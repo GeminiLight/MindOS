@@ -17,7 +17,7 @@ import {
   type Lease,
   type LeaseKey,
 } from '../../foundation/storage/leases.js';
-import { redactSensitiveText } from '../../agent/redaction.js';
+import { redactSensitiveText } from '../../foundation/security/redaction.js';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
 
 export const MINDOS_RUNTIME_CONTROL_PLANE_FILE = '.mindos/runtime-control-plane.json';

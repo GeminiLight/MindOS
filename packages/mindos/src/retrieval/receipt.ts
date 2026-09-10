@@ -10,7 +10,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import path from 'node:path';
-import { redactSensitiveText } from '../agent/redaction.js';
+import { redactSensitiveText } from '../foundation/security/redaction.js';
 import { resolveExistingSafe } from '../foundation/security/index.js';
 
 export type RetrievalReceiptOutcome = 'selected' | 'empty' | 'timeout' | 'error' | 'skipped';

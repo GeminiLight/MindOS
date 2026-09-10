@@ -20,7 +20,7 @@ import {
   type Lease,
   type LeaseKey,
 } from '../../foundation/storage/leases.js';
-import { redactSensitiveObject, redactSensitiveText } from '../../agent/redaction.js';
+import { redactSensitiveObject, redactSensitiveText } from '../../foundation/security/redaction.js';
 import {
   STUDIO_AUTOMATION_SCHEDULES,
   type StudioAutomationApproval,

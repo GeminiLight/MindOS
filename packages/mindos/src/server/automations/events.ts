@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { redactSensitiveObject, redactSensitiveText } from '../../agent/redaction.js';
+import { redactSensitiveObject, redactSensitiveText } from '../../foundation/security/redaction.js';
 import { applyRuntimeControlPlaneMutation } from '../handlers/runtime-control-plane.js';
 import {
   STUDIO_AUTOMATION_MAX_EVENTS,

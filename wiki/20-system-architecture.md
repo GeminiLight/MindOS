@@ -452,10 +452,15 @@ Web 的 `packages/web/app/api/file/route.ts` 只保留 Next.js adapter：读取 
 
 ```
 用户消息 → POST /api/agent/sessions/:sessionId/turns
-    ├── 注入：本轮 context（时间、session context、初始化材料、当前/附加文件、上传文件、active recall）
+    ├── 请求契约：core agent/turn/request.ts 单一来源（allowlist/normalizers/session-turn body；
+    │   Next host 的 _lib/turn-request.ts 与 Product Server 的 handlers/agent-turn.ts 都只做包装）
+    ├── 注入：本轮 context（时间、session context、初始化材料、当前/附加文件、上传文件、active recall；
+    │   省略签名判定在 core agent/turn/context.ts）
     ├── MindOS Pi runtime：pi-coding-agent session + MindOS extension/tools
     └── 外部 runtime：Codex / Claude Code / ACP adapter → SSE 流式输出
 ```
+
+lane 生命周期（ledger/capsule/断连宽限）目前仍在 Web `_lib/turn-lane-*.ts` 各一份；收敛到 core `RuntimeLane` 契约的设计已定稿于 `wiki/specs/spec-runtime-lane-contract.md`，实现在下一个任务分支（见 backlog）。
 
 ### 外部 Agent (MCP)
 

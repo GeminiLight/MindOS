@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { redactSensitiveText } from '../../agent/redaction.js';
+import { redactSensitiveText } from '../../foundation/security/redaction.js';
 import { mutateStudioAutomationState, readStudioAutomationState } from './store.js';
 import type { StudioAutomationApproval } from './types.js';
 

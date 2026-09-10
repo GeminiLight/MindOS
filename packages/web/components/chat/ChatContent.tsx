@@ -58,7 +58,7 @@ import { useAcpDetection } from '@/hooks/useAcpDetection';
 import { useNativeRuntimeDetection } from '@/hooks/useNativeRuntimeDetection';
 import { useRuntimeReadiness } from '@/hooks/useRuntimeReadiness';
 import type { AcpAgentSelection } from '@/hooks/useAskModal';
-import { compactRuntimeDisplayReason } from '@/lib/agent/runtime-error-display';
+import { compactRuntimeFailureMessage as compactRuntimeDisplayReason } from '@geminilight/mindos/agent/runtime/runtime-errors';
 import type { AskContextRequest } from '@/lib/ask-context-events';
 import type { MindosThinkingLevel } from '@/lib/agent/thinking';
 import {

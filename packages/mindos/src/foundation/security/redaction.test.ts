@@ -66,3 +66,14 @@ describe('redactSensitiveObject', () => {
     expect(redactSensitiveObject(true)).toBe(true);
   });
 });
+
+describe('compatibility re-exports', () => {
+  it('keeps agent/redaction.ts and agent/turn/redaction.ts as re-exports of the foundation implementation', async () => {
+    const agentRedaction = await import('../../agent/redaction.js');
+    const agentTurnRedaction = await import('../../agent/turn/redaction.js');
+    expect(agentRedaction.redactSensitiveText).toBe(redactSensitiveText);
+    expect(agentRedaction.redactSensitiveObject).toBe(redactSensitiveObject);
+    expect(agentTurnRedaction.redactSensitiveText).toBe(redactSensitiveText);
+    expect(agentTurnRedaction.redactSensitiveObject).toBe(redactSensitiveObject);
+  });
+});

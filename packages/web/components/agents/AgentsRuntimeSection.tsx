@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { AlertTriangle, Bot, CheckCircle2, Loader2, MessageSquare, Network, RefreshCw, ShieldCheck } from 'lucide-react';
 import { useNativeRuntimeDetection } from '@/hooks/useNativeRuntimeDetection';
 import { openAskModal } from '@/hooks/useAskModal';
-import { compactRuntimeDisplayReason } from '@/lib/agent/runtime-error-display';
+import { compactRuntimeFailureMessage as compactRuntimeDisplayReason } from '@geminilight/mindos/agent/runtime/runtime-errors';
 import { useLocale } from '@/lib/stores/locale-store';
 import type { AgentRuntimeDescriptor, AgentRuntimeIdentity, AgentRuntimeStatus } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -112,7 +112,7 @@ function nativeEndpoint(
   const fallbackName = kind === 'codex' ? 'Codex' : 'Claude Code';
   const status: EndpointStatus = loading ? 'checking' : error ? 'error' : runtime?.status ?? 'missing';
   const reason = error ?? runtime?.availability?.reason;
-  const compactReason = compactRuntimeDisplayReason(reason, {
+  const compactReason = compactRuntimeDisplayReason(reason ?? '', {
     runtime: kind,
     fallback: copy.unavailableDetail,
   });

@@ -8,7 +8,7 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import { resolveExistingSafe } from '../../foundation/security/index.js';
-import { redactSensitiveText } from '../../agent/redaction.js';
+import { redactSensitiveText } from '../../foundation/security/redaction.js';
 import { nextAutomationRunAt } from './schedule.js';
 import { mutateStudioAutomationState, readStudioAutomationState } from './store.js';
 import {

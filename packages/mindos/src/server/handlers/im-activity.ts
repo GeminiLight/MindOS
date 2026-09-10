@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { json, type MindosServerResponse } from '../response.js';
-import { redactSensitiveObject, redactSensitiveText } from '../../agent/turn/redaction.js';
+import { redactSensitiveObject, redactSensitiveText } from '../../foundation/security/redaction.js';
 
 export type ImPlatform =
   | 'telegram'

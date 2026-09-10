@@ -8,6 +8,11 @@ import {
 } from '../prompt/context-prompt.js';
 
 export { redactSensitiveObject, redactSensitiveText } from './redaction.js';
+// Turn-request wire contract and context-omission signatures are shared by the
+// Product Server handler and the Next host route; the barrel stays the single
+// import surface (spec-runtime-lane-contract).
+export * from './request.js';
+export * from './context.js';
 export {
   safeParseMindosJsonObject,
   sanitizeToolArgs,

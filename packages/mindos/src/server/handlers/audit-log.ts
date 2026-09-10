@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { posix } from 'node:path';
 import { resolveExistingSafe } from '../../foundation/security/index.js';
-import { redactSensitiveObject, redactSensitiveText } from '../../agent/turn/redaction.js';
+import { redactSensitiveObject, redactSensitiveText } from '../../foundation/security/redaction.js';
 import type { AgentAuditEvent, AgentAuditInput } from '../../knowledge/audit/index.js';
 import {
   appendJsonlEvents,

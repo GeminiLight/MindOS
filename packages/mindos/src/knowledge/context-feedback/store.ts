@@ -11,7 +11,7 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import { getAgentRunCapsule } from '../../agent/capsules/store.js';
-import { redactSensitiveText } from '../../agent/redaction.js';
+import { redactSensitiveText } from '../../foundation/security/redaction.js';
 import { resolveExistingSafe } from '../../foundation/security/index.js';
 import { getRetrievalReceipt } from '../../retrieval/receipt.js';
 import type { EchoPromotionCandidate } from '../context-assets/echo-promotion.js';

@@ -1,4 +1,4 @@
-import { redactSensitiveText } from '../../agent/redaction.js';
+import { redactSensitiveText } from '../../foundation/security/redaction.js';
 import { isAcpCapabilitySupported, type AcpAgentCapabilities, type AcpSession } from './types.js';
 
 export type AcpHandshakeHealthStatus = 'ready' | 'failed';

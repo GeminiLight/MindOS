@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process';
 import { accessSync, constants, existsSync, readdirSync, realpathSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
-import { redactSensitiveText } from '../../agent/redaction.js';
+import { redactSensitiveText } from '../../foundation/security/redaction.js';
 import type {
   ConnectionCandidate,
   ConnectionIdentity,

@@ -15,7 +15,7 @@ import type {
 import type { NotInstalledAgent } from '@/hooks/useAcpDetection';
 import { useLocale } from '@/lib/stores/locale-store';
 import { agentIconFile } from '@/lib/agent-icons';
-import { compactRuntimeDisplayHints, compactRuntimeDisplayReason } from '@/lib/agent/runtime-error-display';
+import { compactRuntimeDiagnosticHints as compactRuntimeDisplayHints, compactRuntimeFailureMessage as compactRuntimeDisplayReason } from '@geminilight/mindos/agent/runtime/runtime-errors';
 import { FLOATING_SURFACE_CLASS } from '@/components/shared/FloatingSurface';
 
 interface RuntimeIconSwitcherProps {

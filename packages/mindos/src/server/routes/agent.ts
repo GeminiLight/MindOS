@@ -4,7 +4,12 @@ import { handleAgentActivity, handleAgentActivityPost } from '../handlers/agent-
 import { handleAgentCapabilitiesGet } from '../handlers/agent-capabilities.js';
 import { handleAgentRunCapsuleRecoveryPost, handleAgentRunCapsulesGet } from '../handlers/agent-run-capsules.js';
 import { handleAgentRunsGet } from '../handlers/agent-runs.js';
-import { defaultCheckNativeRuntimeHealth, type AgentRuntimesServices } from '../handlers/agent-runtimes.js';
+import {
+  defaultCheckNativeRuntimeHealth,
+  handleAgentRuntimesGet,
+  type AgentRuntimesPayload,
+  type AgentRuntimesServices,
+} from '../handlers/agent-runtimes.js';
 import { handleAgentSessionsDelete, handleAgentSessionsGet, handleAgentSessionsPost } from '../handlers/agent-sessions.js';
 import { handleAgentSessionTurnStream } from '../handlers/agent-turn.js';
 import {
@@ -120,16 +125,27 @@ function createCustomAgentServices(services: MindosHttpServices): CustomAgentSet
  * Product Server never wired it and answered 404. The standalone server has no
  * pi KB toolkit or A2A registry, so those sources are empty here; ACP, native
  * runtime and MCP capabilities come from the same services the Next host uses.
+ * Runtime descriptors are listed through the detection handler (shared
+ * detection cache) and injected into the tool-layer registry, which must not
+ * depend on HTTP handlers itself (spec-runtime-lane-contract).
  */
 function createProductAgentCapabilitiesServices(services: MindosHttpServices) {
   return createAgentCapabilitiesServices({
     knowledgeBaseTools: [],
     effectiveMindRoot: () => services.mindRoot,
-    readSettings: (() => services.readSettings()) as AgentRuntimesServices['readSettings'],
-    detectLocalAcpAgents,
-    resolveRuntimeCommand: resolveCommandPath,
-    resolveRuntimeCommandCandidates: resolveCommandPathCandidates,
-    checkNativeRuntimeHealth: defaultCheckNativeRuntimeHealth,
+    listRuntimeDescriptors: async () => {
+      const response = await handleAgentRuntimesGet(new URLSearchParams(), {
+        readSettings: (() => services.readSettings()) as AgentRuntimesServices['readSettings'],
+        detectLocalAcpAgents,
+        resolveRuntimeCommand: resolveCommandPath,
+        resolveRuntimeCommandCandidates: resolveCommandPathCandidates,
+        checkNativeRuntimeHealth: defaultCheckNativeRuntimeHealth,
+      });
+      if (response.status !== 200 || !response.body || !('runtimes' in response.body)) {
+        throw new Error('Could not load agent runtime descriptors.');
+      }
+      return (response.body as AgentRuntimesPayload).runtimes;
+    },
     readMcpConfig: () => services.mcpTools?.readMcpConfig() ?? { mcpServers: {} },
     readMcpToolCache: () => services.mcpTools?.readMcpToolCache() ?? null,
     getDiscoveredAgents: () => [],

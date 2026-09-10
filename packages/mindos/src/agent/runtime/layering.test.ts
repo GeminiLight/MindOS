@@ -101,6 +101,13 @@ describe('agent/runtime layering', () => {
     expect(importSpecifiers(source)).toEqual([]);
   });
 
+  it('keeps agent/ledger/artifact-ledger.ts on the acp-types wire-type door (#326 leftover)', () => {
+    const source = readFileSync(resolve(srcDir, 'agent/ledger/artifact-ledger.ts'), 'utf-8');
+    const imports = importSpecifiers(source).filter((specifier) => specifier.includes('protocols/'));
+    expect(imports).toEqual([]);
+    expect(importSpecifiers(source)).toContain('../runtime/acp-types.js');
+  });
+
   it('would flag a runtime module that imports the protocol host directly', () => {
     const offending = "import { spawnAndConnect } from '../../protocols/acp/subprocess.js';\nexport const x = 1;";
     expect(importSpecifiers(offending).filter((specifier) => specifier.includes('protocols/'))).toEqual([

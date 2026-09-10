@@ -11,7 +11,7 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import { resolveExistingSafe } from '../../foundation/security/index.js';
-import { redactSensitiveObject } from '../../agent/redaction.js';
+import { redactSensitiveObject } from '../../foundation/security/redaction.js';
 import {
   CONTEXT_ASSET_KINDS,
   type ContextAsset,

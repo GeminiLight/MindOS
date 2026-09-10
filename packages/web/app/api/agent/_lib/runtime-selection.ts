@@ -9,7 +9,7 @@ import {
   resolveCommandPath,
   resolveCommandPathCandidates,
 } from '@/lib/acp/detect-local';
-import { compactRuntimeDisplayReason } from '@/lib/agent/runtime-error-display';
+import { compactRuntimeFailureMessage as compactRuntimeDisplayReason } from '@geminilight/mindos/agent/runtime/runtime-errors';
 import {
   getCachedAvailableNativeRuntimeDescriptor,
   rememberAvailableNativeRuntimeDescriptor,

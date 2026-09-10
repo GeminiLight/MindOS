@@ -8,20 +8,44 @@ import type {
   RuntimeSessionBinding,
   AcpRuntimeOptions,
   NativeRuntimeOptions,
-  NativeRuntimeEffort,
   SessionContextSelection,
   SessionWorkDir,
   Message as FrontendMessage,
 } from '@/lib/types';
 import { apiError, ErrorCodes } from '@/lib/errors';
-import {
-  isMindosThinkingLevel,
-  type MindosAgentOptions,
-} from '@/lib/agent/thinking';
+import type { MindosAgentOptions } from '@/lib/agent/thinking';
 import type {
   AgentRunCapsuleRecoveryAction,
   AgentRunCapsuleRecoveryPlan,
 } from '@geminilight/mindos/agent';
+import {
+  findUnknownMindosAgentTurnRequestFields,
+  firstUnknownMindosTurnField,
+  getLastMindosUserContent,
+  getLastMindosUserImages,
+  getLastMindosUserSkillName,
+  mindosAgentRunCapsuleRecoveryPlanToTurnBody,
+  normalizeMindosAcpRuntimeOptions,
+  normalizeMindosAgentMode,
+  normalizeMindosAgentOptions as normalizeMindosAgentOptionsCore,
+  normalizeMindosAgentSessionTurnBody,
+  normalizeMindosAssistantId,
+  normalizeMindosNativeRuntimeOptions,
+  normalizeMindosPermissionMode,
+  validateMindosAgentModeField,
+  validateMindosAgentOptionsObject,
+  validateMindosPermissionModeField,
+  MINDOS_ACP_RUNTIME_OPTION_FIELDS,
+  MINDOS_NATIVE_RUNTIME_OPTION_FIELDS,
+} from '@geminilight/mindos/agent/turn';
+
+/**
+ * Web-facing shapes and `apiError` wrappers over the shared turn-request
+ * contract. The allowlists, normalisers and body parsers themselves live in
+ * `@geminilight/mindos/agent/turn` (core `agent/turn/request.ts`) so the Next
+ * host route and the Product Server handler cannot drift
+ * (spec-runtime-lane-contract).
+ */
 
 export type AgentTurnRequestBody = {
   messages: FrontendMessage[];
@@ -86,446 +110,93 @@ export function agentRunCapsuleRecoveryPlanToTurnBody(
   plan: AgentRunCapsuleRecoveryPlan,
   chatSessionId: string,
 ): AgentTurnRequestBody {
-  const request = plan.request;
-  const options = request.options ?? {};
-  const storedRuntimeOptions = objectOption(options.runtimeOptions);
-  const storedAcpRuntimeOptions = objectOption(options.acpRuntimeOptions);
-  const storedAgentOptions = objectOption(options.agentOptions);
-  const runtimeBinding = request.runtimeBinding
-    ? {
-      kind: request.runtimeBinding.type,
-      runtime: request.runtimeBinding.runtime,
-      runtimeId: request.runtimeBinding.runtimeId,
-      ...(request.runtimeBinding.externalSessionId ? { externalSessionId: request.runtimeBinding.externalSessionId } : {}),
-      ...(request.runtimeBinding.cwd ? { cwd: request.runtimeBinding.cwd } : {}),
-      ...(request.runtimeBinding.status ? { status: request.runtimeBinding.status } : {}),
-      updatedAt: request.runtimeBinding.updatedAt ?? Date.now(),
-    }
-    : null;
-  const nativeRuntimeOptions = request.runtime.kind === 'codex' || request.runtime.kind === 'claude'
-    ? {
-      ...storedRuntimeOptions,
-      ...(request.model ? { modelOverride: request.model } : {}),
-      ...(request.thinkingEffort ? { reasoningEffort: request.thinkingEffort } : {}),
-    }
-    : undefined;
-  return {
-    messages: structuredClone(request.messages) as unknown as FrontendMessage[],
-    selectedRuntime: { ...request.runtime },
-    ...(request.runtime.kind === 'acp'
-      ? { selectedAcpAgent: { id: request.runtime.id, name: request.runtime.name } }
-      : {}),
-    runtimeBinding: runtimeBinding as RuntimeSessionBinding | null,
-    ...(request.agentMode ? { agentMode: request.agentMode as AgentMode } : {}),
-    ...(request.permissionMode ? { permissionMode: request.permissionMode as AgentPermissionMode } : {}),
-    ...(request.context.currentFile ? { currentFile: request.context.currentFile } : {}),
-    attachedFiles: [...request.context.attachedFiles],
-    uploadedFiles: structuredClone(request.context.uploadedFiles),
-    ...(typeof options.maxSteps === 'number' ? { maxSteps: options.maxSteps } : {}),
-    ...(typeof options.assistantId === 'string' ? { assistantId: options.assistantId } : {}),
-    ...(typeof options.providerOverride === 'string' ? { providerOverride: options.providerOverride } : {}),
-    ...(request.runtime.kind === 'mindos' && request.model ? { modelOverride: request.model } : {}),
-    ...(nativeRuntimeOptions ? { runtimeOptions: nativeRuntimeOptions as NativeRuntimeOptions } : {}),
-    ...(storedAcpRuntimeOptions ? { acpRuntimeOptions: storedAcpRuntimeOptions as AcpRuntimeOptions } : {}),
-    ...(storedAgentOptions ? { agentOptions: storedAgentOptions as MindosAgentOptions } : {}),
-    ...(objectOption(options.workDir) ? { workDir: objectOption(options.workDir) as unknown as SessionWorkDir } : {}),
-    ...(objectOption(options.contextSelection) ? { contextSelection: objectOption(options.contextSelection) as unknown as SessionContextSelection } : {}),
-    chatSessionId,
-  };
-}
-
-function objectOption(value: unknown): Record<string, unknown> | undefined {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? structuredClone(value as Record<string, unknown>)
-    : undefined;
+  return mindosAgentRunCapsuleRecoveryPlanToTurnBody(plan, chatSessionId) as unknown as AgentTurnRequestBody;
 }
 
 export function normalizeNativeRuntimeOptions(value: unknown): NativeRuntimeOptions {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
-  const record = value as Record<string, unknown>;
-  const reasoningEffort = typeof record.reasoningEffort === 'string'
-    && /^[a-z][a-z0-9_-]{0,31}$/.test(record.reasoningEffort)
-    ? record.reasoningEffort as NativeRuntimeEffort
-    : undefined;
-  const modelOverride = typeof record.modelOverride === 'string' && record.modelOverride.trim()
-    ? record.modelOverride.trim()
-    : undefined;
-  return {
-    ...(reasoningEffort ? { reasoningEffort } : {}),
-    ...(modelOverride ? { modelOverride } : {}),
-  };
+  return normalizeMindosNativeRuntimeOptions(value) as NativeRuntimeOptions;
 }
 
 export function validateNativeRuntimeOptions(value: unknown) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const record = value as Record<string, unknown>;
-  const unknown = firstUnknownField(record, NATIVE_RUNTIME_OPTION_FIELDS, 'runtimeOptions');
-  if (unknown) {
-    return apiError(
-      ErrorCodes.INVALID_REQUEST,
-      unknown,
-      400,
-    );
-  }
-  return null;
+  const unknown = firstUnknownMindosTurnField(
+    value as Record<string, unknown>,
+    MINDOS_NATIVE_RUNTIME_OPTION_FIELDS,
+    'runtimeOptions',
+  );
+  return unknown ? apiError(ErrorCodes.INVALID_REQUEST, unknown, 400) : null;
 }
 
 export function normalizeAcpRuntimeOptions(value: unknown): AcpRuntimeOptions {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
-  const record = value as Record<string, unknown>;
-  const modeId = typeof record.modeId === 'string' && record.modeId.trim()
-    ? record.modeId.trim()
-    : undefined;
-  const configValues = normalizeStringRecord(record.configValues);
-  return {
-    ...(modeId ? { modeId } : {}),
-    ...(configValues ? { configValues } : {}),
-  };
+  return normalizeMindosAcpRuntimeOptions(value) as AcpRuntimeOptions;
 }
 
 export function validateAcpRuntimeOptions(value: unknown) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const record = value as Record<string, unknown>;
-  const unknown = firstUnknownField(record, ACP_RUNTIME_OPTION_FIELDS, 'acpRuntimeOptions');
-  if (unknown) {
-    return apiError(
-      ErrorCodes.INVALID_REQUEST,
-      unknown,
-      400,
-    );
-  }
-  return null;
+  const unknown = firstUnknownMindosTurnField(
+    value as Record<string, unknown>,
+    MINDOS_ACP_RUNTIME_OPTION_FIELDS,
+    'acpRuntimeOptions',
+  );
+  return unknown ? apiError(ErrorCodes.INVALID_REQUEST, unknown, 400) : null;
 }
 
 export function normalizeAgentMode(value: unknown): AgentMode | undefined {
-  return value === 'default' || value === 'plan' || value === 'goal'
-    ? value
-    : undefined;
+  return normalizeMindosAgentMode(value) as AgentMode | undefined;
 }
 
 export function normalizeAgentPermissionMode(value: unknown): AgentPermissionMode | undefined {
-  return value === 'read' || value === 'ask' || value === 'auto' || value === 'full'
-    ? value
-    : undefined;
+  return normalizeMindosPermissionMode(value) as AgentPermissionMode | undefined;
 }
 
 export function validateAgentMode(value: unknown) {
-  if (value === undefined || normalizeAgentMode(value)) return null;
-  return apiError(
-    ErrorCodes.INVALID_REQUEST,
-    'agentMode must be default, plan, or goal',
-    400,
-  );
+  const message = validateMindosAgentModeField(value);
+  return message ? apiError(ErrorCodes.INVALID_REQUEST, message, 400) : null;
 }
 
 export function validateAgentPermissionMode(value: unknown) {
-  if (value === undefined || normalizeAgentPermissionMode(value)) return null;
-  return apiError(
-    ErrorCodes.INVALID_REQUEST,
-    'permissionMode must be read, ask, auto, or full',
-    400,
-  );
+  const message = validateMindosPermissionModeField(value);
+  return message ? apiError(ErrorCodes.INVALID_REQUEST, message, 400) : null;
 }
 
 export function validateMindosAgentOptions(value: unknown) {
-  if (value === undefined) return null;
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return apiError(ErrorCodes.INVALID_REQUEST, 'agentOptions must be an object', 400);
-  }
-  const record = value as Record<string, unknown>;
-  const unknown = firstUnknownField(record, MINDOS_AGENT_OPTION_FIELDS, 'agentOptions');
-  if (unknown) return apiError(ErrorCodes.INVALID_REQUEST, unknown, 400);
-  if (record.enableThinking !== undefined && typeof record.enableThinking !== 'boolean') {
-    return apiError(ErrorCodes.INVALID_REQUEST, 'agentOptions.enableThinking must be a boolean', 400);
-  }
-  if (record.thinkingLevel !== undefined && !isMindosThinkingLevel(record.thinkingLevel)) {
-    return apiError(
-      ErrorCodes.INVALID_REQUEST,
-      'agentOptions.thinkingLevel must be off, minimal, low, medium, high, xhigh, or max',
-      400,
-    );
-  }
-  if (
-    record.thinkingBudget !== undefined
-    && (typeof record.thinkingBudget !== 'number' || !Number.isFinite(record.thinkingBudget))
-  ) {
-    return apiError(ErrorCodes.INVALID_REQUEST, 'agentOptions.thinkingBudget must be a finite number', 400);
-  }
-  return null;
+  const message = validateMindosAgentOptionsObject(value);
+  return message ? apiError(ErrorCodes.INVALID_REQUEST, message, 400) : null;
 }
 
 export function normalizeMindosAgentOptions(value: unknown): MindosAgentOptions {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
-  const record = value as Record<string, unknown>;
-  const options: MindosAgentOptions = {};
-
-  if (typeof record.enableThinking === 'boolean') {
-    options.enableThinking = record.enableThinking;
-  }
-  if (isMindosThinkingLevel(record.thinkingLevel)) {
-    options.thinkingLevel = record.thinkingLevel;
-  }
-
-  if (typeof record.thinkingBudget === 'number' && Number.isFinite(record.thinkingBudget)) {
-    options.thinkingBudget = Math.min(50000, Math.max(1000, Math.floor(record.thinkingBudget)));
-  }
-
-  return options;
+  return normalizeMindosAgentOptionsCore(value) as MindosAgentOptions;
 }
 
 export function normalizeAssistantId(value: unknown): string | undefined {
-  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+  return normalizeMindosAssistantId(value);
 }
 
 export function getLastUserContent(messages: FrontendMessage[]): string {
-  for (let i = messages.length - 1; i >= 0; i -= 1) {
-    const message = messages[i];
-    if (message?.role === 'user' && typeof message.content === 'string') return message.content;
-  }
-  return '';
+  return getLastMindosUserContent(messages);
 }
 
 export function getLastUserSkillName(messages: FrontendMessage[]): string | undefined {
-  for (let i = messages.length - 1; i >= 0; i -= 1) {
-    const message = messages[i] as FrontendMessage & { skillName?: unknown } | undefined;
-    if (message?.role !== 'user') continue;
-    return typeof message.skillName === 'string' && message.skillName.trim()
-      ? message.skillName.trim()
-      : undefined;
-  }
-  return undefined;
+  return getLastMindosUserSkillName(messages);
 }
 
 export function getLastUserImages(messages: FrontendMessage[]): unknown[] {
-  for (let i = messages.length - 1; i >= 0; i -= 1) {
-    const message = messages[i];
-    if (message?.role !== 'user') continue;
-    return Array.isArray(message.images) ? message.images : [];
-  }
-  return [];
+  return getLastMindosUserImages(messages);
 }
 
 export function normalizeAgentSessionTurnBody(
   rawBody: unknown,
   sessionId: string,
 ): { ok: true; body: AgentTurnRequestBody } | { ok: false; message: string } {
-  if (!rawBody || typeof rawBody !== 'object' || Array.isArray(rawBody)) {
-    return { ok: false, message: 'Invalid agent session turn request body' };
-  }
-
-  const record = rawBody as Record<string, unknown>;
-  const unknownTopLevel = firstUnknownField(record, AGENT_SESSION_TURN_TOP_LEVEL_FIELDS);
-  if (unknownTopLevel) return { ok: false, message: unknownTopLevel };
-  const unknownRuntimeOptions = objectField(record, 'runtimeOptions')
-    ? firstUnknownField(objectField(record, 'runtimeOptions')!, NATIVE_RUNTIME_OPTION_FIELDS, 'runtimeOptions')
-    : null;
-  if (unknownRuntimeOptions) return { ok: false, message: unknownRuntimeOptions };
-  const unknownAcpRuntimeOptions = objectField(record, 'acpRuntimeOptions')
-    ? firstUnknownField(objectField(record, 'acpRuntimeOptions')!, ACP_RUNTIME_OPTION_FIELDS, 'acpRuntimeOptions')
-    : null;
-  if (unknownAcpRuntimeOptions) return { ok: false, message: unknownAcpRuntimeOptions };
-  const unknownAgentOptions = objectField(record, 'agentOptions')
-    ? firstUnknownField(objectField(record, 'agentOptions')!, MINDOS_AGENT_OPTION_FIELDS, 'agentOptions')
-    : null;
-  if (unknownAgentOptions) return { ok: false, message: unknownAgentOptions };
-  const unknownSelectedRuntime = objectField(record, 'selectedRuntime')
-    ? firstUnknownField(objectField(record, 'selectedRuntime')!, SELECTED_RUNTIME_FIELDS, 'selectedRuntime')
-    : null;
-  if (unknownSelectedRuntime) return { ok: false, message: unknownSelectedRuntime };
-  const unknownRuntimeBinding = objectField(record, 'runtimeBinding')
-    ? firstUnknownField(objectField(record, 'runtimeBinding')!, RUNTIME_BINDING_FIELDS, 'runtimeBinding')
-    : null;
-  if (unknownRuntimeBinding) return { ok: false, message: unknownRuntimeBinding };
-  const context = objectField(record, 'context');
-  const unknownContext = context ? firstUnknownField(context, AGENT_TURN_CONTEXT_FIELDS, 'context') : null;
-  if (unknownContext) return { ok: false, message: unknownContext };
-  const messageRecord = objectField(record, 'message');
-  const unknownMessage = messageRecord ? firstUnknownField(messageRecord, AGENT_TURN_MESSAGE_FIELDS, 'message') : null;
-  if (unknownMessage) return { ok: false, message: unknownMessage };
-  if (Array.isArray(record.messages)) {
-    return {
-      ok: true,
-      body: {
-        ...(record as unknown as AgentTurnRequestBody),
-        chatSessionId: sessionId,
-      },
-    };
-  }
-
-  const text = stringField(messageRecord, 'text') ?? stringField(messageRecord, 'content') ?? stringField(record, 'prompt');
-  const images = arrayField(messageRecord, 'images') ?? arrayField(record, 'images');
-  if (!text && (!images || images.length === 0)) {
-    return { ok: false, message: 'message.text is required' };
-  }
-
-  const runtimeOptions = record.runtimeOptions;
-  const acpRuntimeOptions = normalizeAcpRuntimeOptions(record.acpRuntimeOptions);
-  const selectedRuntime = selectedRuntimeField(record);
-  const selectedAcpAgent = selectedAcpAgentField(record);
-  const message: FrontendMessage = {
-    role: 'user',
-    content: text ?? '',
-    timestamp: Date.now(),
-    ...(images ? { images: images as FrontendMessage['images'] } : {}),
-    ...(stringField(messageRecord, 'skillName') ? { skillName: stringField(messageRecord, 'skillName') } : {}),
-  };
-
-  return {
-    ok: true,
-    body: {
-      messages: [message],
-      chatSessionId: sessionId,
-      ...(normalizeAgentMode(record.agentMode) ? { agentMode: normalizeAgentMode(record.agentMode) } : {}),
-      ...(normalizeAgentPermissionMode(record.permissionMode) ? { permissionMode: normalizeAgentPermissionMode(record.permissionMode) } : {}),
-      ...(stringField(record, 'assistantId') ? { assistantId: stringField(record, 'assistantId') } : {}),
-      ...(stringField(context, 'currentFile') ?? stringField(record, 'currentFile')
-        ? { currentFile: stringField(context, 'currentFile') ?? stringField(record, 'currentFile') }
-        : {}),
-      ...(arrayField(context, 'attachedFiles') ?? arrayField(record, 'attachedFiles')
-        ? { attachedFiles: stringArrayField(context, 'attachedFiles') ?? stringArrayField(record, 'attachedFiles') ?? [] }
-        : {}),
-      ...(arrayField(context, 'uploadedFiles') ?? arrayField(record, 'uploadedFiles')
-        ? { uploadedFiles: (arrayField(context, 'uploadedFiles') ?? arrayField(record, 'uploadedFiles')) as AgentTurnRequestBody['uploadedFiles'] }
-        : {}),
-      ...(objectField(context, 'workDir') ?? objectField(record, 'workDir')
-        ? { workDir: (objectField(context, 'workDir') ?? objectField(record, 'workDir')) as AgentTurnRequestBody['workDir'] }
-        : {}),
-      ...(objectField(context, 'contextSelection') ?? objectField(record, 'contextSelection')
-        ? { contextSelection: (objectField(context, 'contextSelection') ?? objectField(record, 'contextSelection')) as AgentTurnRequestBody['contextSelection'] }
-        : {}),
-      ...(selectedRuntime !== undefined ? { selectedRuntime } : {}),
-      ...(selectedAcpAgent !== undefined ? { selectedAcpAgent } : {}),
-      ...(objectField(record, 'runtimeBinding')
-        ? { runtimeBinding: objectField(record, 'runtimeBinding') as AgentTurnRequestBody['runtimeBinding'] }
-        : {}),
-      ...(runtimeOptions && typeof runtimeOptions === 'object' && !Array.isArray(runtimeOptions)
-        ? { runtimeOptions: runtimeOptions as AgentTurnRequestBody['runtimeOptions'] }
-        : {}),
-      ...(Object.keys(acpRuntimeOptions).length > 0
-        ? { acpRuntimeOptions }
-        : {}),
-      ...(objectField(record, 'agentOptions')
-        ? { agentOptions: objectField(record, 'agentOptions') as AgentTurnRequestBody['agentOptions'] }
-        : {}),
-      ...(typeof record.maxSteps === 'number' && Number.isFinite(record.maxSteps) ? { maxSteps: record.maxSteps } : {}),
-      ...(stringField(record, 'providerOverride') ? { providerOverride: stringField(record, 'providerOverride') } : {}),
-      ...(stringField(record, 'modelOverride')
-        ? { modelOverride: stringField(record, 'modelOverride') }
-        : {}),
-    },
-  };
+  const normalized = normalizeMindosAgentSessionTurnBody(rawBody, sessionId);
+  if (!normalized.ok) return normalized;
+  return { ok: true, body: normalized.body as unknown as AgentTurnRequestBody };
 }
 
 export function validateAgentTurnRequestContract(body: unknown) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     return apiError(ErrorCodes.INVALID_REQUEST, 'Invalid agent session turn request body', 400);
   }
-  const record = body as Record<string, unknown>;
-  const unknownTopLevel = firstUnknownField(record, AGENT_SESSION_TURN_TOP_LEVEL_FIELDS);
-  if (unknownTopLevel) return apiError(ErrorCodes.INVALID_REQUEST, unknownTopLevel, 400);
-  const unknownRuntimeOptions = objectField(record, 'runtimeOptions')
-    ? firstUnknownField(objectField(record, 'runtimeOptions')!, NATIVE_RUNTIME_OPTION_FIELDS, 'runtimeOptions')
-    : null;
-  if (unknownRuntimeOptions) return apiError(ErrorCodes.INVALID_REQUEST, unknownRuntimeOptions, 400);
-  const unknownAcpRuntimeOptions = objectField(record, 'acpRuntimeOptions')
-    ? firstUnknownField(objectField(record, 'acpRuntimeOptions')!, ACP_RUNTIME_OPTION_FIELDS, 'acpRuntimeOptions')
-    : null;
-  if (unknownAcpRuntimeOptions) return apiError(ErrorCodes.INVALID_REQUEST, unknownAcpRuntimeOptions, 400);
-  const unknownAgentOptions = objectField(record, 'agentOptions')
-    ? firstUnknownField(objectField(record, 'agentOptions')!, MINDOS_AGENT_OPTION_FIELDS, 'agentOptions')
-    : null;
-  if (unknownAgentOptions) return apiError(ErrorCodes.INVALID_REQUEST, unknownAgentOptions, 400);
-  const unknownSelectedRuntime = objectField(record, 'selectedRuntime')
-    ? firstUnknownField(objectField(record, 'selectedRuntime')!, SELECTED_RUNTIME_FIELDS, 'selectedRuntime')
-    : null;
-  if (unknownSelectedRuntime) return apiError(ErrorCodes.INVALID_REQUEST, unknownSelectedRuntime, 400);
-  const unknownRuntimeBinding = objectField(record, 'runtimeBinding')
-    ? firstUnknownField(objectField(record, 'runtimeBinding')!, RUNTIME_BINDING_FIELDS, 'runtimeBinding')
-    : null;
-  if (unknownRuntimeBinding) return apiError(ErrorCodes.INVALID_REQUEST, unknownRuntimeBinding, 400);
-  return null;
+  const unknown = findUnknownMindosAgentTurnRequestFields(body as Record<string, unknown>);
+  return unknown ? apiError(ErrorCodes.INVALID_REQUEST, unknown, 400) : null;
 }
-
-function objectField(record: Record<string, unknown> | undefined, key: string): Record<string, unknown> | undefined {
-  const value = record?.[key];
-  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
-}
-
-function stringField(record: Record<string, unknown> | undefined, key: string): string | undefined {
-  const value = record?.[key];
-  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
-}
-
-function arrayField(record: Record<string, unknown> | undefined, key: string): unknown[] | undefined {
-  const value = record?.[key];
-  return Array.isArray(value) ? value : undefined;
-}
-
-function selectedRuntimeField(record: Record<string, unknown>): AgentTurnRequestBody['selectedRuntime'] | undefined {
-  if (!Object.prototype.hasOwnProperty.call(record, 'selectedRuntime')) return undefined;
-  if (record.selectedRuntime === null) return null;
-  return objectField(record, 'selectedRuntime') as AgentTurnRequestBody['selectedRuntime'] | undefined;
-}
-
-function selectedAcpAgentField(record: Record<string, unknown>): AgentTurnRequestBody['selectedAcpAgent'] | undefined {
-  if (!Object.prototype.hasOwnProperty.call(record, 'selectedAcpAgent')) return undefined;
-  if (record.selectedAcpAgent === null) return null;
-  return objectField(record, 'selectedAcpAgent') as AgentTurnRequestBody['selectedAcpAgent'] | undefined;
-}
-
-function stringArrayField(record: Record<string, unknown> | undefined, key: string): string[] | undefined {
-  const values = arrayField(record, key)?.filter((item): item is string => typeof item === 'string');
-  return values && values.length > 0 ? values : undefined;
-}
-
-function normalizeStringRecord(value: unknown): Record<string, string> | undefined {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
-  const entries = Object.entries(value as Record<string, unknown>)
-    .map(([key, raw]) => {
-      const cleanKey = key.trim();
-      const cleanValue = typeof raw === 'string' ? raw.trim() : '';
-      return cleanKey && cleanValue ? [cleanKey, cleanValue] as const : null;
-    })
-    .filter((entry): entry is readonly [string, string] => entry !== null);
-  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
-}
-
-function firstUnknownField(record: Record<string, unknown>, allowed: ReadonlySet<string>, prefix?: string): string | null {
-  for (const key of Object.keys(record)) {
-    if (!allowed.has(key)) return `Unknown field: ${prefix ? `${prefix}.` : ''}${key}`;
-  }
-  return null;
-}
-
-const AGENT_SESSION_TURN_TOP_LEVEL_FIELDS = new Set([
-  'messages',
-  'message',
-  'prompt',
-  'images',
-  'agentMode',
-  'permissionMode',
-  'currentFile',
-  'attachedFiles',
-  'uploadedFiles',
-  'maxSteps',
-  'assistantId',
-  'selectedAcpAgent',
-  'selectedRuntime',
-  'runtimeBinding',
-  'workDir',
-  'contextSelection',
-  'context',
-  'providerOverride',
-  'modelOverride',
-  'runtimeOptions',
-  'acpRuntimeOptions',
-  'agentOptions',
-  'chatSessionId',
-]);
-const AGENT_TURN_CONTEXT_FIELDS = new Set(['currentFile', 'attachedFiles', 'uploadedFiles', 'workDir', 'contextSelection']);
-const AGENT_TURN_MESSAGE_FIELDS = new Set(['text', 'content', 'images', 'skillName']);
-const NATIVE_RUNTIME_OPTION_FIELDS = new Set(['reasoningEffort', 'modelOverride']);
-const ACP_RUNTIME_OPTION_FIELDS = new Set(['modeId', 'configValues']);
-const MINDOS_AGENT_OPTION_FIELDS = new Set(['enableThinking', 'thinkingLevel', 'thinkingBudget']);
-const SELECTED_RUNTIME_FIELDS = new Set(['id', 'name', 'kind', 'binaryPath']);
-const RUNTIME_BINDING_FIELDS = new Set(['kind', 'runtime', 'runtimeId', 'externalSessionId', 'cwd', 'status', 'updatedAt']);

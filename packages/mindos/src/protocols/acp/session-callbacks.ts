@@ -18,7 +18,7 @@ import {
   parseConfigOptions,
 } from './session-parsers.js';
 import { recordArtifactsFromAcpToolCall } from '../../agent/ledger/artifact-ledger.js';
-import { redactSensitiveText } from '../../agent/redaction.js';
+import { redactSensitiveText } from '../../foundation/security/redaction.js';
 
 const TOOL_RAW_TEXT_LIMIT = 4000;
 const INLINE_IMAGE_RESULT_LIMIT = 64 * 1024;

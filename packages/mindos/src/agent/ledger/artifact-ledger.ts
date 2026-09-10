@@ -6,7 +6,7 @@ import {
   getProcessGlobal,
 } from '../global-state.js';
 import { redactSensitiveObject, redactSensitiveText } from '../redaction.js';
-import type { AcpContentBlock, AcpToolCallFull } from '../../protocols/acp/types.js';
+import type { AcpContentBlock, AcpToolCallFull } from '../runtime/acp-types.js';
 import {
   ARTIFACT_TRIM_SLACK,
   MAX_ARTIFACTS,

@@ -10,6 +10,10 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { AgentCapabilityInput } from '../../server/handlers/agent-capabilities.js';
 import {
+  buildAgentRuntimesPayload,
+  type AgentRuntimeDescriptor,
+} from '../runtime/registry.js';
+import {
   createAgentCapabilitiesServices,
   type MindosAgentCapabilityRegistryServices,
 } from './capability-registry.js';
@@ -29,16 +33,13 @@ function createServices(overrides: Partial<MindosAgentCapabilityRegistryServices
   return {
     knowledgeBaseTools: [],
     effectiveMindRoot: () => '/nonexistent/mind-root',
-    readSettings: () => ({}),
-    detectLocalAcpAgents: async () => [],
-    resolveRuntimeCommand: () => null,
-    checkNativeRuntimeHealth: async () => ({ ok: false, message: 'not installed' }),
+    listRuntimeDescriptors: async () => [],
     readMcpConfig: () => ({}),
     readMcpToolCache: () => null,
     getDiscoveredAgents: () => [],
     resolveBuiltinSubagentsDir: () => null,
     ...overrides,
-  } as MindosAgentCapabilityRegistryServices;
+  };
 }
 
 describe('kb-tool capabilities', () => {
@@ -262,18 +263,25 @@ describe('a2a-agent capabilities', () => {
 });
 
 describe('runtime capabilities', () => {
+  // Descriptors come from the host-injected `listRuntimeDescriptors` port; the
+  // test builds them through the same core registry function the hosts use, so
+  // the descriptor-table projections (lifecycle/compatibility) stay covered
+  // end to end without the tool depending on an HTTP handler.
+  function hostDescriptors(): AgentRuntimeDescriptor[] {
+    return buildAgentRuntimesPayload({
+      installed: [
+        { id: 'codex', name: 'Codex', binaryPath: '/usr/local/bin/codex', status: 'available' },
+        { id: 'claude', name: 'Claude Code', binaryPath: '/usr/local/bin/claude', status: 'available' },
+        { id: 'gemini', name: 'Gemini CLI', binaryPath: '/usr/local/bin/gemini' },
+      ],
+      notInstalled: [],
+      checkedAt: new Date().toISOString(),
+    }).runtimes;
+  }
+
   it('projects runtime lifecycle and compatibility metadata into native and ACP capability records', async () => {
     const listers = createAgentCapabilitiesServices(createServices({
-      resolveRuntimeCommand: (command) => {
-        if (command === 'codex') return '/usr/local/bin/codex';
-        if (command === 'claude') return '/usr/local/bin/claude';
-        return null;
-      },
-      checkNativeRuntimeHealth: async () => ({ status: 'available' }),
-      detectLocalAcpAgents: async () => ({
-        installed: [{ id: 'gemini', name: 'Gemini CLI', binaryPath: '/usr/local/bin/gemini' }],
-        notInstalled: [],
-      }),
+      listRuntimeDescriptors: async () => hostDescriptors(),
     }));
 
     const native = await listers.native?.();
@@ -329,5 +337,28 @@ describe('runtime capabilities', () => {
         }),
       }),
     });
+  });
+
+  it('partitions descriptors by kind: native keeps codex/claude/mindos, acp keeps the rest', async () => {
+    const listers = createAgentCapabilitiesServices(createServices({
+      listRuntimeDescriptors: async () => hostDescriptors(),
+    }));
+    const native = await listers.native?.();
+    const acp = await listers.acp?.();
+    expect(native?.map((cap) => cap.id).sort()).toEqual([
+      'native-runtime:claude:claude',
+      'native-runtime:codex:codex',
+      'native-runtime:mindos:mindos',
+    ]);
+    expect(acp?.map((cap) => cap.id)).toEqual(['native-runtime:acp:gemini']);
+  });
+
+  it('propagates a host descriptor-listing failure instead of masking it', async () => {
+    const listers = createAgentCapabilitiesServices(createServices({
+      listRuntimeDescriptors: async () => {
+        throw new Error('detection unavailable');
+      },
+    }));
+    await expect(listers.native?.()).rejects.toThrow('detection unavailable');
   });
 });

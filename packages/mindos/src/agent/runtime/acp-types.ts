@@ -15,10 +15,12 @@ export type {
   AcpAdapterOutputKind,
   AcpAgentCapabilities,
   AcpAuthMethod,
+  AcpContentBlock,
   AcpMcpCapabilities,
   AcpPromptCapabilities,
   AcpRegistryEntry,
   AcpSessionCapabilities,
+  AcpToolCallFull,
   AcpTransportType,
 } from '../../protocols/acp/types.js';
 
