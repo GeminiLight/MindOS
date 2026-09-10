@@ -29,6 +29,7 @@ export const SERVER_EVENT_TYPES = [
   'sync.changed',
   'runtime.changed',
   'settings.changed',
+  'control-plane.changed',
   'heartbeat',
   'ready',
 ] as const;
@@ -56,6 +57,8 @@ export interface ServerEventMap {
   'runtime.changed': { type: 'runtime.changed'; runtimes: string[] };
   /** `POST /api/settings` persisted a new settings document. */
   'settings.changed': { type: 'settings.changed' };
+  /** A runtime control-plane mutation (schedule / approval / task / mailbox) was committed on the server. */
+  'control-plane.changed': { type: 'control-plane.changed'; mindRoot: string; action: string; updatedAt: string };
   heartbeat: { type: 'heartbeat' };
   ready: { type: 'ready'; lastEventId: number; resync: boolean; treeVersion?: number };
 }

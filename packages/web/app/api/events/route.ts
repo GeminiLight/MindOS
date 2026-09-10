@@ -5,6 +5,7 @@ import {
   getMindosServerEventBus,
   handleEventsStream,
   installAgentRunLedgerBridge,
+  installRuntimeControlPlaneBridge,
   type MindosServerEventBus,
 } from '@geminilight/mindos/server';
 import { getTreeVersion } from '@/lib/fs';
@@ -22,6 +23,7 @@ const encoder = new TextEncoder();
 function prepareBus(): MindosServerEventBus {
   const bus = getMindosServerEventBus();
   installAgentRunLedgerBridge(bus);
+  installRuntimeControlPlaneBridge(bus);
   registerTreeVersionHook(TREE_VERSION_HOOK_KEY, (version) => {
     bus.emit({ type: 'tree.changed', version });
   });

@@ -3,6 +3,7 @@ import { getRequestListener } from '@hono/node-server';
 import { RESPONSE_ALREADY_SENT } from '@hono/node-server/utils/response';
 import { createMindosApp } from './app.js';
 import { installAgentRunLedgerBridge } from './events/ledger-bridge.js';
+import { installRuntimeControlPlaneBridge } from './events/control-plane-bridge.js';
 import { CORS_HEADERS } from './response.js';
 import type { MindosRuntimeOptions } from './runtime.js';
 import { createDefaultMindosHttpServices, type MindosHttpServices } from './services.js';
@@ -61,7 +62,10 @@ export function createMindosHttpServer(options: MindosHttpServerOptions = {}): M
     syncDaemon: options.syncDaemon,
   });
   // Agent run ledger events reach GET /api/events through the process bus.
-  if (services.events) installAgentRunLedgerBridge(services.events);
+  if (services.events) {
+    installAgentRunLedgerBridge(services.events);
+    installRuntimeControlPlaneBridge(services.events);
+  }
   // ACP agents are children of this server process: make sure they die with it.
   registerAcpShutdownHooks();
 

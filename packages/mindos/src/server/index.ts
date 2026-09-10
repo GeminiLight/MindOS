@@ -497,6 +497,7 @@ export {
   isAgentRunLedgerBridgeInstalled,
   summarizeAgentRunEvent,
 } from './events/ledger-bridge.js';
+export { installRuntimeControlPlaneBridge, isRuntimeControlPlaneBridgeInstalled } from './events/control-plane-bridge.js';
 
 export {
   MINDOS_SERVER_EVENTS_HEARTBEAT_MS,
