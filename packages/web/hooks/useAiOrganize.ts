@@ -5,6 +5,7 @@ import type { LocalAttachment, Message } from '@/lib/types';
 import type { OrganizeSource } from '@/lib/organize-history';
 import { buildAssistantAgentTurnRequestBody } from '@/lib/assistant-runner';
 import { buildAgentTurnEndpoint, createTransientAgentSessionId } from '@/lib/agent-turn-endpoint';
+import { parseSseJsonData, readSseStream } from '@/lib/sse/read-sse-stream';
 import {
   AI_ATTACHMENT_MAX_CHARS,
   describeOversizedAiAttachments,
@@ -145,104 +146,82 @@ export async function consumeOrganizeStream(
   onSnapshot: (path: string, content: string) => void,
   signal?: AbortSignal,
 ): Promise<{ changes: OrganizeFileChange[]; summary: string; toolCallCount: number }> {
-  const reader = body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-
   const changes: OrganizeFileChange[] = [];
   const pendingTools = new Map<string, { name: string; path: string; action: 'create' | 'update' | 'unknown' }>();
   let summary = '';
   let toolCallCount = 0;
   const snapshotted = new Set<string>();
 
-  try {
-    while (true) {
-      if (signal?.aborted) break;
-      const { done, value } = await reader.read();
-      if (done && !buffer) break;
+  // readSseStream awaits this handler per frame, so the snapshot captured on
+  // tool_start is guaranteed to finish before the matching tool_end is seen.
+  await readSseStream(body, async (frame) => {
+    const event = parseSseJsonData(frame);
+    if (!event) return;
 
-      if (!done) buffer += decoder.decode(value, { stream: true });
-      const lines = done ? [buffer] : buffer.split('\n');
-      buffer = done ? '' : lines.pop() ?? '';
+    const type = event.type as string;
 
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed.startsWith('data:')) continue;
-        const jsonStr = trimmed.slice(5).trim();
-        if (!jsonStr) continue;
+    switch (type) {
+      case 'tool_start': {
+        const toolName = event.toolName as string;
+        const toolCallId = event.toolCallId as string;
+        const args = event.args;
+        toolCallCount++;
 
-        let event: Record<string, unknown>;
-        try { event = JSON.parse(jsonStr); } catch { continue; }
+        const hint = deriveStageHint(type, toolName, args);
+        if (hint) onProgress({ stageHint: hint });
 
-        const type = event.type as string;
+        if (FILE_WRITE_TOOLS.has(toolName)) {
+          const path = extractPathFromArgs(toolName, args);
+          let action: 'create' | 'update' | 'unknown' = 'update';
+          if (toolName === 'create_file' || toolName === 'batch_create_files') action = 'create';
+          else if (toolName === 'delete_file' || toolName === 'rename_file' || toolName === 'move_file') action = 'unknown';
 
-        switch (type) {
-          case 'tool_start': {
-            const toolName = event.toolName as string;
-            const toolCallId = event.toolCallId as string;
-            const args = event.args;
-            toolCallCount++;
-
-            const hint = deriveStageHint(type, toolName, args);
-            if (hint) onProgress({ stageHint: hint });
-
-            if (FILE_WRITE_TOOLS.has(toolName)) {
-              const path = extractPathFromArgs(toolName, args);
-              let action: 'create' | 'update' | 'unknown' = 'update';
-              if (toolName === 'create_file' || toolName === 'batch_create_files') action = 'create';
-              else if (toolName === 'delete_file' || toolName === 'rename_file' || toolName === 'move_file') action = 'unknown';
-
-              // Capture snapshot for update operations — await to ensure we get the
-              // pre-write content before the server executes the write tool call
-              if (action === 'update' && path && !snapshotted.has(path)) {
-                snapshotted.add(path);
-                const content = await captureSnapshot(path);
-                if (content) onSnapshot(path, content);
-              }
-
-              pendingTools.set(toolCallId, { name: toolName, path, action });
-              onProgress({ currentTool: { name: toolName, path } });
-            }
-            break;
+          // Capture snapshot for update operations — await to ensure we get the
+          // pre-write content before the server executes the write tool call
+          if (action === 'update' && path && !snapshotted.has(path)) {
+            snapshotted.add(path);
+            const content = await captureSnapshot(path);
+            if (content) onSnapshot(path, content);
           }
 
-          case 'tool_end': {
-            const toolCallId = event.toolCallId as string;
-            const isError = !!event.isError;
-            const pending = pendingTools.get(toolCallId);
-            if (pending) {
-              if (pending.name === 'batch_create_files') {
-                for (const p of pending.path.split(', ').filter(Boolean)) {
-                  changes.push({ action: pending.action, path: p, toolCallId, ok: !isError });
-                }
-              } else {
-                changes.push({ action: pending.action, path: pending.path, toolCallId, ok: !isError });
-              }
-              pendingTools.delete(toolCallId);
-              onProgress({ changes: [...changes], currentTool: null });
-            }
-            break;
-          }
-
-          case 'text_delta': {
-            summary += (event.delta as string) ?? '';
-            onProgress({ stageHint: { stage: 'analyzing' }, summary: stripThinkingTags(summary) });
-            break;
-          }
-
-          case 'error': {
-            throw new Error((event.message as string) || 'AI organize failed');
-          }
-
-          case 'done':
-            break;
+          pendingTools.set(toolCallId, { name: toolName, path, action });
+          onProgress({ currentTool: { name: toolName, path } });
         }
+        break;
       }
-      if (done) break;
+
+      case 'tool_end': {
+        const toolCallId = event.toolCallId as string;
+        const isError = !!event.isError;
+        const pending = pendingTools.get(toolCallId);
+        if (pending) {
+          if (pending.name === 'batch_create_files') {
+            for (const p of pending.path.split(', ').filter(Boolean)) {
+              changes.push({ action: pending.action, path: p, toolCallId, ok: !isError });
+            }
+          } else {
+            changes.push({ action: pending.action, path: pending.path, toolCallId, ok: !isError });
+          }
+          pendingTools.delete(toolCallId);
+          onProgress({ changes: [...changes], currentTool: null });
+        }
+        break;
+      }
+
+      case 'text_delta': {
+        summary += (event.delta as string) ?? '';
+        onProgress({ stageHint: { stage: 'analyzing' }, summary: stripThinkingTags(summary) });
+        break;
+      }
+
+      case 'error': {
+        throw new Error((event.message as string) || 'AI organize failed');
+      }
+
+      case 'done':
+        break;
     }
-  } finally {
-    reader.releaseLock();
-  }
+  }, { signal });
 
   return { changes, summary: stripThinkingTags(summary), toolCallCount };
 }

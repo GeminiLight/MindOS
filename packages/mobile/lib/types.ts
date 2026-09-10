@@ -1,8 +1,40 @@
 /**
  * Shared types for MindOS mobile app.
- * Copied from packages/web/lib/types.ts + packages/web/lib/core/types.ts.
- * Keep in sync until these API types are promoted into the product package.
+ *
+ * Product wire types (agent runtimes, agent-run timeline) come from the
+ * types-only core subpath `@geminilight/mindos/client-types`; only
+ * `import type` is allowed so Metro never bundles the product package
+ * (spec-client-types-and-sse-parsers, `tests/client-types-subpath-contract`).
+ * Mobile-specific shapes (Message, pending actions, API responses) stay here.
  */
+
+import type {
+  AgentRuntimeAdapter,
+  AgentRuntimeDescriptor as CoreAgentRuntimeDescriptor,
+  AgentRuntimeKind,
+  AgentRuntimeStatus,
+  AgentRunTimelineEvent,
+  AgentRunTimelinePart,
+  AgentRunTimelineRecord,
+  DetectedRuntimeAgent,
+  MissingRuntimeAgent,
+} from '@geminilight/mindos/client-types';
+
+export type {
+  AgentRunNodeKind,
+  AgentRunPermissionMode,
+  AgentRunStatus,
+  AgentRunTimelineEvent,
+  AgentRunTimelineEventCategory,
+  AgentRunTimelineEventData,
+  AgentRunTimelinePart,
+  AgentRunTimelineRecord,
+  AgentRuntimeAdapter,
+  AgentRuntimeKind,
+  AgentRuntimeStatus,
+  DetectedRuntimeAgent,
+  MissingRuntimeAgent,
+} from '@geminilight/mindos/client-types';
 
 // --- Core domain types (from packages/web/lib/core/types.ts) ---
 
@@ -70,146 +102,6 @@ export interface ImagePart {
   fileName?: string;
 }
 
-export type AgentRunNodeKind =
-  | 'mindos-main'
-  | 'mindos-headless'
-  | 'native-runtime'
-  | 'pi-subagent'
-  | 'acp'
-  | 'a2a';
-
-export type AgentRunStatus =
-  | 'queued'
-  | 'running'
-  | 'streaming'
-  | 'completed'
-  | 'failed'
-  | 'canceled'
-  | 'timed_out';
-
-export type AgentRunPermissionMode = 'readonly' | 'kb-write' | 'agent';
-
-export interface AgentRunTimelineRecord {
-  id: string;
-  rootRunId?: string;
-  parentRunId?: string;
-  chatSessionId?: string;
-  agentKind: AgentRunNodeKind;
-  runtimeId: string;
-  displayName: string;
-  status: AgentRunStatus;
-  cwd?: string;
-  permissionMode: AgentRunPermissionMode;
-  inputSummary: string;
-  outputSummary?: string;
-  error?: string;
-  startedAt: number;
-  completedAt?: number;
-  durationMs?: number;
-  metadata?: Record<string, unknown>;
-}
-
-export type AgentRunTimelineEventCategory =
-  | 'status'
-  | 'text'
-  | 'tool'
-  | 'file'
-  | 'permission'
-  | 'question'
-  | 'error';
-
-export type AgentRunTimelineEventData =
-  | {
-      kind: 'status';
-      previousStatus?: AgentRunStatus;
-      nextStatus: AgentRunStatus;
-      summary?: string;
-    }
-  | {
-      kind: 'text';
-      text: string;
-      channel?: 'assistant' | 'reasoning' | 'stdout' | 'stderr' | 'system';
-    }
-  | {
-      kind: 'tool';
-      name: string;
-      status?: 'started' | 'running' | 'completed' | 'failed' | 'canceled';
-      inputSummary?: string;
-      outputSummary?: string;
-      error?: string;
-    }
-  | {
-      kind: 'file';
-      path: string;
-      action: 'read' | 'created' | 'updated' | 'deleted' | 'renamed' | 'diff' | 'unknown';
-      status?: 'started' | 'completed' | 'failed';
-      summary?: string;
-    }
-  | {
-      kind: 'permission';
-      action: string;
-      status: 'requested' | 'approved' | 'denied' | 'expired' | 'skipped';
-      requestId?: string;
-      resource?: string;
-      prompt?: string;
-      decision?: string;
-      decisionLabel?: string;
-      decisionIntent?: 'allow' | 'deny' | 'cancel';
-      decisionScope?: 'once' | 'session' | 'always' | 'turn';
-      options?: Array<{
-        id: string;
-        label: string;
-        intent?: 'allow' | 'deny' | 'cancel';
-        scope?: 'once' | 'session' | 'always' | 'turn';
-      }>;
-      risk?: {
-        level: 'low' | 'medium' | 'high';
-        summary: string;
-        reasons?: string[];
-      };
-    }
-  | {
-      kind: 'question';
-      status: 'requested' | 'answered' | 'cancelled';
-      prompt?: string;
-      summary?: string;
-    }
-  | {
-      kind: 'error';
-      message: string;
-      code?: string;
-      recoverable?: boolean;
-    };
-
-export interface AgentRunTimelineEvent {
-  id: string;
-  runId: string;
-  type: string;
-  category: AgentRunTimelineEventCategory;
-  ts: number;
-  status: AgentRunStatus;
-  record: AgentRunTimelineRecord;
-  message?: string;
-  data?: AgentRunTimelineEventData;
-  title?: string;
-  toolCallId?: string;
-  toolName?: string;
-  filePath?: string;
-  runtime?: string;
-  visibility?: 'timeline' | 'debug';
-  metadata?: Record<string, unknown>;
-}
-
-export interface AgentRunTimelinePart {
-  type: 'agent-run-timeline';
-  chatSessionId: string;
-  rootRunId?: string;
-  startedAfter?: number;
-  runs: AgentRunTimelineRecord[];
-  events?: AgentRunTimelineEvent[];
-  updatedAt: number;
-}
-
 export type MessagePart = TextPart | ToolCallPart | ReasoningPart | ImagePart | AgentRunTimelinePart;
 
 export interface Message {
@@ -226,60 +118,30 @@ export interface Message {
 
 export type ComposerIntent = 'chat' | 'act';
 
-export type AgentRuntimeKind = 'mindos' | 'acp' | 'codex' | 'claude';
-export type AgentRuntimeStatus = 'available' | 'missing' | 'signed-out' | 'error';
-export type AgentRuntimeAdapter =
-  | 'mindos'
-  | 'codex-app-server'
-  | 'codex-sdk'
-  | 'claude-cli'
-  | 'claude-sdk'
-  | 'acp';
-
 export interface AgentRuntimeIdentity {
   id: string;
   name: string;
   kind: AgentRuntimeKind;
 }
 
-export interface AgentRuntimeDescriptor extends AgentRuntimeIdentity {
+/**
+ * The subset of the core runtime descriptor that mobile renders. Derived from
+ * the core type so field types cannot drift; `lib/types.test-d.ts` asserts
+ * every core descriptor is assignable to this view. `adapter` stays optional
+ * because the local MindOS placeholder runtime does not declare one.
+ */
+export type AgentRuntimeDescriptor = Pick<
+  CoreAgentRuntimeDescriptor,
+  'id' | 'name' | 'kind' | 'status' | 'binaryPath' | 'installCmd' | 'packageName' | 'runtimeBridge' | 'availability'
+> & {
   adapter?: AgentRuntimeAdapter;
-  status: AgentRuntimeStatus;
-  binaryPath?: string;
-  installCmd?: string;
-  packageName?: string;
-  runtimeBridge?: {
-    kind: 'codex-app-server' | 'claude-sdk' | 'claude-cli';
-    label: string;
-    fallback?: boolean;
-    reason?: string;
-  };
-  availability?: {
-    checkedAt: string;
-    sources: Array<'acp-detect' | 'acp-registry' | 'mcp-agents' | 'native-health' | 'settings'>;
-    reason?: string;
-    diagnosticHints?: string[];
-    stale?: boolean;
-  };
-}
+};
 
+/** `/api/agent-runtimes` as normalized by `api-client.ts`; `installed` / `notInstalled` are the core shapes. */
 export interface AgentRuntimesResponse {
   runtimes: AgentRuntimeDescriptor[];
-  installed?: Array<{
-    id: string;
-    name: string;
-    binaryPath?: string;
-    status?: Exclude<AgentRuntimeStatus, 'missing'>;
-    reason?: string;
-  }>;
-  notInstalled?: Array<{
-    id: string;
-    name: string;
-    installCmd?: string;
-    packageName?: string;
-    status?: Extract<AgentRuntimeStatus, 'missing' | 'error'>;
-    reason?: string;
-  }>;
+  installed?: DetectedRuntimeAgent[];
+  notInstalled?: MissingRuntimeAgent[];
 }
 
 export interface AgentRunsResponse {

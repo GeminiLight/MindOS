@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { buildAssistantAgentTurnRequestBody } from '@/lib/assistant-runner';
+import { parseSseJsonData, readSseStream } from '@/lib/sse/read-sse-stream';
 import { AgentSectionHeading } from './AgentsPrimitives';
 
 type MindosAssistantSource = 'builtin' | 'custom';
@@ -2073,37 +2074,19 @@ Use this assistant profile:
 Return a concise result for the user. Do not write files or make external changes unless a later run explicitly grants a stronger permission mode.`;
 }
 
-async function readAskTextResponse(res: Response): Promise<string> {
+export async function readAskTextResponse(res: Response): Promise<string> {
   if (!res.body) {
     return typeof res.text === 'function' ? res.text() : '';
   }
 
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
   let output = '';
-
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() ?? '';
-    for (const line of lines) {
-      if (!line.startsWith('data:')) continue;
-      const raw = line.slice(5).trim();
-      if (!raw || raw === '[DONE]') continue;
-      try {
-        const event = JSON.parse(raw) as { type?: string; delta?: string; error?: string; message?: string };
-        if (event.type === 'text_delta' && typeof event.delta === 'string') output += event.delta;
-        if (event.type === 'error' && event.error) throw new Error(event.error);
-        if (event.type === 'error' && event.message) throw new Error(event.message);
-      } catch (error) {
-        if (error instanceof SyntaxError) continue;
-        throw error;
-      }
-    }
-  }
+  await readSseStream(res.body, (frame) => {
+    const event = parseSseJsonData<{ type?: string; delta?: string; error?: string; message?: string }>(frame);
+    if (!event) return;
+    if (event.type === 'text_delta' && typeof event.delta === 'string') output += event.delta;
+    if (event.type === 'error' && event.error) throw new Error(event.error);
+    if (event.type === 'error' && event.message) throw new Error(event.message);
+  });
 
   return output.trim();
 }

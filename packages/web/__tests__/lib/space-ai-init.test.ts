@@ -75,7 +75,7 @@ describe('space AI init stream handling', () => {
 
   it('throws while draining a failed init stream', async () => {
     await expect(consumeSpaceAiInitStream(streamFrom([
-      'data:{"type":"text_delta","delta":"Starting"}\n',
+      'data:{"type":"text_delta","delta":"Starting"}\n\n',
       'data:{"type":"error","message":"Model failed"}\n\n',
     ]))).rejects.toThrow('Model failed');
   });
@@ -85,5 +85,57 @@ describe('space AI init stream handling', () => {
       'data:{bad json}\n',
       'data:{"type":"done"}\n',
     ]))).resolves.toBeUndefined();
+  });
+
+  it('detects error events written as data: with a leading space', () => {
+    expect(findSpaceAiInitStreamError('data: {"type":"error","message":"Spaced"}\n\n')).toBe('Spaced');
+  });
+
+  it('returns null when no error frame is present', () => {
+    expect(findSpaceAiInitStreamError('data:{"type":"text_delta","delta":"hi"}\n\ndata:{"type":"done"}\n\n')).toBeNull();
+    expect(findSpaceAiInitStreamError('')).toBeNull();
+  });
+
+  it('detects an error frame split across two chunks', async () => {
+    await expect(consumeSpaceAiInitStream(streamFrom([
+      'data:{"type":"error",',
+      '"message":"Split failure"}\n\n',
+    ]))).rejects.toThrow('Split failure');
+  });
+
+  it('detects an error frame with CRLF line endings', async () => {
+    await expect(consumeSpaceAiInitStream(streamFrom([
+      'data:{"type":"text_delta","delta":"x"}\r\n\r\n',
+      'data:{"type":"error","message":"CRLF failure"}\r\n\r\n',
+    ]))).rejects.toThrow('CRLF failure');
+  });
+
+  it('detects an error spread over multiple data lines', async () => {
+    await expect(consumeSpaceAiInitStream(streamFrom([
+      'data:{"type":"error",\n',
+      'data:"message":"Multi-line failure"}\n\n',
+    ]))).rejects.toThrow('Multi-line failure');
+  });
+
+  it('ignores non-error frames while draining', async () => {
+    await expect(consumeSpaceAiInitStream(streamFrom([
+      'data:{"type":"text_delta","delta":"Writing"}\n\n',
+      'data:{"type":"tool_start","toolName":"write_file","toolCallId":"t1"}\n\n',
+      'data:{"type":"tool_end","toolCallId":"t1"}\n\n',
+      'data:{"type":"done"}\n\n',
+    ]))).resolves.toBeUndefined();
+  });
+
+  it('detects a trailing error frame that has no closing blank line', async () => {
+    await expect(consumeSpaceAiInitStream(streamFrom([
+      'data:{"type":"done"}\n\n',
+      'data:{"type":"error","message":"Tail failure"}',
+    ]))).rejects.toThrow('Tail failure');
+  });
+
+  it('falls back to a generic message when the error frame has no message', async () => {
+    await expect(consumeSpaceAiInitStream(streamFrom([
+      'data:{"type":"error"}\n\n',
+    ]))).rejects.toThrow('AI initialization failed');
   });
 });

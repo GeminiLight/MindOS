@@ -287,3 +287,71 @@ describe('Workflow Execution — Skill Injection', () => {
     expect(skillFetchCount).toBe(1);
   });
 });
+
+describe('Workflow Execution — SSE stream parsing', () => {
+  const step = {
+    id: 's1', name: 'Step 1', prompt: 'Simple task',
+    index: 0, status: 'running' as const, output: '',
+  };
+  const workflow = {
+    title: 'Simple',
+    steps: [{ id: 's1', name: 'Step 1', prompt: 'Simple task' }],
+  };
+
+  async function runWithStream(chunks: string[]): Promise<string[]> {
+    mockFetch((url) => {
+      if (isAgentTurnUrl(url)) return streamResponse(chunks);
+      return jsonResponse({}, 404);
+    });
+    const { runStepWithAI } = await import('@/components/renderers/workflow-yaml/execution');
+    const seen: string[] = [];
+    const ctrl = new AbortController();
+    await runStepWithAI(step, workflow, '/test.yaml', (acc) => seen.push(acc), ctrl.signal);
+    return seen;
+  }
+
+  it('accumulates text_delta and thinking_delta frames across a chunk split', async () => {
+    const seen = await runWithStream([
+      'data:{"type":"thinking_delta","delta":"Think "}\n\n',
+      'data:{"type":"text_delta",',
+      '"delta":"Done"}\n',
+      '\n',
+    ]);
+    expect(seen).toEqual(['Think ', 'Think Done']);
+  });
+
+  it('accepts data: frames written with a leading space', async () => {
+    const seen = await runWithStream(['data: {"type":"text_delta","delta":"Spaced"}\n\n']);
+    expect(seen).toEqual(['Spaced']);
+  });
+
+  it('rejects with the message from an error event written with a leading space', async () => {
+    mockFetch((url) => {
+      if (isAgentTurnUrl(url)) return streamResponse(['data: {"type":"error","message":"Spaced failure"}\n\n']);
+      return jsonResponse({}, 404);
+    });
+    const { runStepWithAI } = await import('@/components/renderers/workflow-yaml/execution');
+    const ctrl = new AbortController();
+    await expect(runStepWithAI(step, workflow, '/test.yaml', () => {}, ctrl.signal))
+      .rejects.toThrow('Spaced failure');
+  });
+
+  it('keeps accumulating legacy 0:"..." lines, including escaped newlines and quotes', async () => {
+    const seen = await runWithStream(['0:"Hello\\n"\n', '0:"\\"world\\""\n']);
+    expect(seen).toEqual(['Hello\n', 'Hello\n"world"']);
+  });
+
+  it('processes a trailing frame without a closing blank line', async () => {
+    const seen = await runWithStream(['data:{"type":"text_delta","delta":"Tail"}']);
+    expect(seen).toEqual(['Tail']);
+  });
+
+  it('ignores malformed and non-text frames', async () => {
+    const seen = await runWithStream([
+      'data:{bad json}\n\n',
+      'data:{"type":"tool_start","toolName":"read_file"}\n\n',
+      'data:{"type":"text_delta","delta":"ok"}\n\n',
+    ]);
+    expect(seen).toEqual(['ok']);
+  });
+});

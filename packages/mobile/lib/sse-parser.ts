@@ -9,6 +9,12 @@
  * joined with `\n`, comment lines are ignored, and a block only dispatches
  * when its data buffer is non-empty. `lastEventId` persists across events.
  *
+ * Two end-of-stream behaviours are offered because the two consumers differ:
+ * `end()` follows the spec and discards an unterminated block (used by the
+ * long-lived `/api/events` stream), while `flush()` dispatches it (used by the
+ * agent-turn client, whose final `done` frame may arrive without a trailing
+ * blank line).
+ *
  * Nothing in this file touches React Native APIs so it is unit-testable in Node.
  */
 
@@ -27,6 +33,13 @@ export interface SseParser {
   push(chunk: Uint8Array | string): void;
   /** End of stream: per spec an unterminated event is discarded, never dispatched. */
   end(): void;
+  /**
+   * End of stream, lenient variant: treat an unterminated trailing line as
+   * complete, then dispatch the current block if it has data (exactly as a
+   * blank line would). Afterwards the parser is empty and can keep accepting
+   * chunks.
+   */
+  flush(): void;
 }
 
 export interface Utf8StreamDecoder {
@@ -249,6 +262,17 @@ export function createSseParser(onFrame: (frame: SseFrame) => void): SseParser {
       textBuffer = '';
       pendingCR = false;
       resetBlock();
+    },
+    flush() {
+      // textBuffer never holds a terminator, so whatever is left is one
+      // partial line; a pending CR has already terminated its line.
+      if (textBuffer.length > 0) {
+        const line = textBuffer;
+        textBuffer = '';
+        processLine(line);
+      }
+      pendingCR = false;
+      dispatch();
     },
   };
 }

@@ -1,6 +1,7 @@
 // Workflow step execution logic — fetches skills, resolves agents, constructs prompts, streams AI responses
 
 import { buildAgentTurnEndpoint, createTransientAgentSessionId } from '@/lib/agent-turn-endpoint';
+import { parseSseJsonData, readSseStream } from '@/lib/sse/read-sse-stream';
 import type { WorkflowYaml, WorkflowStepRuntime } from './types';
 
 // ─── Skill Fetching ───────────────────────────────────────────────────────
@@ -184,46 +185,10 @@ export async function runStepWithAI(
   if (!res.ok) throw new Error(`Request failed (HTTP ${res.status})`);
   if (!res.body) throw new Error('No response body');
 
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
   let acc = '';
-  let buffer = '';
 
-  function processStreamLine(line: string) {
-    // SSE format: data:{"type":"text_delta","delta":"..."}
-    const sseMatch = line.match(/^data:(.+)$/);
-    if (sseMatch) {
-      let event: unknown;
-      try {
-        event = JSON.parse(sseMatch[1]);
-      } catch {
-        // Not valid JSON — try legacy Vercel AI SDK format: 0:"..."
-        const legacyMatch = line.match(/^0:"((?:[^"\\]|\\.)*)"$/);
-        if (legacyMatch) {
-          acc += legacyMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
-          onChunk(acc);
-        }
-        return;
-      }
-
-      if (event && typeof event === 'object' && 'type' in event) {
-        const typedEvent = event as { type?: unknown; delta?: unknown; message?: unknown };
-        if (typedEvent.type === 'text_delta' && typeof typedEvent.delta === 'string') {
-          acc += typedEvent.delta;
-          onChunk(acc);
-        } else if (typedEvent.type === 'thinking_delta' && typeof typedEvent.delta === 'string') {
-          // Show agent thinking as dimmed text
-          acc += typedEvent.delta;
-          onChunk(acc);
-        } else if (typedEvent.type === 'error' && typedEvent.message) {
-          // ACP agent error — throw so WorkflowRunner shows it in step error state
-          throw new Error(String(typedEvent.message));
-        }
-      }
-      return;
-    }
-
-    // Legacy Vercel AI SDK format (without SSE prefix)
+  // Legacy Vercel AI SDK format (without SSE prefix): 0:"..."
+  function appendLegacyLine(line: string) {
     const legacyMatch = line.match(/^0:"((?:[^"\\]|\\.)*)"$/);
     if (legacyMatch) {
       acc += legacyMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
@@ -231,13 +196,23 @@ export async function runStepWithAI(
     }
   }
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() ?? '';
-    for (const line of lines) processStreamLine(line);
-  }
-  if (buffer) processStreamLine(buffer);
+  // The fetch signal already rejects the pending read on abort, so the stream
+  // reader is not given the signal: an aborted step must surface AbortError
+  // rather than resolve as if it completed.
+  await readSseStream(res.body, (frame) => {
+    // SSE format: data:{"type":"text_delta","delta":"..."}
+    const event = parseSseJsonData<{ type?: unknown; delta?: unknown; message?: unknown }>(frame);
+    if (!event) return;
+    if (event.type === 'text_delta' && typeof event.delta === 'string') {
+      acc += event.delta;
+      onChunk(acc);
+    } else if (event.type === 'thinking_delta' && typeof event.delta === 'string') {
+      // Show agent thinking as dimmed text
+      acc += event.delta;
+      onChunk(acc);
+    } else if (event.type === 'error' && event.message) {
+      // ACP agent error — throw so WorkflowRunner shows it in step error state
+      throw new Error(String(event.message));
+    }
+  }, { onOtherLine: appendLegacyLine });
 }

@@ -1,27 +1,19 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { AgentRuntimeDescriptor, AgentRuntimeStatus } from '@/lib/types';
+import type {
+  AgentRuntimeDescriptor,
+  DetectedRuntimeAgent,
+  MissingRuntimeAgent,
+} from '@/lib/types';
 
-export interface DetectedAgent {
-  id: string;
-  name: string;
-  binaryPath: string;
-  status?: Exclude<AgentRuntimeStatus, 'missing'>;
-  reason?: string;
-  resolvedCommand?: {
-    cmd: string;
-    args: string[];
-    source: 'user-override' | 'descriptor' | 'registry';
-  };
-}
-
-export interface NotInstalledAgent {
-  id: string;
-  name: string;
-  installCmd: string;
-  packageName?: string;
-}
+/**
+ * `/api/agent-runtimes` returns the core `installed` / `notInstalled`
+ * shapes; these aliases keep the hook's historical names for its consumers
+ * without redeclaring the structure (spec-client-types-and-sse-parsers).
+ */
+export type DetectedAgent = DetectedRuntimeAgent;
+export type NotInstalledAgent = MissingRuntimeAgent;
 
 interface AcpDetectionState {
   installedAgents: DetectedAgent[];

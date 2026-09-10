@@ -257,6 +257,10 @@ function describeEvent(event: AgentRunTimelineEvent | undefined): string | null 
         : compactNullable(data.summary || data.prompt || event.message);
     case 'error':
       return compactNullable(data.message);
+    case 'plan':
+    case 'goal':
+      // Plan / goal evaluations carry their own one-line summary.
+      return compactNullable(data.summary || event.message);
     default:
       return exhaustiveEventData(data);
   }

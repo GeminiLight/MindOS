@@ -113,6 +113,7 @@ describe('MindOS runtime product kernel contract', () => {
       './capabilities',
       './cli',
       './client',
+      './client-types',
       './foundation',
       './intelligence',
       './knowledge',

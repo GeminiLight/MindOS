@@ -20,7 +20,7 @@ function run(overrides: Partial<AgentRunTimelineRecord> = {}): AgentRunTimelineR
     runtimeId: 'reviewer',
     displayName: 'Reviewer',
     status: 'completed',
-    permissionMode: 'agent',
+    permissionMode: 'ask',
     inputSummary: 'Review the repo',
     outputSummary: 'Looks good.',
     startedAt: 1000,

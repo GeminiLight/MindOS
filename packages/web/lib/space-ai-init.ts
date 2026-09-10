@@ -2,6 +2,7 @@ import { apiFetch } from '@/lib/api';
 import { buildAgentTurnEndpoint, createTransientAgentSessionId } from '@/lib/agent-turn-endpoint';
 import { isAiConfiguredForAgentTurn, type SettingsJsonForAi } from '@/lib/settings-ai-client';
 import { notifyFilesChanged } from '@/lib/files-changed';
+import { parseSseJsonData, parseSseText, readSseStream, type SseFrame } from '@/lib/sse/read-sse-stream';
 
 /**
  * Check if AI is available by inspecting the active or explicitly selected provider.
@@ -15,43 +16,25 @@ export async function checkAiAvailable(providerOverride?: string | null): Promis
   }
 }
 
+function findSpaceAiInitFrameError(frame: SseFrame): string | null {
+  const event = parseSseJsonData<{ type?: unknown; message?: unknown }>(frame);
+  if (event?.type === 'error') return String(event.message || 'AI initialization failed');
+  return null;
+}
+
 export function findSpaceAiInitStreamError(raw: string): string | null {
-  for (const line of raw.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed.startsWith('data:')) continue;
-    const payload = trimmed.slice(5).trim();
-    if (!payload) continue;
-    try {
-      const event = JSON.parse(payload) as { type?: unknown; message?: unknown };
-      if (event.type === 'error') return String(event.message || 'AI initialization failed');
-    } catch {
-      // Ignore malformed non-error stream lines while continuing to drain.
-    }
+  for (const frame of parseSseText(raw)) {
+    const error = findSpaceAiInitFrameError(frame);
+    if (error) return error;
   }
   return null;
 }
 
 export async function consumeSpaceAiInitStream(body: ReadableStream<Uint8Array>): Promise<void> {
-  const reader = body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() ?? '';
-      const error = findSpaceAiInitStreamError(lines.join('\n'));
-      if (error) throw new Error(error);
-    }
-    if (buffer) {
-      const error = findSpaceAiInitStreamError(buffer);
-      if (error) throw new Error(error);
-    }
-  } finally {
-    reader.releaseLock();
-  }
+  await readSseStream(body, (frame) => {
+    const error = findSpaceAiInitFrameError(frame);
+    if (error) throw new Error(error);
+  });
 }
 
 /**

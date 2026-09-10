@@ -177,6 +177,64 @@ describe('createSseParser', () => {
     expect(frames).toHaveLength(0);
   });
 
+  it('flush() dispatches a pending block whose last line has no terminator', () => {
+    const { frames, parser } = collect();
+    parser.push(bytes('event: x\ndata: first\ndata: sec'));
+    parser.push(bytes('ond'));
+    expect(frames).toHaveLength(0);
+    parser.flush();
+
+    expect(frames).toEqual([{ event: 'x', data: 'first\nsecond', lastEventId: '' }]);
+  });
+
+  it('flush() dispatches a block that ended with a newline but no blank line', () => {
+    const { frames, parser } = collect();
+    parser.push(bytes('data: {"type":"done"}\n'));
+    parser.flush();
+
+    expect(frames).toEqual([{ event: 'message', data: '{"type":"done"}', lastEventId: '' }]);
+  });
+
+  it('flush() dispatches nothing when no data is pending and leaves the parser usable', () => {
+    const { frames, parser } = collect();
+    parser.flush();
+    parser.push(bytes('data: a\n\n'));
+    parser.flush();
+    parser.push(bytes(': comment'));
+    parser.flush();
+    parser.push(bytes('id: 9'));
+    parser.flush();
+
+    expect(frames).toEqual([{ event: 'message', data: 'a', lastEventId: '' }]);
+  });
+
+  it('flush() does not dispatch the same block twice', () => {
+    const { frames, parser } = collect();
+    parser.push(bytes('data: once'));
+    parser.flush();
+    parser.flush();
+    parser.push(bytes('\n\n'));
+
+    expect(frames).toEqual([{ event: 'message', data: 'once', lastEventId: '' }]);
+  });
+
+  it('flush() handles a trailing CR without emitting a stray empty line', () => {
+    const { frames, parser } = collect();
+    parser.push(bytes('data: a\r'));
+    parser.flush();
+
+    expect(frames).toEqual([{ event: 'message', data: 'a', lastEventId: '' }]);
+  });
+
+  it('end() discards an unterminated trailing line instead of dispatching it', () => {
+    const { frames, parser } = collect();
+    parser.push(bytes('data: partial'));
+    parser.end();
+    parser.push(bytes('\n\n'));
+
+    expect(frames).toHaveLength(0);
+  });
+
   it('handles an empty chunk and a very long data line', () => {
     const { frames, parser } = collect();
     const long = 'x'.repeat(64 * 1024);

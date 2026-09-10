@@ -20,7 +20,7 @@ function run(overrides: Partial<AgentRunTimelineRecord> = {}): AgentRunTimelineR
     runtimeId: 'reviewer',
     displayName: 'Reviewer',
     status: 'completed',
-    permissionMode: 'agent',
+    permissionMode: 'ask',
     inputSummary: 'Review the repo',
     outputSummary: 'Looks good.',
     startedAt: 1000,
@@ -52,6 +52,41 @@ describe('recent agent activity mobile summary', () => {
       failedCount: 0,
       pendingUserActionCount: 0,
       lastUpdatedAt: 3000,
+    });
+  });
+
+  it('describes plan and goal evaluation events by their summary', () => {
+    const codex = run({
+      id: 'codex-run',
+      agentKind: 'native-runtime',
+      runtimeId: 'codex',
+      displayName: 'Codex',
+      status: 'running',
+      metadata: { runtimeKind: 'codex' },
+      startedAt: 1000,
+      completedAt: undefined,
+    });
+    const plan = eventFor(codex, {
+      id: 'plan-1',
+      type: 'plan',
+      category: 'status',
+      data: {
+        kind: 'plan',
+        schemaVersion: 1,
+        mode: 'plan',
+        summary: 'Draft three steps before editing',
+        steps: [{ title: 'Read the spec', status: 'pending' }],
+        risks: [],
+        source: 'assistant',
+        generatedAt: 1001,
+      },
+    });
+
+    const summary = buildRecentAgentActivity({ runs: [codex], events: [plan] }, { now: 2000 });
+
+    expect(summary.items[0]).toMatchObject({
+      name: 'Codex',
+      detail: 'Draft three steps before editing',
     });
   });
 

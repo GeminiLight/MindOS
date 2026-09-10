@@ -23,6 +23,7 @@
     "@babel/runtime": "^7.29.2",
     "@expo/metro-runtime": "~57.0.15",
     "@expo/vector-icons": "^15.0.2",
+    "@geminilight/mindos": "workspace:*",
     "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "~57.0.20",
     "expo-asset": "~57.0.16",

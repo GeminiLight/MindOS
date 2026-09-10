@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   consumeOrganizeStream,
   stripThinkingTags,
@@ -280,6 +280,10 @@ describe('parseOrganizeEvents', () => {
 });
 
 describe('consumeOrganizeStream', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it('processes a final text_delta line without a trailing newline', async () => {
     const result = await consumeOrganizeStream(
       streamFrom(['data:{"type":"text_delta","delta":"final summary"}']),
@@ -288,6 +292,101 @@ describe('consumeOrganizeStream', () => {
     );
 
     expect(result.summary).toBe('final summary');
+  });
+
+  it('accumulates a text_delta frame split across chunks', async () => {
+    const summaries: string[] = [];
+    const result = await consumeOrganizeStream(
+      streamFrom([
+        'data:{"type":"text_delta","delta":"Hello "}\n\n',
+        'data:{"type":"text_delta",',
+        '"delta":"world"}\n\n',
+      ]),
+      (partial) => { if (partial.summary !== undefined) summaries.push(partial.summary); },
+      () => {},
+    );
+
+    expect(summaries).toEqual(['Hello', 'Hello world']);
+    expect(result.summary).toBe('Hello world');
+  });
+
+  it('captures the pre-write snapshot on tool_start before recording the tool_end change', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.startsWith('/api/file?')) {
+        return { ok: true, json: async () => ({ content: 'original body' }) };
+      }
+      throw new Error(`Unexpected fetch ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const order: string[] = [];
+    const result = await consumeOrganizeStream(
+      streamFrom([
+        'data:{"type":"tool_start","toolName":"write_file","toolCallId":"t1",',
+        '"args":{"path":"notes/a.md"}}\n\n',
+        'data:{"type":"tool_end","toolCallId":"t1","isError":false}\n\n',
+        'data:{"type":"done"}\n\n',
+      ]),
+      (partial) => { if (partial.changes) order.push('change'); },
+      (path, content) => { order.push(`snapshot ${path}=${content}`); },
+    );
+
+    expect(order).toEqual(['snapshot notes/a.md=original body', 'change']);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0][0])).toBe('/api/file?path=notes%2Fa.md&op=read_file');
+    expect(result.changes).toEqual([{ action: 'update', path: 'notes/a.md', toolCallId: 't1', ok: true }]);
+    expect(result.toolCallCount).toBe(1);
+  });
+
+  it('records a failed create without snapshotting it', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await consumeOrganizeStream(
+      streamFrom([
+        'data:{"type":"tool_start","toolName":"create_file","toolCallId":"t2","args":{"path":"notes/new.md"}}\n\n',
+        'data:{"type":"tool_end","toolCallId":"t2","isError":true}\n\n',
+      ]),
+      () => {},
+      () => {},
+    );
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.changes).toEqual([{ action: 'create', path: 'notes/new.md', toolCallId: 't2', ok: false }]);
+  });
+
+  it('stops reading once the abort signal fires', async () => {
+    const controller = new AbortController();
+    const result = await consumeOrganizeStream(
+      streamFrom([
+        'data:{"type":"text_delta","delta":"first"}\n\n',
+        'data:{"type":"text_delta","delta":" second"}\n\n',
+      ]),
+      (partial) => { if (partial.summary !== undefined) controller.abort(); },
+      () => {},
+      controller.signal,
+    );
+
+    expect(result.summary).toBe('first');
+  });
+
+  it('throws the message from an error frame', async () => {
+    await expect(consumeOrganizeStream(
+      streamFrom(['data:{"type":"error","message":"Organize failed"}\n\n']),
+      () => {},
+      () => {},
+    )).rejects.toThrow('Organize failed');
+  });
+
+  it('skips malformed frames and keeps going', async () => {
+    const result = await consumeOrganizeStream(
+      streamFrom(['data:{not json}\n\n', 'data:{"type":"text_delta","delta":"ok"}\n\n']),
+      () => {},
+      () => {},
+    );
+
+    expect(result.summary).toBe('ok');
   });
 });
 

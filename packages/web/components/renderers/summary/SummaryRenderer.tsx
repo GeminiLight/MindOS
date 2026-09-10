@@ -5,6 +5,7 @@ import { Sparkles, RefreshCw, Clock, FileText } from 'lucide-react';
 import { encodePath } from '@/lib/utils';
 import { apiFetch } from '@/lib/api';
 import { buildAgentTurnEndpoint, createTransientAgentSessionId } from '@/lib/agent-turn-endpoint';
+import { createSseTextParser, parseSseJsonData, readSseStream, type SseFrame } from '@/lib/sse/read-sse-stream';
 import type { RendererContext } from '@/lib/renderers/registry';
 import { escapeHtml } from '../safe-html';
 
@@ -43,37 +44,63 @@ export function renderMarkdown(md: string): string {
     .replace(/^(?!<[hulo])(.+)$/gm, '<p style="margin:.5em 0;font-size:.85rem;line-height:1.7;color:var(--foreground)">$1</p>');
 }
 
+function applySummaryFrame(acc: string, frame: SseFrame): string {
+  const event = parseSseJsonData<{ type?: unknown; delta?: unknown; message?: unknown }>(frame);
+  if (!event) return acc;
+  if ((event.type === 'text_delta' || event.type === 'thinking_delta') && typeof event.delta === 'string') {
+    return acc + event.delta;
+  }
+  if (event.type === 'error') {
+    throw new Error(String(event.message || 'Stream error'));
+  }
+  return acc;
+}
+
+// Lines that are not SSE fields: legacy Vercel AI SDK `0:"..."` frames, its
+// `d:` / `e:` metadata (dropped), or a plain text stream fallback.
+function applySummaryOtherLine(acc: string, line: string): string {
+  const legacyMatch = line.match(/^0:"((?:[^"\\]|\\.)*)"$/);
+  if (legacyMatch) {
+    return acc + legacyMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+  }
+  if (line && !line.startsWith('d:') && !line.startsWith('e:') && !line.startsWith('0:')) {
+    return acc + line;
+  }
+  return acc;
+}
+
 export function appendSummaryStreamChunk(acc: string, raw: string): string {
   let next = acc;
-  for (const line of raw.split('\n')) {
-    const sseMatch = line.match(/^data:(.+)$/);
-    if (sseMatch) {
-      let event: unknown;
-      try {
-        event = JSON.parse(sseMatch[1]);
-      } catch {
-        continue;
-      }
-      if (event && typeof event === 'object' && 'type' in event) {
-        const typedEvent = event as { type?: unknown; delta?: unknown; message?: unknown };
-        if ((typedEvent.type === 'text_delta' || typedEvent.type === 'thinking_delta') && typeof typedEvent.delta === 'string') {
-          next += typedEvent.delta;
-        } else if (typedEvent.type === 'error') {
-          throw new Error(String(typedEvent.message || 'Stream error'));
-        }
-      }
-      continue;
-    }
-
-    const legacyMatch = line.match(/^0:"((?:[^"\\]|\\.)*)"$/);
-    if (legacyMatch) {
-      next += legacyMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
-    } else if (line && !line.startsWith('d:') && !line.startsWith('e:') && !line.startsWith('0:')) {
-      // plain text stream fallback
-      next += line;
-    }
-  }
+  // Frames and legacy lines must be applied in arrival order, so this drives
+  // the incremental parser directly instead of collecting frames first.
+  const parser = createSseTextParser({
+    onFrame: (frame) => { next = applySummaryFrame(next, frame); },
+    onOtherLine: (line) => { next = applySummaryOtherLine(next, line); },
+  });
+  parser.push(raw);
+  parser.flush();
   return next;
+}
+
+export async function consumeSummaryStream(
+  body: ReadableStream<Uint8Array>,
+  onUpdate: (acc: string) => void,
+  signal?: AbortSignal,
+): Promise<string> {
+  let acc = '';
+  await readSseStream(body, (frame) => {
+    acc = applySummaryFrame(acc, frame);
+    onUpdate(acc);
+  }, {
+    signal,
+    onOtherLine: (line) => {
+      const next = applySummaryOtherLine(acc, line);
+      if (next === acc) return;
+      acc = next;
+      onUpdate(acc);
+    },
+  });
+  return acc;
 }
 
 const LIMIT = 8;
@@ -136,24 +163,10 @@ Be specific. Reference actual content from the files. Keep the total response un
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       if (!res.body) throw new Error('No response body');
 
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let acc = '';
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
-        acc = appendSummaryStreamChunk(acc, lines.join('\n'));
-        setSummary(acc);
-      }
-      if (buffer) {
-        acc = appendSummaryStreamChunk(acc, buffer);
-        setSummary(acc);
-      }
+      await consumeSummaryStream(res.body, setSummary, ctrl.signal);
+      // An abort between frames returns early instead of throwing; the run
+      // was cancelled, so it must not be presented as a finished briefing.
+      if (ctrl.signal.aborted) return;
       setGenerated(true);
     } catch (err: unknown) {
       if (err instanceof Error && err.name !== 'AbortError') {

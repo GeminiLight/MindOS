@@ -16,6 +16,7 @@ describe('generated renderer HTML safety', () => {
   it('parses MindOS summary SSE without rendering raw event JSON', () => {
     const text = appendSummaryStreamChunk('', [
       'data:{"type":"text_delta","delta":"Hello "}',
+      '',
       'data:{"type":"thinking_delta","delta":"world"}',
       '',
     ].join('\n'));

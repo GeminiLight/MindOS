@@ -1,4 +1,8 @@
 export { ACP_ERRORS } from '@geminilight/mindos/protocols/acp';
+// ACP wire types: one source in the Web package. `@/lib/types` re-exports
+// them from `@geminilight/mindos/client-types`; this module only keeps the
+// historical import path alive for the ACP adapters and their tests
+// (spec-client-types-and-sse-parsers).
 export type {
   AcpAdapterConnectionType,
   AcpAgentCapabilities,
@@ -39,4 +43,4 @@ export type {
   AcpToolResult,
   AcpTransportType,
   AcpUpdateType,
-} from '@geminilight/mindos/protocols/acp';
+} from '@/lib/types';

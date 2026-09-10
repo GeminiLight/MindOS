@@ -4,6 +4,7 @@ import type {
   AgentRunObservatoryTrace,
 } from '@geminilight/mindos/server';
 import type { AgentRunCapsuleRecoveryAction } from '@geminilight/mindos/agent';
+import { parseSseJsonData, parseSseText } from '@/lib/sse/read-sse-stream';
 
 export type AgentRunObservatoryFilter = 'all' | 'active' | 'waiting' | 'issues' | 'completed';
 
@@ -108,12 +109,9 @@ function parseResponseError(text: string): string | undefined {
 }
 
 function parseSseError(text: string): string | undefined {
-  for (const line of text.split('\n')) {
-    if (!line.startsWith('data: ')) continue;
-    try {
-      const event = JSON.parse(line.slice(6)) as { type?: string; message?: string };
-      if (event.type === 'error' && event.message) return event.message;
-    } catch { /* ignore malformed non-error events */ }
+  for (const frame of parseSseText(text)) {
+    const event = parseSseJsonData<{ type?: string; message?: string }>(frame);
+    if (event?.type === 'error' && event.message) return event.message;
   }
   return undefined;
 }
