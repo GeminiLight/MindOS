@@ -19,7 +19,10 @@ import {
   type MindOSSSEvent,
   type MindosUiAgentMessage,
 } from '@geminilight/mindos/agent/turn';
-import { runMindosPiAgentTurnSession } from '@geminilight/mindos/agent/mindos-pi';
+import {
+  runMindosPiAgentTurnSession,
+  type MindosPiAgentTurnSessionResult,
+} from '@geminilight/mindos/agent/mindos-pi';
 import { runWithAskUserQuestionBridge } from '@geminilight/mindos/agent/bridges/user-question-bridge';
 import {
   runWithAgentRunContext,
@@ -145,6 +148,7 @@ export async function runMindosPiTurn(input: RunMindosPiTurnInput): Promise<Resp
 
     return createAgentTurnSseResponse(async (send) => {
       let outputSummary = '';
+      let streamedError: Error | undefined;
       const mainRun = startAgentRun({
         ...(input.capsule.runId ? { id: input.capsule.runId } : {}),
         agentKind: 'mindos-main',
@@ -187,8 +191,45 @@ export async function runMindosPiTurn(input: RunMindosPiTurnInput): Promise<Resp
       sendAgentRunContext(send, mainRun);
       const sendWithLedger = (event: MindOSSSEvent) => {
         if (event.type === 'text_delta') outputSummary += event.delta;
+        // Mirror the native lane: an error frame is a failed turn even when
+        // the session returns without a structured error result.
+        if (event.type === 'error') streamedError = new Error(event.message);
         appendSseEventToAgentRun(mainRun.id, event);
         send(event);
+      };
+      const recordRunFailure = (error: unknown, terminalStatus: ReturnType<typeof agentRunErrorStatus>) => {
+        const modeArtifacts = recordModeArtifacts(
+          mainRun.id,
+          input.agentModeContract,
+          outputSummary,
+          terminalStatus,
+        );
+        failAgentRun(mainRun.id, {
+          status: terminalStatus,
+          error,
+          outputSummary,
+          ...(runtimeSession ? {
+            archive: {
+              sessionId: runtimeSession.externalSessionId,
+              path: runtimeSession.sessionFile,
+            },
+            metadata: {
+              ...mindosAgentModeArtifactsMetadata(modeArtifacts),
+              externalSessionId: runtimeSession.externalSessionId,
+              runtimeSessionDir: runtimeSession.sessionDir,
+              runtimeSessionResumed: runtimeSession.resumed,
+            },
+          } : {
+            metadata: mindosAgentModeArtifactsMetadata(modeArtifacts),
+          }),
+        });
+        finalizeAgentTurnCapsule({
+          mindRoot: input.mindRoot,
+          runId: mainRun.id,
+          status: terminalStatus,
+          outputText: outputSummary,
+          ...(embeddedRuntimeBinding ? { runtimeBinding: embeddedRuntimeBinding } : {}),
+        });
       };
       if (runtimeSession) {
         sendWithLedger({
@@ -217,6 +258,7 @@ export async function runMindosPiTurn(input: RunMindosPiTurnInput): Promise<Resp
           message: extensionLoadStatus,
         });
       }
+      let sessionResult: MindosPiAgentTurnSessionResult | undefined;
       try {
         const agentRunContext = {
           chatSessionId: input.chatSessionId,
@@ -247,12 +289,12 @@ export async function runMindosPiTurn(input: RunMindosPiTurnInput): Promise<Resp
             });
 
             const agentRunId = randomUUID();
-            await runWithAskUserQuestionBridge({
+            sessionResult = await runWithAskUserQuestionBridge({
               runId: agentRunId,
               send: (event) => sendWithLedger(event as unknown as MindOSSSEvent),
             }, () => runMindosPiAgentTurnSession({
               session: {
-                subscribe: (callback) => { session.subscribe(callback); },
+                subscribe: (callback) => session.subscribe(callback),
                 prompt: async (prompt, options) => { await session.prompt(prompt, options as any); },
                 steer: (message) => session.steer(message),
                 abort: () => session.abort(),
@@ -288,6 +330,16 @@ export async function runMindosPiTurn(input: RunMindosPiTurnInput): Promise<Resp
         } finally {
           restoreAgentRunResourceContext();
         }
+        const terminalError = sessionResult?.status === 'error'
+          ? new Error(sessionResult.message ?? 'MindOS agent turn failed.')
+          : streamedError;
+        if (terminalError) {
+          // The session already sent the SSE error frame (and no `done`):
+          // record the failure without re-throwing, or the client would
+          // receive a second error frame for the same failure.
+          recordRunFailure(terminalError, 'failed');
+          return;
+        }
         const modeArtifacts = recordModeArtifacts(
           mainRun.id,
           input.agentModeContract,
@@ -319,40 +371,12 @@ export async function runMindosPiTurn(input: RunMindosPiTurnInput): Promise<Resp
           ...(embeddedRuntimeBinding ? { runtimeBinding: embeddedRuntimeBinding } : {}),
         });
       } catch (error) {
-        const terminalStatus = agentRunErrorStatus(error, input.requestSignal);
-        const modeArtifacts = recordModeArtifacts(
-          mainRun.id,
-          input.agentModeContract,
-          outputSummary,
-          terminalStatus,
-        );
-        failAgentRun(mainRun.id, {
-          status: terminalStatus,
-          error,
-          outputSummary,
-          ...(runtimeSession ? {
-            archive: {
-              sessionId: runtimeSession.externalSessionId,
-              path: runtimeSession.sessionFile,
-            },
-            metadata: {
-              ...mindosAgentModeArtifactsMetadata(modeArtifacts),
-              externalSessionId: runtimeSession.externalSessionId,
-              runtimeSessionDir: runtimeSession.sessionDir,
-              runtimeSessionResumed: runtimeSession.resumed,
-            },
-          } : {
-            metadata: mindosAgentModeArtifactsMetadata(modeArtifacts),
-          }),
-        });
-        finalizeAgentTurnCapsule({
-          mindRoot: input.mindRoot,
-          runId: mainRun.id,
-          status: terminalStatus,
-          outputText: outputSummary,
-          ...(embeddedRuntimeBinding ? { runtimeBinding: embeddedRuntimeBinding } : {}),
-        });
+        recordRunFailure(error, agentRunErrorStatus(error, input.requestSignal));
         throw error;
+      } finally {
+        // The pi AgentSession is turn-scoped here: release its listeners and
+        // agent connection so a long-lived host does not accumulate them.
+        session.dispose?.();
       }
     }, (err) => {
       if (err instanceof Error && (err as any).code === 'TIMEOUT') return input.t.agentTimeout;

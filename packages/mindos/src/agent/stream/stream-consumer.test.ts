@@ -201,17 +201,88 @@ describe('consumeUIMessageStream (core)', () => {
     }));
   });
 
-  it('renders visible status events and stream errors as parts', async () => {
+  it('renders visible status events as parts and exposes stream errors as a terminal error state', async () => {
     const result = await consumeUIMessageStream(makeStream(
       { type: 'status', visible: true, message: 'Resuming Codex thread…', runtime: 'codex' },
       { type: 'status', visible: false, message: 'internal detail' },
-      { type: 'error', message: 'upstream exploded' },
+      { type: 'error', message: 'upstream exploded token=sk-1234567890abcdefghij' },
     ), () => {}, undefined, { emitCoalesceMs: 0 });
 
     expect(result.parts).toEqual([
       { type: 'runtime-status', message: 'Resuming Codex thread…', runtime: 'codex' },
-      { type: 'text', text: '\n\n**Stream Error:** upstream exploded' },
     ]);
+    expect(result.content).toBe('');
+    expect(result.status).toBe('error');
+    expect(result.error).toBe('upstream exploded token=[redacted]');
+  });
+
+  it('keeps streamed text and marks the message as errored when the error frame follows content', async () => {
+    const updates: Message[] = [];
+    const result = await consumeUIMessageStream(makeStream(
+      { type: 'text_delta', delta: 'partial answer' },
+      { type: 'error', message: 'model overloaded' },
+      { type: 'done' },
+    ), (message) => updates.push(message), undefined, { emitCoalesceMs: 0 });
+
+    expect(result.content).toBe('partial answer');
+    expect(result.status).toBe('error');
+    expect(result.error).toBe('model overloaded');
+    expect(updates.at(-1)).toMatchObject({ status: 'error', error: 'model overloaded' });
+  });
+
+  it('marks a cleanly finished stream as completed and leaves an unterminated stream without status', async () => {
+    const completed = await consumeUIMessageStream(makeStream(
+      { type: 'text_delta', delta: 'ok' },
+      { type: 'done' },
+    ), () => {}, undefined, { emitCoalesceMs: 0 });
+    expect(completed).toMatchObject({ content: 'ok', status: 'completed' });
+    expect(completed.error).toBeUndefined();
+
+    const unterminated = await consumeUIMessageStream(makeStream(
+      { type: 'text_delta', delta: 'cut' },
+    ), () => {}, undefined, { emitCoalesceMs: 0 });
+    expect(unterminated.status).toBeUndefined();
+  });
+
+  it('accepts ACP runtime permission requests alongside codex and claude', async () => {
+    const result = await consumeUIMessageStream(makeStream(
+      {
+        type: 'runtime_permission_request',
+        runId: 'run-acp',
+        requestId: 'req-1',
+        runtime: 'acp',
+        toolCallId: 'acp-tool-1',
+        toolName: 'Bash',
+        input: { command: 'ls' },
+        options: [{ id: 'allow', label: 'Allow', intent: 'allow' }, { id: 'deny', label: 'Deny', intent: 'deny' }],
+        reason: 'ACP adapter requested permission for a tool call.',
+      },
+      { type: 'runtime_permission_resolved', runId: 'run-acp', requestId: 'req-1', runtime: 'acp', toolCallId: 'acp-tool-1', decision: 'allow', decisionIntent: 'allow' },
+      { type: 'done' },
+    ), () => {}, undefined, { emitCoalesceMs: 0 });
+
+    const [tc] = toolCalls(result);
+    expect(tc).toEqual(expect.objectContaining({ toolCallId: 'acp-tool-1', toolName: 'Bash', runtime: 'acp' }));
+    expect(tc?.runtimePermission).toEqual(expect.objectContaining({
+      runId: 'run-acp',
+      requestId: 'req-1',
+      runtime: 'acp',
+      status: 'approved',
+      decision: 'allow',
+      options: [
+        { id: 'allow', label: 'Allow', intent: 'allow' },
+        { id: 'deny', label: 'Deny', intent: 'deny' },
+      ],
+    }));
+  });
+
+  it('ignores runtime permission requests from unknown runtimes', async () => {
+    const result = await consumeUIMessageStream(makeStream(
+      { type: 'runtime_permission_request', runId: 'r', requestId: 'q', runtime: 'mindos', toolCallId: 'x', toolName: 'Bash', input: {}, options: [] },
+      { type: 'done' },
+    ), () => {}, undefined, { emitCoalesceMs: 0 });
+
+    expect(toolCalls(result)).toEqual([]);
   });
 
   it('finalizes dangling tool calls when the stream ends mid-execution', async () => {

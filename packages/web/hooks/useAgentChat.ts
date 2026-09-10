@@ -6,6 +6,7 @@ import type { ProviderId } from '@/lib/agent/providers';
 import { consumeUIMessageStream } from '@/lib/agent/stream-consumer';
 import { MINDOS_AGENT, annotateMessageWithAgentRuntime, compactAgentRuntimeIdentity, getMatchingRuntimeSessionBinding } from '@/lib/ask-agent';
 import { isRetryableError, retryDelay, sleep } from '@/lib/agent/reconnect';
+import { agentTurnStreamErrorFromMessage, isTerminalAgentTurnError } from '@/lib/agent/agent-turn-stream-error';
 import { buildAgentTurnEndpoint } from '@/lib/agent-turn-endpoint';
 import {
   MAX_CONCURRENT_RUNS,
@@ -504,6 +505,10 @@ export function useAgentChat({
           },
         },
       );
+      // A stream that ended with an `error` frame is a failed turn: surface it
+      // through the failure path instead of returning it as a finished answer.
+      const streamError = agentTurnStreamErrorFromMessage(finalMessage);
+      if (streamError) throw streamError;
       if (!opts.mergeReattachReplay) return { finalMessage };
       const annotatedFinal = annotateMessageWithAgentRuntime(finalMessage, runtimeForMessage);
       const mergedFinal = mergeReattachedAssistantMessage(lastAssistantMessage(sessionId), annotatedFinal);
@@ -606,6 +611,9 @@ export function useAgentChat({
           return true;
         } catch (err) {
           lastError = err instanceof Error ? err : new Error(String(err));
+          // The run already ended on the server with an error frame; a
+          // reattach would only replay the same failure.
+          if (isTerminalAgentTurnError(err)) break;
           const httpStatus = (err as Error & { httpStatus?: number }).httpStatus;
           if (httpStatus === 400 || httpStatus === 404 || !isRetryableError(err, httpStatus)) break;
           const hasEstablishedRun = Boolean(getRun(sessionId)?.agentRunContext?.rootRunId);

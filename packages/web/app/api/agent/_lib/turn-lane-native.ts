@@ -40,7 +40,7 @@ import {
   sendAgentRunContext,
 } from './turn-sse';
 import type { AgentTurnRequestContext } from './turn-request';
-import type { RunNativeRuntimeLaneTurnInput } from './turn-lane-shared';
+import { armAgentRunClientDisconnectCancel, type RunNativeRuntimeLaneTurnInput } from './turn-lane-shared';
 import {
   capsuleRuntimeBinding,
   captureAgentTurnCapsule,
@@ -97,6 +97,15 @@ async function runNativeRuntimeTurn(
   const unregisterCancelHandler = registerAgentRunCancelHandler(nativeRun.id, ({ reason }) => {
     if (nativeRunSignal.aborted) return;
     nativeRunAbort.abort(cancelReasonToAbortError(reason));
+  });
+  // The request signal is deliberately not linked to the run: a dropped SSE
+  // stream must be reattachable. A client that never comes back cancels the
+  // run after the disconnect grace instead of holding the runtime until the
+  // 600 s timeout.
+  const releaseDisconnectGrace = armAgentRunClientDisconnectCancel({
+    runId: nativeRun.id,
+    rootRunId: nativeRun.rootRunId ?? nativeRun.id,
+    requestSignal: input.requestSignal,
   });
   const sendWithLedger = (event: MindOSSSEvent) => {
     if (event.type === 'text_delta') outputSummary += event.delta;
@@ -247,6 +256,7 @@ async function runNativeRuntimeTurn(
     });
     throw error;
   } finally {
+    releaseDisconnectGrace();
     unregisterCancelHandler();
   }
 }

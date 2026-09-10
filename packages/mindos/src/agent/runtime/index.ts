@@ -5,6 +5,7 @@ export * from './catalog.js';
 export * from './child-process.js';
 export * from './claude-code-cli.js';
 export * from './claude-code-sdk.js';
+export * from './claude-stream-json-mapper.js';
 export * from './compatibility.js';
 export * from './codex-app-server.js';
 export * from './codex-env.js';

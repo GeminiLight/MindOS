@@ -364,6 +364,10 @@ export async function consumeUIMessageStream(
   const toolCalls = new Map<string, ToolCallPart>();
   let currentTextId: string | null = null;
   let currentReasoningPart: ReasoningPart | null = null;
+  // Terminal stream state: an `error` frame is a failed turn (never
+  // downgraded by a later `done`), a `done` frame without error completes it.
+  let streamStatus: Message['status'];
+  let streamError: string | undefined;
 
   const startedAt = Date.now();
 
@@ -433,6 +437,8 @@ export async function consumeUIMessageStream(
       content: textContent,
       parts: clonedParts,
       timestamp: startedAt,
+      ...(streamStatus ? { status: streamStatus } : {}),
+      ...(streamError !== undefined ? { error: streamError } : {}),
     };
   }
 
@@ -699,7 +705,10 @@ export async function consumeUIMessageStream(
             const runId = eventRecord.runId as string;
             const requestId = eventRecord.requestId as string;
             const runtime = normalizeRuntime(eventRecord.runtime);
-            if (!toolCallId || !runId || !requestId || (runtime !== 'codex' && runtime !== 'claude')) break;
+            // Every external lane (ACP adapters, Codex, Claude) can ask for
+            // approval; only the embedded MindOS runtime resolves permission
+            // in-process and never emits this frame.
+            if (!toolCallId || !runId || !requestId || (runtime !== 'acp' && runtime !== 'codex' && runtime !== 'claude')) break;
             const toolName = typeof eventRecord.toolName === 'string' && eventRecord.toolName ? eventRecord.toolName : 'approval_request';
             const tc = findOrCreateToolCall(toolCallId, toolName);
             tc.toolName = toolName;
@@ -841,20 +850,23 @@ export async function consumeUIMessageStream(
           }
 
           case 'error': {
-            // Stream error
-            const message = eventRecord.message as string;
-            parts.push({
-              type: 'text',
-              text: `\n\n**Stream Error:** ${redactSensitiveText(message)}`,
-            });
+            // Terminal failure reported by the runtime. Expose it as message
+            // state rather than injecting text: hosts decide how to render a
+            // failed turn, and text consumers (Echo drafts) must not persist
+            // the error string as an answer.
+            const message = typeof eventRecord.message === 'string' ? eventRecord.message : '';
+            streamStatus = 'error';
+            streamError = redactSensitiveText(message);
             currentTextId = null;
             changed = true;
             break;
           }
 
           case 'done': {
-            // Stream completed cleanly — usage data is optional
-            // No state change needed; just marks end of SSE stream
+            // Stream completed cleanly. A done after an error keeps the error.
+            // No emission: the parts did not change, and the returned final
+            // message carries the status.
+            if (streamStatus !== 'error') streamStatus = 'completed';
             break;
           }
 

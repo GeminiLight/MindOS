@@ -35,14 +35,28 @@ export function expandAttachedFiles(raw: string[]): string[] {
   return expandMindosAgentAttachedFiles(raw, collectAllFiles) ?? raw;
 }
 
+/**
+ * The runtime session the current turn will talk to. Context may only be
+ * omitted when that same session already received it: a completed prior run
+ * on the same `runtimeId` bound to the same external session. Lanes that
+ * resume their runtime session from the chat session itself (embedded Pi)
+ * set `resumesChatSession` because the request carries no binding.
+ */
+export type ContextSignatureTarget = {
+  runtimeId: string;
+  externalSessionId?: string;
+  resumesChatSession?: boolean;
+};
+
 export function shouldInjectSessionContext(input: {
   chatSessionId?: string;
   signature: string | null;
   priorRuns: AgentRunRecord[];
+  target: ContextSignatureTarget;
 }): boolean {
   if (!input.signature) return false;
   if (!input.chatSessionId) return true;
-  return latestSessionContextSignature(input.priorRuns) !== input.signature;
+  return latestContextSignature(input.priorRuns, 'sessionContextSignature', input.target) !== input.signature;
 }
 
 export function sessionContextRunMetadata(signature: string | null, injected: boolean): Record<string, unknown> {
@@ -72,10 +86,11 @@ export function shouldInjectFileContext(input: {
   chatSessionId?: string;
   signature: string | null;
   priorRuns: AgentRunRecord[];
+  target: ContextSignatureTarget;
 }): boolean {
   if (!input.signature) return false;
   if (!input.chatSessionId) return true;
-  return latestFileContextSignature(input.priorRuns) !== input.signature;
+  return latestContextSignature(input.priorRuns, 'fileContextSignature', input.target) !== input.signature;
 }
 
 export function fileContextForPrompt(context: MindosAgentFileContext, injectFull: boolean): MindosAgentFileContext {
@@ -213,17 +228,24 @@ export function dirnameOf(filePath?: string): string | null {
   return dirnameOfMindosPath(filePath);
 }
 
-function latestSessionContextSignature(runs: AgentRunRecord[]): string | null {
-  for (const run of runs) {
-    const signature = run.metadata?.sessionContextSignature;
-    if (typeof signature === 'string' && signature) return signature;
-  }
-  return null;
+function runBelongsToContextTarget(run: AgentRunRecord, target: ContextSignatureTarget): boolean {
+  // Only a completed run proves the runtime session saw the context; a
+  // failed spawn or a canceled turn may never have delivered the prompt.
+  if (run.status !== 'completed') return false;
+  if (run.runtimeId !== target.runtimeId) return false;
+  if (target.resumesChatSession) return true;
+  if (!target.externalSessionId) return false;
+  return run.metadata?.externalSessionId === target.externalSessionId;
 }
 
-function latestFileContextSignature(runs: AgentRunRecord[]): string | null {
+function latestContextSignature(
+  runs: AgentRunRecord[],
+  key: 'sessionContextSignature' | 'fileContextSignature',
+  target: ContextSignatureTarget,
+): string | null {
   for (const run of runs) {
-    const signature = run.metadata?.fileContextSignature;
+    if (!runBelongsToContextTarget(run, target)) continue;
+    const signature = run.metadata?.[key];
     if (typeof signature === 'string' && signature) return signature;
   }
   return null;

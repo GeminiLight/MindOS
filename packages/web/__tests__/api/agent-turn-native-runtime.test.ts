@@ -817,9 +817,12 @@ describe('/api/agent/sessions/:sessionId/turns native runtime routing', () => {
     const firstSignature = firstRun.metadata?.sessionContextSignature;
 
     capturedNativeOptions = null;
+    // The client resumes the Codex thread the first turn bound; only that
+    // same runtime session may omit the already-delivered context.
     const second = await POST(agentTurnRequest({
       ...baseBody,
       messages: [{ role: 'user', content: 'second turn' }],
+      runtimeBinding: { kind: 'codex-thread', runtime: 'codex', runtimeId: 'codex', externalSessionId: 'thr_123', status: 'active', updatedAt: Date.now() },
     }));
 
     expect(second.status).toBe(200);
@@ -872,6 +875,7 @@ describe('/api/agent/sessions/:sessionId/turns native runtime routing', () => {
     const second = await POST(agentTurnRequest({
       ...baseBody,
       messages: [{ role: 'user', content: 'second turn' }],
+      runtimeBinding: { kind: 'codex-thread', runtime: 'codex', runtimeId: 'codex', externalSessionId: 'thr_123', status: 'active', updatedAt: Date.now() },
     }));
 
     expect(second.status).toBe(200);
@@ -1035,7 +1039,7 @@ describe('/api/agent/sessions/:sessionId/turns native runtime routing', () => {
     expect(toolEvent).not.toHaveProperty('visibility');
   });
 
-  it('does not abort the native runtime when the HTTP request signal aborts', async () => {
+  it('keeps the native runtime alive inside the disconnect grace window when the HTTP request signal aborts', async () => {
     mockResolveCommandPath.mockImplementation(async (command: string) => command === 'codex' ? '/usr/local/bin/codex' : null);
     mockCheckNativeRuntimeHealth.mockResolvedValue({ status: 'available' });
     mockDetectLocalAcpAgents.mockResolvedValue({ installed: [], notInstalled: [] });

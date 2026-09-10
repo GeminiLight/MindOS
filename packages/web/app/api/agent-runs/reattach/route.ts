@@ -14,6 +14,7 @@ import {
   startMindosAgentTurnSseHeartbeat,
   type MindOSSSEvent,
 } from '@geminilight/mindos/agent/turn';
+import { watchAgentRunClient } from '../../agent/_lib/turn-lane-shared';
 
 const encoder = new TextEncoder();
 const REPLAY_LIMIT = 1000;
@@ -268,12 +269,16 @@ export async function GET(req: Request) {
       const sentEventIds = new Set<string>();
       let sentAssistantText = false;
       let stopHeartbeat: (() => void) | undefined;
+      // A reattached client counts as presence for the native lane's
+      // disconnect grace (turn-lane-shared.ts); released when this stream ends.
+      const releaseClientWatch = watchAgentRunClient(rootRunId, req.signal);
 
       const close = () => {
         if (closed) return;
         closed = true;
         stopHeartbeat?.();
         stopHeartbeat = undefined;
+        releaseClientWatch();
         unsubscribe();
         req.signal.removeEventListener('abort', close);
         try {

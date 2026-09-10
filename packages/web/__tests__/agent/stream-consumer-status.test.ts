@@ -390,12 +390,14 @@ describe('consumeUIMessageStream — status event handling', () => {
     });
   });
 
-  it('handles error event by adding error text to message', async () => {
+  it('exposes an error event as a terminal error state instead of message text', async () => {
     const stream = makeStream(
       { type: 'error', message: 'LLM API unavailable' },
     );
     const result = await consumeUIMessageStream(stream, vi.fn());
-    expect(result.content).toContain('LLM API unavailable');
+    expect(result.content).toBe('');
+    expect(result.status).toBe('error');
+    expect(result.error).toBe('LLM API unavailable');
   });
 
   it('handles malformed SSE lines gracefully', async () => {

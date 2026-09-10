@@ -740,7 +740,7 @@ describe('MindOS session event contract', () => {
       runFallback: async () => { fallbackRuns += 1; },
     });
 
-    expect(handled).toBe(true);
+    expect(handled).toEqual({ handled: true, status: 'completed' });
     expect(fallbackRuns).toBe(1);
     expect(events).toEqual([
       { type: 'status', message: 'proxy mode' },
@@ -770,7 +770,7 @@ describe('MindOS session event contract', () => {
       runFallback: async () => {},
     });
 
-    expect(handled).toBe(true);
+    expect(handled).toEqual({ handled: true, status: 'completed' });
     expect(cachedKey).toBe('https://proxy.example/v1:non-streaming');
     expect(events).toEqual([
       { type: 'status', message: 'detecting' },
@@ -797,7 +797,7 @@ describe('MindOS session event contract', () => {
       runFallback: async () => { fallbackRuns += 1; },
     });
 
-    expect(handled).toBe(true);
+    expect(handled).toEqual({ handled: true, status: 'error', message: 'model failed' });
     expect(fallbackRuns).toBe(0);
     expect(events).toEqual([{ type: 'error', message: 'model failed' }]);
   });
@@ -1604,6 +1604,7 @@ describe('MindOS session event contract', () => {
     const appendedMessages: unknown[] = [];
     let capturedSystemPrompt = '';
     let capturedSystemPromptOverride: ((base?: string) => string | undefined) | null = null;
+    let capturedSessionLoader: { getSystemPrompt?(): string | undefined; getSkills?(): { skills: unknown[] } } | null = null;
     const extensionReadTool = { name: 'read_file', execute: async () => ({ content: [{ type: 'text', text: 'extension' }] }) };
     const extensionWebTool = {
       name: 'web_search',
@@ -1613,6 +1614,7 @@ describe('MindOS session event contract', () => {
     };
     const resourceLoader = {
       reload: async () => { calls.push('resource.reload'); },
+      getSystemPrompt: () => 'base prompt',
       getSkills: () => ({
         skills: [
           { name: 'mindos', disableModelInvocation: false },
@@ -1705,6 +1707,7 @@ describe('MindOS session event contract', () => {
             .map((tool) => tool.name)
             .join(',');
           calls.push(`agent:${config.cwd}:${config.thinkingLevel}:${allowlist}:${config.noTools}:${customToolNames}`);
+          capturedSessionLoader = config.resourceLoader as typeof capturedSessionLoader;
           return { session };
         },
         generateSkillsXml: (skills) => `<skills>${skills.map((skill) => skill.name).join(',')}</skills>`,
@@ -1750,6 +1753,11 @@ describe('MindOS session event contract', () => {
     expect(effectiveSessionPrompt).not.toContain('load_skill("third-party")');
     expect(effectiveSessionPrompt).not.toContain('## Active Skill Request');
     expect(effectiveSessionPrompt).toBe(runtime.systemPrompt);
+    // The session must see the augmented prompt without a second reload: the
+    // loader handed to createAgentSession appends the sections lazily and
+    // still forwards every other member to the real loader.
+    expect(capturedSessionLoader?.getSystemPrompt?.()).toBe(runtime.systemPrompt);
+    expect(capturedSessionLoader?.getSkills?.().skills).toHaveLength(3);
     expect(appendedMessages).toEqual([
       { index: 0, message: expect.objectContaining({ role: 'user' }) },
       { index: 1, message: expect.objectContaining({ role: 'assistant' }) },
@@ -1760,7 +1768,6 @@ describe('MindOS session event contract', () => {
       'auth:runtime:anthropic:key',
       'settings:{"enableSkillCommands":true,"compaction":{"enabled":false},"thinkingBudgets":{"medium":3000}}',
       'loader:/repo:/skills:/ext',
-      'resource.reload',
       'resource.reload',
       'session.append:0',
       'session.append:1',
@@ -1815,7 +1822,8 @@ describe('MindOS session event contract', () => {
     });
 
     expect(runtime.extensionLoadErrors).toEqual([extensionError]);
-    expect(reportedErrors).toEqual([[extensionError], [extensionError]]);
+    // One reload per runtime creation, so host diagnostics fire once.
+    expect(reportedErrors).toEqual([[extensionError]]);
   });
 
   it('reports when pi-web-access loads without the expected web tools', async () => {

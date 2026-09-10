@@ -96,6 +96,7 @@ import {
   sessionContextRunMetadata,
   shouldInjectFileContext,
   shouldInjectSessionContext,
+  type ContextSignatureTarget,
 } from './turn-context';
 import { capsuleRuntimeBinding, type AgentTurnCapsuleSeed } from './turn-capsule';
 
@@ -314,6 +315,14 @@ export async function runAgentTurnRequestBody(
     && body.runtimeBinding.externalSessionId.trim()
     ? body.runtimeBinding.externalSessionId.trim()
     : undefined;
+  // Context omission is keyed on the runtime session this turn will resume:
+  // native/ACP lanes through the request binding, the embedded Pi lane
+  // through the chat session (its runtime session is resumed server-side).
+  const contextSignatureTarget: ContextSignatureTarget = {
+    runtimeId: selectedNativeRuntime?.id ?? selectedAcpAgent?.id ?? 'mindos',
+    ...(requestExternalSessionId ? { externalSessionId: requestExternalSessionId } : {}),
+    ...(!selectedNativeRuntime && !selectedAcpAgent ? { resumesChatSession: true } : {}),
+  };
   let sessionContext: ReturnType<typeof resolveSessionContext>;
   try {
     sessionContext = resolveSessionContext({
@@ -343,6 +352,7 @@ export async function runAgentTurnRequestBody(
     chatSessionId,
     signature: sessionContextSignature,
     priorRuns: recentSessionRuns,
+    target: contextSignatureTarget,
   });
 
   // Diagnostic: log attached files so silent failures are visible
@@ -509,6 +519,7 @@ export async function runAgentTurnRequestBody(
     chatSessionId,
     signature: fileContextSignature,
     priorRuns: recentSessionRuns,
+    target: contextSignatureTarget,
   });
   const promptFileContext = fileContextForPrompt(loadedFileContext, includeFileContext);
   const fileContextMetadata = fileContextRunMetadata(fileContextSignature, includeFileContext, loadedFileContext);

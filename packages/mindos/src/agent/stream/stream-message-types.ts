@@ -62,7 +62,8 @@ export interface RuntimePermissionRisk {
 export interface RuntimePermissionState {
   runId: string;
   requestId: string;
-  runtime: Extract<AgentRuntimeKind, 'codex' | 'claude'>;
+  /** External lanes that can ask for approval; the embedded MindOS runtime resolves permission in-process. */
+  runtime: Extract<AgentRuntimeKind, 'acp' | 'codex' | 'claude'>;
   status: 'waiting' | 'approved' | 'denied' | 'cancelled';
   options: RuntimePermissionOption[];
   decision?: string;
@@ -173,4 +174,13 @@ export interface Message {
   agentId?: string;
   agentName?: string;
   agentKind?: AgentRuntimeKind;
+  /**
+   * Terminal stream state set by the stream consumer: `error` when the
+   * runtime reported an `error` frame (see `error`), `completed` after a
+   * clean `done`. Absent while streaming or when the stream ended without a
+   * terminal frame.
+   */
+  status?: 'completed' | 'error';
+  /** Redacted runtime error message when `status === 'error'`. */
+  error?: string;
 }
