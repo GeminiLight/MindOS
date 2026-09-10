@@ -1,12 +1,16 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { openStateDatabase, readLease, releaseLease, tryAcquireLease } from '../../foundation/storage/leases.js';
+import { closeAllMindosDatabases } from '../../foundation/storage/sqlite.js';
 import {
   MINDOS_RUNTIME_CONTROL_PLANE_FILE,
+  RUNTIME_CONTROL_PLANE_LEASE,
   handleRuntimeControlPlaneGet,
   handleRuntimeControlPlanePost,
   readRuntimeControlPlane,
+  subscribeRuntimeControlPlaneMutations,
 } from './runtime-control-plane.js';
 
 let mindRoot: string;
@@ -26,6 +30,7 @@ describe('runtime control-plane primitives', () => {
   });
 
   afterEach(() => {
+    closeAllMindosDatabases();
     rmSync(mindRoot, { recursive: true, force: true });
   });
 
@@ -192,5 +197,78 @@ describe('runtime control-plane primitives', () => {
     }, services)).toThrow(/Access denied/);
 
     rmSync(outside, { recursive: true, force: true });
+  });
+  it('refuses to mutate a corrupt state file, preserves it aside and recovers on the next write', async () => {
+    const file = join(mindRoot, MINDOS_RUNTIME_CONTROL_PLANE_FILE);
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, '{ "schedules": [ not json', 'utf-8');
+
+    const refused = handleRuntimeControlPlanePost({ action: 'upsert-task', task: { id: 'task-1', title: 'First' } }, services);
+    expect(refused.status).toBe(500);
+    expect((refused.body as { error: string }).error).toMatch(/corrupt/i);
+    expect(existsSync(file)).toBe(false);
+    const preserved = readdirSync(dirname(file)).filter((name) => name.startsWith('runtime-control-plane.json.corrupt-'));
+    expect(preserved).toHaveLength(1);
+    expect(readFileSync(join(dirname(file), preserved[0]!), 'utf-8')).toBe('{ "schedules": [ not json');
+
+    const recovered = handleRuntimeControlPlanePost({ action: 'upsert-task', task: { id: 'task-1', title: 'First' } }, services);
+    expect(recovered.status).toBe(201);
+    expect(readRuntimeControlPlane(mindRoot).tasks).toEqual([expect.objectContaining({ id: 'task-1' })]);
+  });
+
+  it('reports a corrupt state file on read instead of returning an empty snapshot', async () => {
+    const file = join(mindRoot, MINDOS_RUNTIME_CONTROL_PLANE_FILE);
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, 'garbage', 'utf-8');
+
+    expect(() => readRuntimeControlPlane(mindRoot)).toThrow(/corrupt/i);
+    const response = await handleRuntimeControlPlaneGet(new URLSearchParams(), services);
+    expect(response.status).toBe(500);
+    expect((response.body as { error: string }).error).toMatch(/corrupt/i);
+    // Reads never move the file: only a serialized mutation may set it aside.
+    expect(readFileSync(file, 'utf-8')).toBe('garbage');
+  });
+
+  it('returns 409 without touching the file while another writer holds the lease', () => {
+    const file = join(mindRoot, MINDOS_RUNTIME_CONTROL_PLANE_FILE);
+    const db = openStateDatabase(mindRoot);
+    const held = tryAcquireLease(db, { ...RUNTIME_CONTROL_PLANE_LEASE, ttlMs: 30_000 });
+    expect(held.ok).toBe(true);
+    if (!held.ok) return;
+
+    const busy = handleRuntimeControlPlanePost({ action: 'upsert-task', task: { id: 'task-1', title: 'First' } }, services);
+    expect(busy.status).toBe(409);
+    expect((busy.body as { error: string }).error).toMatch(/busy/i);
+    expect(busy.headers?.['Retry-After']).toBe('1');
+    expect(existsSync(file)).toBe(false);
+
+    releaseLease(db, held.lease);
+    const ok = handleRuntimeControlPlanePost({ action: 'upsert-task', task: { id: 'task-1', title: 'First' } }, services);
+    expect(ok.status).toBe(201);
+    expect(readLease(db, RUNTIME_CONTROL_PLANE_LEASE)).toBeNull();
+  });
+
+  it('writes the state file with owner-only permissions', () => {
+    handleRuntimeControlPlanePost({ action: 'upsert-task', task: { id: 'task-1', title: 'First' } }, services);
+    const file = join(mindRoot, MINDOS_RUNTIME_CONTROL_PLANE_FILE);
+    if (process.platform !== 'win32') {
+      expect(statSync(file).mode & 0o777).toBe(0o600);
+    }
+    expect(readdirSync(dirname(file)).filter((name) => name.includes('.tmp'))).toEqual([]);
+  });
+
+  it('notifies in-process subscribers once per committed mutation and supports unsubscribe', () => {
+    const seen: Array<{ action: string; itemId: string; mindRoot: string }> = [];
+    const unsubscribe = subscribeRuntimeControlPlaneMutations((event) => {
+      seen.push({ action: event.action, itemId: event.item.id, mindRoot: event.mindRoot });
+    });
+
+    handleRuntimeControlPlanePost({ action: 'upsert-task', task: { id: 'task-1', title: 'First' } }, services);
+    handleRuntimeControlPlanePost({ action: 'upsert-task', task: { title: '' } }, services);
+    expect(seen).toEqual([{ action: 'upsert-task', itemId: 'task-1', mindRoot }]);
+
+    unsubscribe();
+    handleRuntimeControlPlanePost({ action: 'upsert-task', task: { id: 'task-2', title: 'Second' } }, services);
+    expect(seen).toHaveLength(1);
   });
 });

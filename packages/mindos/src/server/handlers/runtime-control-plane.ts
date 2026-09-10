@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import {
   existsSync,
   mkdirSync,
@@ -8,10 +9,51 @@ import {
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { resolveExistingSafe, resolveSafe } from '../../foundation/security/index.js';
+import {
+  LeaseBusyError,
+  acquireLease,
+  openStateDatabase,
+  releaseLease,
+  type Lease,
+  type LeaseKey,
+} from '../../foundation/storage/leases.js';
 import { redactSensitiveText } from '../../agent/redaction.js';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
 
 export const MINDOS_RUNTIME_CONTROL_PLANE_FILE = '.mindos/runtime-control-plane.json';
+
+/** Lease that serializes writers of `runtime-control-plane.json` in `.mindos/db/state_1.sqlite`. */
+export const RUNTIME_CONTROL_PLANE_LEASE: LeaseKey = { kind: 'runtime-control-plane', key: 'state' };
+/** The critical section is one read + one atomic rewrite, so a holder never needs long. */
+const LEASE_TTL_MS = 10_000;
+/** Total time a writer waits for the lease before reporting busy. */
+const LEASE_WAIT_MS = 1_000;
+
+/** Another writer holds the control-plane lease; the caller should retry shortly. */
+export class RuntimeControlPlaneBusyError extends Error {
+  readonly status = 409;
+
+  constructor(cause: LeaseBusyError) {
+    super('Runtime control-plane state is busy; retry shortly.', { cause });
+    this.name = 'RuntimeControlPlaneBusyError';
+  }
+}
+
+/** The state file cannot be parsed; it is never overwritten, only set aside by a serialized mutation. */
+export class RuntimeControlPlaneCorruptError extends Error {
+  readonly status = 500;
+  readonly file: string;
+  readonly preservedAs?: string;
+
+  constructor(file: string, preservedAs?: string) {
+    super(preservedAs
+      ? `Runtime control-plane state at ${file} is corrupt; it was preserved as ${preservedAs} and the mutation was refused. The next mutation starts from an empty state.`
+      : `Runtime control-plane state at ${file} is corrupt; move it aside or apply a mutation to preserve it as ${file}.corrupt-<timestamp>.`);
+    this.name = 'RuntimeControlPlaneCorruptError';
+    this.file = file;
+    this.preservedAs = preservedAs;
+  }
+}
 
 export type RuntimeControlPlaneTriggerType = 'manual' | 'cron' | 'interval' | 'event';
 export type RuntimeControlPlaneScheduleStatus = 'disabled' | 'enabled' | 'paused' | 'archived';
@@ -164,6 +206,38 @@ export type RuntimeControlPlaneServices = {
   now?(): Date;
 };
 
+/** In-process notification emitted after a mutation has been committed to disk. */
+export type RuntimeControlPlaneMutationEvent = {
+  mindRoot: string;
+  action: RuntimeControlPlaneMutationPayload['action'];
+  item: RuntimeControlPlaneMutationResult['item'];
+  updatedAt: string;
+};
+
+export type RuntimeControlPlaneMutationListener = (event: RuntimeControlPlaneMutationEvent) => void;
+
+const mutationListeners = new Set<RuntimeControlPlaneMutationListener>();
+
+/**
+ * Subscribe to committed control-plane mutations in this process. Listener
+ * errors are swallowed so one bad subscriber cannot fail a mutation that has
+ * already landed on disk. Returns the unsubscribe function.
+ */
+export function subscribeRuntimeControlPlaneMutations(listener: RuntimeControlPlaneMutationListener): () => void {
+  mutationListeners.add(listener);
+  return () => { mutationListeners.delete(listener); };
+}
+
+function notifyMutationListeners(event: RuntimeControlPlaneMutationEvent): void {
+  for (const listener of Array.from(mutationListeners)) {
+    try {
+      listener(event);
+    } catch (error) {
+      console.error('[runtime-control-plane] mutation listener failed:', error instanceof Error ? error.message : String(error));
+    }
+  }
+}
+
 type RuntimeControlPlaneState = Omit<RuntimeControlPlaneSnapshot, 'summary'>;
 type ParseResult<T> = { value: T } | { error: string };
 
@@ -196,7 +270,18 @@ export function handleRuntimeControlPlanePost(
   body: unknown,
   services: RuntimeControlPlaneServices,
 ): MindosServerResponse<RuntimeControlPlaneMutationResult | { error: string }> {
-  const result = applyRuntimeControlPlaneMutation(services.mindRoot, body, services.now?.() ?? new Date());
+  let result: ParseResult<RuntimeControlPlaneMutationResult>;
+  try {
+    result = applyRuntimeControlPlaneMutation(services.mindRoot, body, services.now?.() ?? new Date());
+  } catch (error) {
+    if (error instanceof RuntimeControlPlaneBusyError) {
+      return json({ error: error.message }, { status: error.status, headers: { 'Retry-After': '1' } });
+    }
+    if (error instanceof RuntimeControlPlaneCorruptError) {
+      return json({ error: error.message }, { status: error.status });
+    }
+    throw error;
+  }
   if ('error' in result) return json({ error: result.error }, { status: 400 });
   return json(result.value, { status: 201, headers: { 'Cache-Control': 'no-store' } });
 }
@@ -206,6 +291,14 @@ export function readRuntimeControlPlane(mindRoot: string): RuntimeControlPlaneSn
   return withSummary(state);
 }
 
+/**
+ * Apply one mutation under the control-plane lease: the state is read inside
+ * the critical section and written back exactly once, so concurrent writers
+ * (Web, automation worker, CLI) never lose each other's updates. Throws
+ * `RuntimeControlPlaneBusyError` when the lease cannot be taken in time and
+ * `RuntimeControlPlaneCorruptError` when the file cannot be parsed (it is
+ * moved aside, never overwritten). Validation failures are returned, not thrown.
+ */
 export function applyRuntimeControlPlaneMutation(
   mindRoot: string,
   body: unknown,
@@ -213,17 +306,35 @@ export function applyRuntimeControlPlaneMutation(
 ): ParseResult<RuntimeControlPlaneMutationResult> {
   if (!isRecord(body)) return { error: 'Expected an object payload.' };
   const action = typeof body.action === 'string' ? body.action : '';
-  const state = readRuntimeControlPlaneState(mindRoot);
   const nowIso = now.toISOString();
 
+  const outcome = withControlPlaneLock(mindRoot, () => {
+    const state = readRuntimeControlPlaneStateForMutation(mindRoot);
+    const applied = applyMutationToState(action, body, state, nowIso);
+    if ('error' in applied) return applied;
+    state.updatedAt = nowIso;
+    writeRuntimeControlPlaneState(mindRoot, state);
+    return mutationResult(action as RuntimeControlPlaneMutationPayload['action'], applied.value, state);
+  });
+
+  if (!('error' in outcome)) {
+    notifyMutationListeners({ mindRoot, action: outcome.value.action, item: outcome.value.item, updatedAt: nowIso });
+  }
+  return outcome;
+}
+
+function applyMutationToState(
+  action: string,
+  body: Record<string, unknown>,
+  state: RuntimeControlPlaneState,
+  nowIso: string,
+): ParseResult<RuntimeControlPlaneMutationResult['item']> {
   switch (action) {
     case 'create-schedule': {
       const parsed = parseSchedule(body.schedule ?? body, state, nowIso);
       if ('error' in parsed) return parsed;
       state.schedules = [parsed.value, ...state.schedules.filter((item) => item.id !== parsed.value.id)].slice(0, MAX_SCHEDULES);
-      state.updatedAt = nowIso;
-      writeRuntimeControlPlaneState(mindRoot, state);
-      return mutationResult(action, parsed.value, state);
+      return parsed;
     }
     case 'update-schedule': {
       const scheduleId = sanitizeId(body.scheduleId);
@@ -233,17 +344,13 @@ export function applyRuntimeControlPlaneMutation(
       const parsed = parseSchedulePatch(state.schedules[index]!, body.patch, nowIso);
       if ('error' in parsed) return parsed;
       state.schedules[index] = parsed.value;
-      state.updatedAt = nowIso;
-      writeRuntimeControlPlaneState(mindRoot, state);
-      return mutationResult(action, parsed.value, state);
+      return parsed;
     }
     case 'enqueue-approval': {
       const parsed = parseApproval(body.approval ?? body, state, nowIso);
       if ('error' in parsed) return parsed;
       state.approvalQueue = [parsed.value, ...state.approvalQueue.filter((item) => item.id !== parsed.value.id)].slice(0, MAX_APPROVALS);
-      state.updatedAt = nowIso;
-      writeRuntimeControlPlaneState(mindRoot, state);
-      return mutationResult(action, parsed.value, state);
+      return parsed;
     }
     case 'resolve-approval': {
       const approvalId = sanitizeId(body.approvalId);
@@ -259,70 +366,102 @@ export function applyRuntimeControlPlaneMutation(
         resolvedAt: nowIso,
       };
       state.approvalQueue[index] = resolved;
-      state.updatedAt = nowIso;
-      writeRuntimeControlPlaneState(mindRoot, state);
-      return mutationResult(action, resolved, state);
+      return { value: resolved };
     }
     case 'record-wake': {
       const parsed = parseWake(body.wake ?? body, state, nowIso);
       if ('error' in parsed) return parsed;
       state.wakeEvents = [parsed.value, ...state.wakeEvents.filter((item) => item.id !== parsed.value.id)].slice(0, MAX_WAKE_EVENTS);
-      state.updatedAt = nowIso;
-      writeRuntimeControlPlaneState(mindRoot, state);
-      return mutationResult(action, parsed.value, state);
+      return parsed;
     }
     case 'record-failure': {
       const parsed = parseFailure(body.failure ?? body, state, nowIso);
       if ('error' in parsed) return parsed;
       state.failureAudits = [parsed.value, ...state.failureAudits.filter((item) => item.id !== parsed.value.id)].slice(0, MAX_FAILURES);
-      state.updatedAt = nowIso;
-      writeRuntimeControlPlaneState(mindRoot, state);
-      return mutationResult(action, parsed.value, state);
+      return parsed;
     }
     case 'send-message': {
       const parsed = parseMessage(body.message ?? body, state, nowIso);
       if ('error' in parsed) return parsed;
       state.mailbox = [parsed.value, ...state.mailbox.filter((item) => item.id !== parsed.value.id)].slice(0, MAX_MESSAGES);
-      state.updatedAt = nowIso;
-      writeRuntimeControlPlaneState(mindRoot, state);
-      return mutationResult(action, parsed.value, state);
+      return parsed;
     }
     case 'upsert-task': {
       const parsed = parseTask(body.task ?? body, state, nowIso);
       if ('error' in parsed) return parsed;
       state.tasks = [parsed.value, ...state.tasks.filter((item) => item.id !== parsed.value.id)].slice(0, MAX_TASKS);
-      state.updatedAt = nowIso;
-      writeRuntimeControlPlaneState(mindRoot, state);
-      return mutationResult(action, parsed.value, state);
+      return parsed;
     }
     default:
       return { error: `Unsupported runtime control-plane action: ${action || '(missing)'}` };
   }
 }
 
-function readRuntimeControlPlaneState(mindRoot: string): RuntimeControlPlaneState {
-  const empty = emptyState();
+function withControlPlaneLock<T>(mindRoot: string, operation: () => T): T {
+  mkdirSync(runtimeControlPlaneDir(mindRoot), { recursive: true });
+  const db = openStateDatabase(mindRoot);
+  let lease: Lease;
   try {
-    const file = runtimeControlPlanePath(mindRoot);
-    if (!existsSync(file)) return empty;
-    const parsed = JSON.parse(readFileSync(file, 'utf-8')) as Partial<RuntimeControlPlaneState>;
-    return normalizeState(parsed);
+    lease = acquireLease(db, { ...RUNTIME_CONTROL_PLANE_LEASE, ttlMs: LEASE_TTL_MS, waitMs: LEASE_WAIT_MS });
+  } catch (error) {
+    if (error instanceof LeaseBusyError) throw new RuntimeControlPlaneBusyError(error);
+    throw error;
+  }
+  try {
+    return operation();
+  } finally {
+    releaseLease(db, lease);
+  }
+}
+
+/** Read for GET: a corrupt file is reported, never moved (only a serialized writer may do that). */
+function readRuntimeControlPlaneState(mindRoot: string): RuntimeControlPlaneState {
+  const file = runtimeControlPlanePath(mindRoot);
+  if (!existsSync(file)) return emptyState();
+  const parsed = parseStateFile(file);
+  if (!parsed) throw new RuntimeControlPlaneCorruptError(file);
+  return parsed;
+}
+
+/** Read inside the lease: a corrupt file is set aside as `.corrupt-<ts>` and the mutation is refused. */
+function readRuntimeControlPlaneStateForMutation(mindRoot: string): RuntimeControlPlaneState {
+  const file = runtimeControlPlanePath(mindRoot);
+  if (!existsSync(file)) return emptyState();
+  const parsed = parseStateFile(file);
+  if (parsed) return parsed;
+  const preserved = `${file}.corrupt-${Date.now()}`;
+  renameSync(file, preserved);
+  throw new RuntimeControlPlaneCorruptError(file, preserved);
+}
+
+function parseStateFile(file: string): RuntimeControlPlaneState | null {
+  try {
+    const parsed = JSON.parse(readFileSync(file, 'utf-8')) as unknown;
+    if (!isRecord(parsed)) return null;
+    return normalizeState(parsed as Partial<RuntimeControlPlaneState>);
   } catch {
-    return empty;
+    return null;
   }
 }
 
 function writeRuntimeControlPlaneState(mindRoot: string, state: RuntimeControlPlaneState): void {
   const file = runtimeControlPlanePath(mindRoot);
   mkdirSync(dirname(file), { recursive: true });
-  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
+  const tmp = `${file}.${process.pid}.${Date.now().toString(36)}.${crypto.randomBytes(3).toString('hex')}.tmp`;
   try {
-    writeFileSync(tmp, `${JSON.stringify(state, null, 2)}\n`, 'utf-8');
+    writeFileSync(tmp, `${JSON.stringify(state, null, 2)}\n`, { encoding: 'utf-8', mode: 0o600 });
     renameSync(tmp, file);
   } catch (error) {
     try { unlinkSync(tmp); } catch { /* ignore cleanup */ }
     throw error;
   }
+}
+
+function runtimeControlPlaneDir(mindRoot: string): string {
+  if (!existsSync(mindRoot)) return join(mindRoot, '.mindos');
+  return existsSync(resolveSafe(mindRoot, '.mindos'))
+    ? resolveExistingSafe(mindRoot, '.mindos')
+    : resolveSafe(mindRoot, '.mindos');
 }
 
 function runtimeControlPlanePath(mindRoot: string): string {

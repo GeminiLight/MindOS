@@ -38,22 +38,99 @@ function tomlServerTableHeaders(sectionKey: string, serverName: string): Set<str
   ]);
 }
 
-/** Drop each table (header plus body up to the next header) that belongs to `serverName`. */
+/** `name = { ... }` (bare or quoted key) directly under the bare `[section]` header. */
+function isTomlInlineServerLine(trimmed: string, serverName: string): boolean {
+  const match = trimmed.match(/^("(?:[^"\\]|\\.)*"|[A-Za-z0-9_-]+)\s*=/);
+  if (!match?.[1]) return false;
+  const key = match[1].startsWith('"') ? JSON.parse(match[1]) as string : match[1];
+  return key === serverName;
+}
+
+/**
+ * Drop each table (header plus body up to the next header) that belongs to
+ * `serverName`, and its inline table `name = { ... }` under the bare
+ * `[section]` header, so a merge never leaves two definitions of one server.
+ */
 function stripTomlServerTables(existing: string, sectionKey: string, serverName: string): string[] {
   const headers = tomlServerTableHeaders(sectionKey, serverName);
   const result: string[] = [];
   let skipping = false;
+  let inRootSection = false;
 
   for (const line of existing.split('\n')) {
     const trimmed = line.trim();
     if (headers.has(trimmed)) {
       skipping = true;
+      inRootSection = false;
       continue;
     }
-    if (skipping && trimmed.startsWith('[')) skipping = false;
+    if (trimmed.startsWith('[')) {
+      skipping = false;
+      inRootSection = trimmed === `[${sectionKey}]`;
+    } else if (inRootSection && isTomlInlineServerLine(trimmed, serverName)) {
+      continue;
+    }
     if (!skipping) result.push(line);
   }
   return result;
+}
+
+/** Split a table header path into segments, honouring double-quoted segments (`a."b.c".d`). */
+function splitTomlHeaderPath(header: string): string[] {
+  const segments: string[] = [];
+  let current = '';
+  let quoted = false;
+  for (let i = 0; i < header.length; i += 1) {
+    const ch = header[i];
+    if (ch === '"' && header[i - 1] !== '\\') {
+      quoted = !quoted;
+    } else if (ch === '.' && !quoted) {
+      segments.push(current.trim());
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  segments.push(current.trim());
+  return segments.map((segment) => {
+    if (segment.startsWith('"') && segment.endsWith('"') && segment.length >= 2) {
+      try {
+        return JSON.parse(segment) as string;
+      } catch {
+        return segment.slice(1, -1);
+      }
+    }
+    return segment;
+  }).filter(Boolean);
+}
+
+/** Server names configured under `sectionKey`: `[section.name]` tables (any spelling) and inline `name = {` entries. */
+export function listTomlServerNames(existing: string, sectionKey: string): string[] {
+  const sectionPath = sectionKey.split('.').filter(Boolean);
+  const names = new Set<string>();
+  let inRootSection = false;
+
+  for (const line of existing.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      const segments = splitTomlHeaderPath(trimmed.slice(1, -1));
+      const underSection = segments.length > sectionPath.length
+        && sectionPath.every((part, index) => segments[index] === part);
+      inRootSection = segments.length === sectionPath.length && sectionPath.every((part, index) => segments[index] === part);
+      if (underSection && segments[sectionPath.length]) names.add(segments[sectionPath.length]!);
+      continue;
+    }
+    if (!inRootSection) continue;
+    const match = trimmed.match(/^("(?:[^"\\]|\\.)*"|[A-Za-z0-9_-]+)\s*=/);
+    if (!match?.[1]) continue;
+    try {
+      names.add(match[1].startsWith('"') ? JSON.parse(match[1]) as string : match[1]);
+    } catch {
+      // Unterminated quoted key: not a server we can name.
+    }
+  }
+  return [...names].sort((a, b) => a.localeCompare(b));
 }
 
 export function buildTomlEntry(sectionKey: string, serverName: string, entry: Record<string, unknown>): string {

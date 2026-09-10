@@ -108,11 +108,13 @@ export function mergeTomlEntry(existing, sectionKey, serverName, entry) {
     `[${sectionKey}.${serverName}.env]`,
     `[${sectionKey}.${serverName}.headers]`,
   ]);
+  const rootHeader     = `[${sectionKey}]`;
   const newBlock       = buildTomlEntry(sectionKey, serverName, entry);
 
   const lines  = existing.split('\n');
   const result = [];
   let skipping = false;
+  let inRootSection = false;
 
   for (const line of lines) {
     const trimmed = line.trim();
@@ -120,12 +122,18 @@ export function mergeTomlEntry(existing, sectionKey, serverName, entry) {
     // Entering one of the target sections → start skipping
     if (trimmed === sectionHeader || trimmed === envHeader || trimmed === headersHeader || legacyHeaders.has(trimmed)) {
       skipping = true;
+      inRootSection = false;
       continue;
     }
 
     // A new [section] header that is NOT ours → stop skipping
-    if (skipping && trimmed.startsWith('[')) {
+    if (trimmed.startsWith('[')) {
       skipping = false;
+      inRootSection = trimmed === rootHeader;
+    } else if (inRootSection && isInlineServerLine(trimmed, serverName)) {
+      // `name = { ... }` under the bare [section]: the same server as an
+      // inline table. Drop it, or Codex sees the key defined twice.
+      continue;
     }
 
     if (!skipping) {
@@ -144,4 +152,15 @@ export function mergeTomlEntry(existing, sectionKey, serverName, entry) {
   result.push('');
 
   return result.join('\n');
+}
+
+/** `name = ...` with a bare or double-quoted key equal to `serverName`. */
+function isInlineServerLine(trimmed, serverName) {
+  const match = trimmed.match(/^("(?:[^"\\]|\\.)*"|[A-Za-z0-9_-]+)\s*=/);
+  if (!match) return false;
+  let key = match[1];
+  if (key.startsWith('"')) {
+    try { key = JSON.parse(key); } catch { return false; }
+  }
+  return key === serverName;
 }

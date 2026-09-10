@@ -20,6 +20,21 @@ function isYamlMappingLine(trimmed, key) {
   return trimmed === `${key}:` || trimmed === `${yamlKey(key)}:`;
 }
 
+/** `key: {}` (optionally spaced, optionally followed by a comment): an empty flow mapping. */
+function isYamlEmptyFlowMappingLine(trimmed, key) {
+  const match = trimmed.match(/^(.+?):\s*\{\s*\}\s*(?:#.*)?$/);
+  return !!match && (match[1] === key || match[1] === yamlKey(key));
+}
+
+/**
+ * Split a leading UTF-8 BOM off the text. Indentation is measured with
+ * `trimStart()`, which strips U+FEFF, so an un-stripped BOM counts as one
+ * column and hides a first-line `mcp_servers:` header.
+ */
+function splitBom(text) {
+  return text.charCodeAt(0) === 0xfeff ? { bom: '﻿', text: text.slice(1) } : { bom: '', text };
+}
+
 /**
  * Generate a YAML block for an MCP server entry under a section key.
  *
@@ -90,9 +105,11 @@ export function buildYamlEntry(serverName, entry) {
  */
 export function mergeYamlEntry(existing, sectionKey, serverName, entry) {
   const newBlock = buildYamlEntry(serverName, entry);
+  const { bom, text } = splitBom(existing);
+  existing = text;
 
   if (!existing.trim()) {
-    return `${sectionKey}:\n${newBlock}\n`;
+    return `${bom}${sectionKey}:\n${newBlock}\n`;
   }
 
   const lines = existing.split('\n');
@@ -109,11 +126,20 @@ export function mergeYamlEntry(existing, sectionKey, serverName, entry) {
     const indent = line.length - line.trimStart().length;
 
     // Detect top-level section key
-    if (indent === 0 && trimmed === sectionKey + ':') {
+    if (indent === 0 && isYamlMappingLine(trimmed, sectionKey)) {
       inSection = true;
       sectionFound = true;
       baseIndent = -1;
       result.push(line);
+      continue;
+    }
+
+    // `mcp_servers: {}` is a complete, empty section: open it as a block
+    // mapping holding only the new server instead of appending a second key.
+    if (indent === 0 && !inSection && isYamlEmptyFlowMappingLine(trimmed, sectionKey)) {
+      sectionFound = true;
+      result.push(`${sectionKey}:`);
+      result.push(newBlock);
       continue;
     }
 
@@ -190,8 +216,8 @@ export function mergeYamlEntry(existing, sectionKey, serverName, entry) {
     result.push(newBlock);
   }
 
-  // Ensure trailing newline
+  // Ensure trailing newline; put the original BOM back so the file keeps its prefix
   let output = result.join('\n');
   if (!output.endsWith('\n')) output += '\n';
-  return output;
+  return bom + output;
 }

@@ -3,11 +3,18 @@ import path from 'path';
 import os from 'os';
 import { execFileSync } from 'child_process';
 import {
+  detectAgentConfiguredMcpServersFromConfigs,
+  detectAgentInstalledFromConfigs,
+  detectConfigFormat,
+  getNestedPath,
+  listMcpServerNamesFromText,
+  readOwnRecord,
   resolveSkillLinkAgents,
   type MindosMcpAgentRegistryDef,
   type MindosSkillAgentRegistration,
   type MindosSkillLinkAgent,
 } from '@geminilight/mindos/server';
+import { effectiveMindRoot } from '@geminilight/mindos/foundation';
 import { SKILL_AGENT_REGISTRY } from './mcp-agent-registry';
 import type { SkillInstallMode as SkillInstallModeType } from './mcp-agent-registry';
 import { loadCustomAgents } from './custom-agents';
@@ -438,105 +445,6 @@ function detectSignalsFromName(name: string): { conversation: boolean; usage: bo
   };
 }
 
-function readNestedRecord(obj: Record<string, unknown>, nestedPath: string): Record<string, unknown> | null {
-  const parts = nestedPath.split('.').map((part) => part.trim()).filter(Boolean);
-  if (parts.length === 0 || parts.some(isUnsafeObjectKey)) return null;
-  let current: unknown = obj;
-  for (const part of parts) {
-    if (!current || typeof current !== 'object') return null;
-    if (!Object.prototype.hasOwnProperty.call(current, part)) return null;
-    current = (current as Record<string, unknown>)[part];
-  }
-  if (!current || typeof current !== 'object') return null;
-  return current as Record<string, unknown>;
-}
-
-function readOwnRecord(obj: unknown, key: string): Record<string, unknown> | null {
-  if (!obj || typeof obj !== 'object' || isUnsafeObjectKey(key)) return null;
-  if (!Object.prototype.hasOwnProperty.call(obj, key)) return null;
-  const value = (obj as Record<string, unknown>)[key];
-  return value && typeof value === 'object' ? value as Record<string, unknown> : null;
-}
-
-function isUnsafeObjectKey(key: string): boolean {
-  return key === '__proto__' || key === 'prototype' || key === 'constructor';
-}
-
-function parseJsonServerNames(content: string, configKey: string, globalNestedKey?: string): string[] {
-  try {
-    const config = parseJsonc(content) as Record<string, unknown>;
-    const section = globalNestedKey
-      ? readNestedRecord(config, globalNestedKey)
-      : readOwnRecord(config, configKey);
-    if (!section) return [];
-    return Object.keys(section);
-  } catch {
-    return [];
-  }
-}
-
-function parseYamlServerNames(content: string, sectionKey: string): string[] {
-  // Lightweight YAML parser: find top-level key matching sectionKey,
-  // then collect all direct children (indent = base + 2 spaces).
-  const lines = content.split('\n');
-  let inSection = false;
-  let baseIndent = -1;
-  const names: string[] = [];
-  for (const line of lines) {
-    if (!line.trim() || line.trim().startsWith('#')) continue;
-    const indent = line.length - line.trimStart().length;
-    const trimmed = line.trim();
-    // Top-level key
-    if (indent === 0 && trimmed.startsWith(sectionKey + ':')) {
-      inSection = true;
-      baseIndent = -1;
-      continue;
-    }
-    // Another top-level key ends the section
-    if (indent === 0 && trimmed) {
-      inSection = false;
-      continue;
-    }
-    if (!inSection) continue;
-    // First child sets the base indent
-    if (baseIndent < 0) {
-      baseIndent = indent;
-    }
-    // Direct children at base indent level
-    if (indent === baseIndent) {
-      const match = trimmed.match(/^([a-zA-Z0-9_-]+)\s*:/);
-      if (match) names.push(match[1]);
-    }
-  }
-  return names;
-}
-
-function parseTomlServerNames(content: string, sectionKey: string): string[] {
-  const names = new Set<string>();
-  const lines = content.split('\n');
-  let inRootSection = false;
-  const sectionPrefix = `${sectionKey}.`;
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
-      const section = trimmed.slice(1, -1).trim();
-      inRootSection = section === sectionKey;
-      if (section.startsWith(sectionPrefix)) {
-        const name = section.slice(sectionPrefix.length).split('.')[0]?.trim();
-        if (name) names.add(name);
-      }
-      continue;
-    }
-    if (!inRootSection) continue;
-    const kv = trimmed.match(/^([a-zA-Z0-9_-]+)\s*=\s*/);
-    if (!kv) continue;
-    const name = kv[1]?.trim();
-    if (name) names.add(name);
-  }
-  return [...names];
-}
-
 function sameNormalizedPath(a: string, b: string): boolean {
   return path.normalize(a) === path.normalize(b);
 }
@@ -562,22 +470,20 @@ function configFileLooksMindosManagedOnly(filePath: string, agent: AgentDef): bo
   if (!trimmed) return true;
 
   try {
-    if (agent.format === 'toml') {
-      const names = parseTomlServerNames(content, agent.key);
-      return names.length === 0 || names.every(name => name === 'mindos');
-    }
-    if (agent.format === 'yaml') {
-      const names = parseYamlServerNames(content, agent.key);
-      return names.length === 0 || names.every(name => name === 'mindos');
-    }
+    const location = {
+      format: detectConfigFormat(agent.format),
+      sectionKey: agent.key,
+      nestedPath: agent.globalNestedKey,
+    };
+    const names = listMcpServerNamesFromText(content, location);
+    if (!names.every(name => name === 'mindos')) return false;
+    if (location.format !== 'json') return true;
 
     const parsed = parseJsonc(content) as Record<string, unknown>;
     const section = agent.globalNestedKey
-      ? readNestedRecord(parsed, agent.globalNestedKey)
+      ? getNestedPath(parsed, agent.globalNestedKey)
       : readOwnRecord(parsed, agent.key);
     if (!section) return Object.keys(parsed).length === 0;
-    const serverNames = Object.keys(section);
-    if (!serverNames.every(name => name === 'mindos')) return false;
 
     if (!agent.globalNestedKey) {
       const topKeys = Object.keys(parsed);
@@ -647,35 +553,32 @@ export function resolveSkillWorkspaceProfile(agentKey: string): SkillWorkspacePr
   };
 }
 
-export function detectAgentConfiguredMcpServers(agentKey: string): AgentConfiguredMcpServers {
+/**
+ * Detection services for the core config readers, routed through THIS
+ * module's fs so behavior stays injectable in Web tests. Relative
+ * project-scoped configs resolve against the mind root (the same base the
+ * install handlers write to), never against the Web server's cwd.
+ */
+function detectionServices(options?: { projectRoot?: string }) {
+  return {
+    projectRoot: options?.projectRoot ?? safeMindRoot(),
+    pathExists: (p: string) => fs.existsSync(p),
+    readTextFile: (p: string) => fs.readFileSync(p, 'utf-8'),
+  };
+}
+
+function safeMindRoot(): string | undefined {
+  try {
+    return effectiveMindRoot() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function detectAgentConfiguredMcpServers(agentKey: string, options?: { projectRoot?: string }): AgentConfiguredMcpServers {
   const agent = MCP_AGENTS[agentKey];
   if (!agent) return { servers: [], sources: [] };
-  const serverSet = new Set<string>();
-  const sources: string[] = [];
-  for (const scopeType of ['global', 'project'] as const) {
-    for (const cfgPath of configPathCandidates(agent, scopeType)) {
-      const absPath = expandHome(cfgPath);
-      if (!fs.existsSync(absPath)) continue;
-      try {
-        const content = fs.readFileSync(absPath, 'utf-8');
-        const nestedPath = scopeType === 'global' ? agent.globalNestedKey : undefined;
-        const names =
-          agent.format === 'toml'
-            ? parseTomlServerNames(content, agent.key)
-            : agent.format === 'yaml'
-              ? parseYamlServerNames(content, agent.key)
-              : parseJsonServerNames(content, agent.key, nestedPath);
-        for (const name of names) serverSet.add(name);
-        sources.push(`${scopeType}:${cfgPath}`);
-      } catch {
-        continue;
-      }
-    }
-  }
-  return {
-    servers: [...serverSet].sort((a, b) => a.localeCompare(b)),
-    sources,
-  };
+  return detectAgentConfiguredMcpServersFromConfigs(agent as MindosMcpAgentRegistryDef, detectionServices(options));
 }
 
 export function detectAgentInstalledSkills(agentKey: string): AgentInstalledSkills {
@@ -758,180 +661,20 @@ export function detectAgentRuntimeSignals(agentKey: string): AgentRuntimeSignals
 
 /* ── MindOS MCP Install Detection ──────────────────────────────────────── */
 
-export function detectInstalled(agentKey: string): { installed: boolean; scope?: string; transport?: string; configPath?: string; url?: string } {
+/**
+ * Whether MindOS is configured for `agentKey`, read through the shared
+ * per-format config readers so a Codex-native `[mcp_servers.mindos]` table
+ * with only `command` counts the same way it does in the product server.
+ */
+export function detectInstalled(
+  agentKey: string,
+  options?: { projectRoot?: string },
+): { installed: boolean; scope?: string; transport?: string; configPath?: string; url?: string } {
   const agent = MCP_AGENTS[agentKey];
   if (!agent) return { installed: false };
-
-  for (const scopeType of ['global', 'project'] as const) {
-    for (const cfgPath of configPathCandidates(agent, scopeType)) {
-      const absPath = expandHome(cfgPath);
-      if (!fs.existsSync(absPath)) continue;
-      try {
-        const content = fs.readFileSync(absPath, 'utf-8');
-        // Handle TOML format (e.g., codex)
-        if (agent.format === 'toml') {
-          const result = parseTomlMcpEntry(content, agent.key, 'mindos');
-          if (result.found && result.entry) {
-            const entry = result.entry;
-            const transport = entry.type === 'stdio' ? 'stdio' : entry.url ? 'http' : 'unknown';
-            return { installed: true, scope: scopeType, transport, configPath: cfgPath, url: entry.url };
-          }
-        } else if (agent.format === 'yaml') {
-          const result = parseYamlMcpEntry(content, agent.key, 'mindos');
-          if (result.found && result.entry) {
-            const entry = result.entry;
-            const transport = entry.command ? 'stdio' : entry.url ? 'http' : 'unknown';
-            return { installed: true, scope: scopeType, transport, configPath: cfgPath, url: entry.url };
-          }
-        } else {
-          // JSON format (default)
-          const config = parseJsonc(content);
-          const servers = scopeType === 'global' && agent.globalNestedKey
-            ? readNestedRecord(config as Record<string, unknown>, agent.globalNestedKey)
-            : readOwnRecord(config, agent.key) ?? undefined;
-          if (servers?.mindos) {
-            const entry = servers.mindos as Record<string, unknown>;
-            const transport = isLocalMcpEntry(entry) ? 'stdio' : entry.url ? 'http' : 'unknown';
-            return { installed: true, scope: scopeType, transport, configPath: cfgPath, url: entry.url as string | undefined };
-          }
-        }
-      } catch { /* ignore parse errors */ }
-    }
-  }
-
-  return { installed: false };
+  return detectAgentInstalledFromConfigs(agent as MindosMcpAgentRegistryDef, detectionServices(options));
 }
 
-function isLocalMcpEntry(entry: Record<string, unknown>): boolean {
-  return entry.type === 'stdio'
-    || entry.type === 'local'
-    || typeof entry.command === 'string'
-    || Array.isArray(entry.command);
-}
-
-// Parse YAML to find MCP server entry without external library
-function parseYamlMcpEntry(content: string, sectionKey: string, serverName: string): { found: boolean; entry?: { command?: string; url?: string } } {
-  const lines = content.split('\n');
-  let inSection = false;
-  let inServer = false;
-  let baseIndent = -1;
-  let serverIndent = -1;
-  const entry: { command?: string; url?: string } = {};
-
-  for (const line of lines) {
-    if (!line.trim() || line.trim().startsWith('#')) continue;
-    const indent = line.length - line.trimStart().length;
-    const trimmed = line.trim();
-
-    // Top-level key
-    if (indent === 0 && trimmed.startsWith(sectionKey + ':')) {
-      inSection = true;
-      baseIndent = -1;
-      continue;
-    }
-    // Another top-level key ends the section
-    if (indent === 0 && trimmed) {
-      if (inServer) return { found: true, entry };
-      inSection = false;
-      continue;
-    }
-    if (!inSection) continue;
-
-    // First child sets the base indent
-    if (baseIndent < 0) baseIndent = indent;
-
-    // Server name at base indent
-    if (indent === baseIndent) {
-      if (inServer) return { found: true, entry };
-      const match = trimmed.match(/^([a-zA-Z0-9_-]+)\s*:/);
-      if (match && match[1] === serverName) {
-        inServer = true;
-        serverIndent = -1;
-      }
-      continue;
-    }
-
-    if (!inServer) continue;
-    if (serverIndent < 0) serverIndent = indent;
-    if (indent === serverIndent) {
-      const kv = trimmed.match(/^(command|url)\s*:\s*["']?([^"'\n]+)["']?\s*$/);
-      if (kv) {
-        if (kv[1] === 'command') entry.command = kv[2].trim();
-        if (kv[1] === 'url') entry.url = kv[2].trim();
-      }
-    }
-  }
-
-  if (inServer) return { found: true, entry };
-  return { found: false };
-}
-
-// Parse TOML to find MCP server entry without external library
-function parseTomlMcpEntry(content: string, sectionKey: string, serverName: string): { found: boolean; entry?: { type?: string; url?: string } } {
-  const lines = content.split('\n');
-  const targetSection = `[${sectionKey}.${serverName}]`;
-  const genericSection = `[${sectionKey}]`;
-
-  let inTargetSection = false;
-  let inGenericSection = false;
-  let foundInGeneric = false;
-  let entry: { type?: string; url?: string } = {};
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-
-    // Check for section headers
-    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
-      // Save previous section result if we were in the target
-      if (inTargetSection && (entry.type || entry.url)) {
-        return { found: true, entry };
-      }
-      if (foundInGeneric && (entry.type || entry.url)) {
-        return { found: true, entry };
-      }
-
-      inTargetSection = trimmed === targetSection;
-      inGenericSection = trimmed === genericSection;
-      foundInGeneric = false;
-      entry = {};
-      continue;
-    }
-
-    // Parse key-value pairs
-    const match = trimmed.match(/^([a-zA-Z0-9_-]+)\s*=\s*(.+)$/);
-    if (match) {
-      const [, key, rawValue] = match;
-      // Remove quotes from value
-      const value = rawValue.replace(/^["'](.+)["']$/, '$1');
-
-      if (inTargetSection) {
-        if (key === 'type') entry.type = value;
-        if (key === 'url') entry.url = value;
-      } else if (inGenericSection && key === serverName) {
-        // Check if it's a table reference like mindos = { type = "stdio" }
-        const tableMatch = rawValue.match(/\{\s*type\s*=\s*["']([^"']+)["'].*?\}/);
-        if (tableMatch) {
-          entry.type = tableMatch[1];
-        }
-        const urlMatch = rawValue.match(/url\s*=\s*["']([^"']+)["']/);
-        if (urlMatch) {
-          entry.url = urlMatch[1];
-        }
-        foundInGeneric = true;
-      }
-    }
-  }
-
-  // Check at end of file
-  if (inTargetSection && (entry.type || entry.url)) {
-    return { found: true, entry };
-  }
-  if (foundInGeneric && (entry.type || entry.url)) {
-    return { found: true, entry };
-  }
-
-  return { found: false };
-}
 
 /* ── Agent Presence Detection ──────────────────────────────────────────── */
 

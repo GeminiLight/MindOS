@@ -12,14 +12,22 @@
 
 import {
   bareOrQuotedKey,
+  bomPrefix,
   collapseBlankLines,
   parseScalarLiteral,
   quotedConfigString,
+  stripBom,
   trimTrailingBlankLines,
 } from './mcp-config-text.js';
 
 function isYamlMappingLine(trimmed: string, key: string): boolean {
   return trimmed === `${key}:` || trimmed === `${bareOrQuotedKey(key)}:`;
+}
+
+/** `key: {}` (optionally spaced, optionally followed by a comment): an empty flow mapping. */
+function isYamlEmptyFlowMappingLine(trimmed: string, key: string): boolean {
+  const match = trimmed.match(/^(.+?):\s*\{\s*\}\s*(?:#.*)?$/);
+  return !!match && (match[1] === key || match[1] === bareOrQuotedKey(key));
 }
 
 export function buildYamlEntry(serverName: string, entry: Record<string, unknown>): string {
@@ -45,7 +53,9 @@ export function buildYamlEntry(serverName: string, entry: Record<string, unknown
  */
 export function mergeYamlEntry(existing: string, sectionKey: string, serverName: string, entry: Record<string, unknown>): string {
   const newBlock = buildYamlEntry(serverName, entry);
-  if (!existing.trim()) return `${sectionKey}:\n${newBlock}\n`;
+  const bom = bomPrefix(existing);
+  existing = stripBom(existing);
+  if (!existing.trim()) return `${bom}${sectionKey}:\n${newBlock}\n`;
 
   const result: string[] = [];
   let inSection = false;
@@ -58,11 +68,18 @@ export function mergeYamlEntry(existing: string, sectionKey: string, serverName:
     const trimmed = line.trim();
     const indent = line.length - line.trimStart().length;
 
-    if (indent === 0 && trimmed === `${sectionKey}:`) {
+    if (indent === 0 && isYamlMappingLine(trimmed, sectionKey)) {
       inSection = true;
       sectionFound = true;
       baseIndent = -1;
       result.push(line);
+      continue;
+    }
+    if (indent === 0 && !inSection && isYamlEmptyFlowMappingLine(trimmed, sectionKey)) {
+      // `mcp_servers: {}` is a complete, empty section: open it as a block
+      // mapping holding only the new server instead of appending a second key.
+      sectionFound = true;
+      result.push(`${sectionKey}:`, newBlock);
       continue;
     }
     if (indent === 0 && trimmed && !trimmed.startsWith('#') && inSection) {
@@ -107,10 +124,12 @@ export function mergeYamlEntry(existing: string, sectionKey: string, serverName:
 
   let output = result.join('\n');
   if (!output.endsWith('\n')) output += '\n';
-  return output;
+  return bom + output;
 }
 
 export function removeYamlEntry(existing: string, sectionKey: string, serverName: string): string {
+  const bom = bomPrefix(existing);
+  existing = stripBom(existing);
   const result: string[] = [];
   let inSection = false;
   let baseIndent = -1;
@@ -160,7 +179,7 @@ export function removeYamlEntry(existing: string, sectionKey: string, serverName
 
   let output = collapseBlankLines(result).join('\n');
   if (output && !output.endsWith('\n')) output += '\n';
-  return output;
+  return bom + output;
 }
 
 function parseYamlScalar(rawValue: string): unknown {
@@ -178,6 +197,7 @@ function matchYamlScalarLine(trimmed: string): { key: string; value: string } | 
 
 /** Read one server block (with optional `env:` / `headers:` sub-mappings) from a YAML config. */
 export function parseYamlMcpServerEntry(existing: string, sectionKey: string, serverName: string): Record<string, unknown> | null {
+  existing = stripBom(existing);
   const entry: Record<string, unknown> = {};
   let inSection = false;
   let inServer = false;
@@ -242,4 +262,34 @@ export function parseYamlMcpServerEntry(existing: string, sectionKey: string, se
   }
 
   return Object.keys(entry).length > 0 ? entry : null;
+}
+
+/** Server names directly under the `sectionKey:` mapping (bare or double-quoted keys); `key: {}` yields none. */
+export function listYamlServerNames(existing: string, sectionKey: string): string[] {
+  const names = new Set<string>();
+  let inSection = false;
+  let baseIndent = -1;
+
+  for (const line of stripBom(existing).split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const indent = line.length - line.trimStart().length;
+
+    if (indent === 0 && isYamlMappingLine(trimmed, sectionKey)) {
+      inSection = true;
+      baseIndent = -1;
+      continue;
+    }
+    if (indent === 0 && trimmed) {
+      inSection = false;
+      continue;
+    }
+    if (!inSection) continue;
+    if (baseIndent < 0) baseIndent = indent;
+    if (indent !== baseIndent) continue;
+    const match = trimmed.match(/^([A-Za-z0-9_-]+|"[^"]+"):(?:\s|$)/);
+    const name = match?.[1]?.replace(/^"|"$/g, '');
+    if (name) names.add(name);
+  }
+  return [...names].sort((a, b) => a.localeCompare(b));
 }

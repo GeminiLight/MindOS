@@ -19,6 +19,7 @@
  * so it cannot import any of this).
  */
 
+import crypto from 'node:crypto';
 import { renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import {
   parseJsonc,
@@ -26,11 +27,12 @@ import {
   removeJsoncValue,
   setJsoncValue,
 } from '../../foundation/shared/utils/jsonc.js';
-import { mergeTomlEntry, parseTomlMcpServerEntry, removeTomlEntry } from './mcp-config-toml.js';
-import { mergeYamlEntry, parseYamlMcpServerEntry, removeYamlEntry } from './mcp-config-yaml.js';
+import { listTomlServerNames, mergeTomlEntry, parseTomlMcpServerEntry, removeTomlEntry } from './mcp-config-toml.js';
+import { listYamlServerNames, mergeYamlEntry, parseYamlMcpServerEntry, removeYamlEntry } from './mcp-config-yaml.js';
 
-export { buildTomlEntry, mergeTomlEntry, parseTomlMcpServerEntry, removeTomlEntry } from './mcp-config-toml.js';
-export { buildYamlEntry, mergeYamlEntry, parseYamlMcpServerEntry, removeYamlEntry } from './mcp-config-yaml.js';
+export { buildTomlEntry, listTomlServerNames, mergeTomlEntry, parseTomlMcpServerEntry, removeTomlEntry } from './mcp-config-toml.js';
+export { buildYamlEntry, listYamlServerNames, mergeYamlEntry, parseYamlMcpServerEntry, removeYamlEntry } from './mcp-config-yaml.js';
+export { stripBom } from './mcp-config-text.js';
 
 export type McpConfigFormat = 'json' | 'toml' | 'yaml';
 
@@ -54,10 +56,12 @@ export function detectConfigFormat(format: string | undefined): McpConfigFormat 
 
 /**
  * Write via a same-directory temp file + rename so a crash mid-write can
- * never leave a third-party agent config truncated or half-written.
+ * never leave a third-party agent config truncated or half-written. The temp
+ * name carries pid, time and a random tail so two writers in one process (or
+ * a pid reused across restarts) never clobber each other's temp file.
  */
 export function writeFileAtomically(absPath: string, content: string): void {
-  const tmpPath = `${absPath}.tmp-${process.pid}`;
+  const tmpPath = `${absPath}.tmp-${process.pid}.${Date.now().toString(36)}.${crypto.randomBytes(3).toString('hex')}`;
   try {
     writeFileSync(tmpPath, content, 'utf-8');
     renameSync(tmpPath, absPath);
@@ -226,6 +230,28 @@ export function readMcpServerEntryFromText(
   if (location.format === 'toml') return parseTomlMcpServerEntry(content, location.sectionKey, serverName);
   if (location.format === 'yaml') return parseYamlMcpServerEntry(content, location.sectionKey, serverName);
   return readJsonServerEntry(content, location, serverName);
+}
+
+/**
+ * Names of every server configured at `location`, sorted. Unparsable JSON
+ * yields an empty list (a broken config configures nothing); TOML / YAML are
+ * line walkers and never throw.
+ */
+export function listMcpServerNamesFromText(content: string, location: McpServerEntryLocation): string[] {
+  if (location.format === 'toml') return listTomlServerNames(content, location.sectionKey);
+  if (location.format === 'yaml') return listYamlServerNames(content, location.sectionKey);
+  let config: Record<string, unknown>;
+  try {
+    config = parseJsonc(content);
+  } catch {
+    return [];
+  }
+  const container = location.nestedPath
+    ? getNestedPath(config, location.nestedPath)
+    : readOwnRecord(config, location.sectionKey);
+  return Object.keys(container ?? {})
+    .filter((name) => !isUnsafeObjectKey(name))
+    .sort((a, b) => a.localeCompare(b));
 }
 
 /**

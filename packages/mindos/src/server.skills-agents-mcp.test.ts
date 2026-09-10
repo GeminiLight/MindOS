@@ -219,11 +219,12 @@ describe('MindOS server contract: skills, custom agents, MCP management', () => 
     });
     expect(settings.disabledSkills).toContain('user-skill');
 
+    // The legacy copy ledger is gone: links on disk are the only truth (spec-skill-management-fix).
     expect(handleSkillsPost({ action: 'record-install', name: 'user-skill', agentKey: 'codex', installPath: '/tmp/skill' }, services)).toMatchObject({
-      status: 200,
-      body: { ok: true },
+      status: 400,
+      body: { error: 'Unknown action: record-install' },
     });
-    expect(settings.installedSkillAgents).toEqual([{ agent: 'codex', skill: 'user-skill', path: '/tmp/skill' }]);
+    expect(settings.installedSkillAgents).toBeUndefined();
 
     expect(handleSkillsPost({ action: 'delete', name: 'user-skill' }, services)).toMatchObject({
       status: 200,
@@ -1233,7 +1234,9 @@ describe('MindOS server contract: skills, custom agents, MCP management', () => 
       readSettings: () => ({ mcpPort: 9991, authToken: 'from-settings' }),
       env: { MINDOS_MANAGED: '1' } as NodeJS.ProcessEnv,
       projectRoot: root,
+      homeDir: root,
       killByPort: (port) => { killedPorts.push(port); },
+      waitForMcpHealth: async () => true,
     })).resolves.toMatchObject({
       status: 200,
       body: { ok: true, port: 9991, note: 'ProcessManager will respawn' },
@@ -1270,6 +1273,7 @@ describe('MindOS server contract: skills, custom agents, MCP management', () => 
       execPath: '/node',
       killByPort: (port) => { killedPorts.push(port); },
       waitForPortFree: async () => true,
+      waitForMcpHealth: async () => true,
       pathExists: (path) => path === bundlePath,
       spawnDetached: (command, args, options) => {
         spawned.push({ command, args, cwd: options.cwd, env: options.env });
@@ -1287,6 +1291,7 @@ describe('MindOS server contract: skills, custom agents, MCP management', () => 
       execPath: '/node',
       killByPort: (port) => { killedPorts.push(port); },
       waitForPortFree: async () => true,
+      waitForMcpHealth: async () => true,
       pathExists: (path) => path === bundlePath,
       spawnDetached: (command, args, options) => {
         spawned.push({ command, args, cwd: options.cwd, env: options.env });
@@ -1332,6 +1337,7 @@ describe('MindOS server contract: skills, custom agents, MCP management', () => 
       execPath: '/node',
       killByPort: () => {},
       waitForPortFree: async () => true,
+      waitForMcpHealth: async () => true,
       pathExists: (path: string) => path === bundlePath,
       spawnDetached: (_command: string, _args: string[], options: { env: NodeJS.ProcessEnv }) => {
         spawnedHosts.push({ host: options.env.MCP_HOST, token: options.env.AUTH_TOKEN });

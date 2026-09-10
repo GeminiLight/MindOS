@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { dirname, isAbsolute, resolve } from 'node:path';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
 import type { MindosServerEventEmitter } from '../events/bus.js';
 import { expandHome } from '../../foundation/shared/utils/path.js';
@@ -47,6 +47,8 @@ export type MindosMcpInstallRequest = {
   transport?: 'stdio' | 'http' | 'auto';
   url?: string;
   token?: string;
+  /** Absolute directory that relative project-scoped config paths resolve against; overrides the service default. */
+  projectRoot?: string;
 };
 
 export type MindosMcpUninstallRequest = {
@@ -55,6 +57,7 @@ export type MindosMcpUninstallRequest = {
     scope: 'project' | 'global';
     serverName?: string;
   }>;
+  projectRoot?: string;
 };
 
 export type MindosMcpServerCopyTarget = {
@@ -68,6 +71,7 @@ export type MindosMcpServerCopyRequest = {
   sourceAgentKey?: string;
   sourceScope?: 'project' | 'global';
   targets?: MindosMcpServerCopyTarget[];
+  projectRoot?: string;
 };
 
 export type MindosMcpInstallResult = {
@@ -85,6 +89,8 @@ export type MindosMcpInstallResult = {
 export type MindosMcpInstallServices = {
   agents: Record<string, MindosMcpAgentDef>;
   homeDir?: string;
+  /** Default base for relative project-scoped config paths (the mind root in the product server). */
+  projectRoot?: string;
   env?: NodeJS.ProcessEnv;
   requireAgentPresence?: boolean;
   detectAgentPresence?: (agent: string) => boolean;
@@ -99,6 +105,7 @@ export type MindosMcpServerCopyServices = MindosMcpInstallServices;
 export type MindosMcpUninstallServices = {
   agents: Record<string, MindosMcpAgentDef>;
   homeDir?: string;
+  projectRoot?: string;
   /** Receives `mcp.changed` when at least one agent config was written. */
   events?: MindosServerEventEmitter;
 };
@@ -117,6 +124,76 @@ function configPathCandidates(agent: MindosMcpAgentDef, scope: 'global' | 'proje
   const primary = scope === 'global' ? agent.global : agent.project;
   const readAlso = scope === 'global' ? agent.globalReadAlso : agent.projectReadAlso;
   return [primary, ...(readAlso ?? [])].filter((entry): entry is string => !!entry);
+}
+
+/** A relative project-scoped config path was asked for without any project root to anchor it. */
+export class AgentConfigProjectRootError extends Error {
+  readonly status = 400;
+
+  constructor(configPath: string) {
+    super(`Project-scoped agent config "${configPath}" needs a project root; pass projectRoot or install into global scope.`);
+    this.name = 'AgentConfigProjectRootError';
+  }
+}
+
+export type AgentConfigPathServices = {
+  homeDir?: string;
+  projectRoot?: string;
+};
+
+/**
+ * Absolute location of one agent config path. Global paths only expand `~`.
+ * Relative project paths (`.mcp.json`, `.cursor/mcp.json`) resolve against
+ * the explicit project root and never against `process.cwd()`: the Web
+ * server's cwd is its runtime directory, not anything the user calls a project.
+ */
+export function resolveAgentConfigPath(
+  configPath: string,
+  scope: 'project' | 'global',
+  services: AgentConfigPathServices,
+): string {
+  const expanded = expandHome(configPath, services.homeDir);
+  if (scope !== 'project' || isAbsolute(expanded)) return expanded;
+  const root = services.projectRoot?.trim();
+  if (!root || !isAbsolute(root)) throw new AgentConfigProjectRootError(configPath);
+  return resolve(root, expanded);
+}
+
+/** True when `configPath` at `scope` cannot be resolved without a project root. */
+export function agentConfigPathNeedsProjectRoot(configPath: string, scope: 'project' | 'global', homeDir?: string): boolean {
+  return scope === 'project' && !isAbsolute(expandHome(configPath, homeDir));
+}
+
+/**
+ * Project root for one request: the request's own absolute `projectRoot`
+ * wins, then the service default. A present-but-invalid request value is a
+ * client error rather than something to silently fall back from.
+ */
+function resolveRequestProjectRoot(
+  body: { projectRoot?: unknown },
+  services: AgentConfigPathServices,
+): { projectRoot?: string } | { error: string } {
+  if (body.projectRoot === undefined || body.projectRoot === null) return { projectRoot: services.projectRoot };
+  if (typeof body.projectRoot !== 'string' || !body.projectRoot.trim()) return { error: 'projectRoot must be a non-empty string' };
+  if (!isAbsolute(body.projectRoot.trim())) return { error: 'projectRoot must be an absolute path' };
+  return { projectRoot: body.projectRoot.trim() };
+}
+
+/** 400 body when any requested item needs a project root that nobody supplied; null otherwise. */
+function missingProjectRootError(
+  items: Array<{ key: string; scope: 'project' | 'global' }>,
+  agents: Record<string, MindosMcpAgentDef>,
+  services: AgentConfigPathServices,
+): string | null {
+  if (services.projectRoot && isAbsolute(services.projectRoot)) return null;
+  for (const item of items) {
+    const agent = agents[item.key];
+    if (!agent || item.scope !== 'project') continue;
+    const needsRoot = configPathCandidates(agent, 'project')
+      .some((configPath) => agentConfigPathNeedsProjectRoot(configPath, 'project', services.homeDir));
+    if (needsRoot) return `${agent.name} project scope needs a project root; pass projectRoot or install into global scope.`;
+  }
+  return null;
 }
 
 /**
@@ -172,13 +249,15 @@ function buildEntry(
 function findMcpServerEntry(
   agent: MindosMcpAgentDef,
   serverName: string,
-  services: Pick<MindosMcpInstallServices, 'homeDir'>,
+  services: AgentConfigPathServices,
   sourceScope?: 'project' | 'global',
 ): { entry: Record<string, unknown>; path: string; scope: 'project' | 'global' } | null {
   const scopes = sourceScope ? [sourceScope] : (['global', 'project'] as const);
   for (const scope of scopes) {
     for (const configPath of configPathCandidates(agent, scope)) {
-      const absPath = expandHome(configPath, services.homeDir);
+      // A lookup without a project root simply cannot see relative project configs.
+      if (agentConfigPathNeedsProjectRoot(configPath, scope, services.homeDir) && !services.projectRoot) continue;
+      const absPath = resolveAgentConfigPath(configPath, scope, services);
       if (!existsSync(absPath)) continue;
       const entry = readMcpServerEntryFromText(readFileSync(absPath, 'utf-8'), entryLocation(agent, scope), serverName);
       if (entry) return { entry, path: configPath, scope };
@@ -194,7 +273,7 @@ function writeMcpServerEntry(
   serverName: string,
   entry: Record<string, unknown>,
   overwrite: boolean,
-  services: Pick<MindosMcpInstallServices, 'homeDir'>,
+  services: AgentConfigPathServices,
 ): MindosMcpInstallResult {
   assertSafeMcpServerName(serverName);
   const configPath = scope === 'global' ? agent.global : agent.project;
@@ -202,7 +281,7 @@ function writeMcpServerEntry(
     return { agent: agentKey, status: 'error', message: `${agent.name} does not support ${scope} scope` };
   }
 
-  const absPath = expandHome(configPath, services.homeDir);
+  const absPath = resolveAgentConfigPath(configPath, scope, services);
   mkdirSync(dirname(absPath), { recursive: true });
   const existing = existsSync(absPath) ? readFileSync(absPath, 'utf-8') : '';
   const location = entryLocation(agent, scope);
@@ -247,6 +326,12 @@ export async function handleMcpInstallPost(
   services: MindosMcpInstallServices,
 ): Promise<MindosServerResponse<{ results: MindosMcpInstallResult[] } | { error: string }>> {
   try {
+    const root = resolveRequestProjectRoot(body, services);
+    if ('error' in root) return json({ error: root.error }, { status: 400 });
+    const pathServices: AgentConfigPathServices = { homeDir: services.homeDir, projectRoot: root.projectRoot };
+    const missingRoot = missingProjectRootError(body.agents ?? [], services.agents, pathServices);
+    if (missingRoot) return json({ error: missingRoot }, { status: 400 });
+
     const results: MindosMcpInstallResult[] = [];
     const globalTransport = body.transport ?? 'auto';
 
@@ -278,7 +363,7 @@ export async function handleMcpInstallPost(
         continue;
       }
 
-      const absPath = expandHome(configPath, services.homeDir);
+      const absPath = resolveAgentConfigPath(configPath, scope, pathServices);
       const entry = buildEntry(effectiveTransport, agent, services, body.url, body.token);
 
       try {
@@ -322,6 +407,16 @@ export async function handleMcpServerCopyPost(
     const targets = body.targets ?? [];
     if (targets.length === 0) return json({ error: 'targets required' }, { status: 400 });
 
+    const root = resolveRequestProjectRoot(body, services);
+    if ('error' in root) return json({ error: root.error }, { status: 400 });
+    const pathServices: AgentConfigPathServices = { homeDir: services.homeDir, projectRoot: root.projectRoot };
+    const missingRoot = missingProjectRootError(
+      targets.map((target) => ({ key: target.key, scope: target.scope ?? 'global' })),
+      services.agents,
+      pathServices,
+    );
+    if (missingRoot) return json({ error: missingRoot }, { status: 400 });
+
     if (serverName === 'mindos') {
       return handleMcpInstallPost({
         agents: targets.map((target) => ({
@@ -330,6 +425,7 @@ export async function handleMcpServerCopyPost(
           transport: 'auto',
         })),
         transport: 'auto',
+        ...(root.projectRoot ? { projectRoot: root.projectRoot } : {}),
       }, services);
     }
 
@@ -338,7 +434,7 @@ export async function handleMcpServerCopyPost(
     const sourceAgent = services.agents[sourceKey];
     if (!sourceAgent) return json({ error: `Unknown source agent: ${sourceKey}` }, { status: 404 });
 
-    const source = findMcpServerEntry(sourceAgent, serverName, services, body.sourceScope);
+    const source = findMcpServerEntry(sourceAgent, serverName, pathServices, body.sourceScope);
     if (!source) {
       return json({ error: `MCP server "${serverName}" was not found in ${sourceAgent.name}` }, { status: 404 });
     }
@@ -367,7 +463,7 @@ export async function handleMcpServerCopyPost(
           serverName,
           source.entry,
           target.overwrite === true,
-          services,
+          pathServices,
         ));
       } catch (error) {
         results.push({ agent: target.key, status: 'error', message: String(error) });
@@ -386,6 +482,12 @@ export function handleMcpUninstallPost(
   services: MindosMcpUninstallServices,
 ): MindosServerResponse<{ results: MindosMcpInstallResult[] } | { error: string }> {
   try {
+    const root = resolveRequestProjectRoot(body, services);
+    if ('error' in root) return json({ error: root.error }, { status: 400 });
+    const pathServices: AgentConfigPathServices = { homeDir: services.homeDir, projectRoot: root.projectRoot };
+    const missingRoot = missingProjectRootError(body.agents ?? [], services.agents, pathServices);
+    if (missingRoot) return json({ error: missingRoot }, { status: 400 });
+
     const results: MindosMcpInstallResult[] = [];
 
     for (const item of body.agents ?? []) {
@@ -404,7 +506,7 @@ export function handleMcpUninstallPost(
         continue;
       }
 
-      const existingPaths = configPaths.filter((configPath) => existsSync(expandHome(configPath, services.homeDir)));
+      const existingPaths = configPaths.filter((configPath) => existsSync(resolveAgentConfigPath(configPath, scope, pathServices)));
       if (existingPaths.length === 0) {
         results.push({ agent: key, status: 'ok', message: 'Config file does not exist' });
         continue;
@@ -416,7 +518,7 @@ export function handleMcpUninstallPost(
       const warnings: string[] = [];
       try {
         for (const configPath of existingPaths) {
-          const absPath = expandHome(configPath, services.homeDir);
+          const absPath = resolveAgentConfigPath(configPath, scope, pathServices);
           try {
             const existing = readFileSync(absPath, 'utf-8');
             warnings.push(...removeMcpServerEntryFromFile(absPath, existing, location, serverName));

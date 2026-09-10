@@ -29,7 +29,7 @@ afterEach(() => {
 });
 
 function leftovers(dir: string): string[] {
-  return fs.readdirSync(dir).filter((name) => /\.tmp-\d+$/.test(name));
+  return fs.readdirSync(dir).filter((name) => name.includes('.tmp-'));
 }
 
 describe('jsonc.js parseJsonc', () => {

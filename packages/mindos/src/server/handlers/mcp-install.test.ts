@@ -305,3 +305,108 @@ describe('MCP install writes third-party agent configs atomically', () => {
     expect(parseJsonc(rewritten)).toMatchObject({ mcpServers: { mindos: { command: 'mindos' } } });
   });
 });
+
+describe('project-scoped installs resolve against an explicit project root, never the server cwd', () => {
+  const cwdProjectFile = join(process.cwd(), '.mcp.json');
+
+  it('writes the project config under services.projectRoot', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'mindos-mcp-project-home-'));
+    const root = mkdtempSync(join(tmpdir(), 'mindos-mcp-project-root-'));
+    const cwdHadFile = existsSync(cwdProjectFile);
+
+    const res = await handleMcpInstallPost({
+      agents: [{ key: 'claude-code', scope: 'project' }],
+      transport: 'stdio',
+    }, { agents, homeDir: home, projectRoot: root });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ results: [{ agent: 'claude-code', status: 'ok', path: '.mcp.json' }] });
+    expect(parseJsonc(readFileSync(join(root, '.mcp.json'), 'utf-8'))).toMatchObject({ mcpServers: { mindos: { command: 'mindos' } } });
+    expect(existsSync(cwdProjectFile)).toBe(cwdHadFile);
+    expect(existsSync(join(home, '.mcp.json'))).toBe(false);
+  });
+
+  it('lets the request name an absolute projectRoot that overrides the service default', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'mindos-mcp-project-home-'));
+    const serviceRoot = mkdtempSync(join(tmpdir(), 'mindos-mcp-project-service-root-'));
+    const requestRoot = mkdtempSync(join(tmpdir(), 'mindos-mcp-project-request-root-'));
+
+    const res = await handleMcpInstallPost({
+      agents: [{ key: 'claude-code', scope: 'project' }],
+      transport: 'stdio',
+      projectRoot: requestRoot,
+    }, { agents, homeDir: home, projectRoot: serviceRoot });
+
+    expect(res.status).toBe(200);
+    expect(existsSync(join(requestRoot, '.mcp.json'))).toBe(true);
+    expect(existsSync(join(serviceRoot, '.mcp.json'))).toBe(false);
+  });
+
+  it('rejects a project-scoped install with 400 when no project root is known', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'mindos-mcp-project-home-'));
+    const cwdHadFile = existsSync(cwdProjectFile);
+
+    const res = await handleMcpInstallPost({
+      agents: [{ key: 'claude-code', scope: 'project' }],
+      transport: 'stdio',
+    }, { agents, homeDir: home });
+
+    expect(res.status).toBe(400);
+    expect((res.body as { error: string }).error).toMatch(/project root/i);
+    expect(existsSync(cwdProjectFile)).toBe(cwdHadFile);
+  });
+
+  it('rejects a relative or non-string request projectRoot with 400', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'mindos-mcp-project-home-'));
+    const root = mkdtempSync(join(tmpdir(), 'mindos-mcp-project-root-'));
+
+    const relative = await handleMcpInstallPost({
+      agents: [{ key: 'claude-code', scope: 'project' }],
+      projectRoot: 'relative/dir',
+    }, { agents, homeDir: home, projectRoot: root });
+    expect(relative.status).toBe(400);
+
+    const wrongType = await handleMcpInstallPost({
+      agents: [{ key: 'claude-code', scope: 'project' }],
+      projectRoot: 42 as unknown as string,
+    }, { agents, homeDir: home, projectRoot: root });
+    expect(wrongType.status).toBe(400);
+    expect(existsSync(join(root, '.mcp.json'))).toBe(false);
+  });
+
+  it('still installs global scope without any project root', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'mindos-mcp-project-home-'));
+    const res = await handleMcpInstallPost({
+      agents: [{ key: 'claude-code', scope: 'global' }],
+      transport: 'stdio',
+    }, { agents, homeDir: home });
+    expect(res.status).toBe(200);
+    expect(existsSync(join(home, '.claude.json'))).toBe(true);
+  });
+
+  it('uninstalls and copies through the same project root', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'mindos-mcp-project-home-'));
+    const root = mkdtempSync(join(tmpdir(), 'mindos-mcp-project-root-'));
+    writeFileSync(join(home, '.claude.json'), JSON.stringify({ mcpServers: { other: { command: 'other' } } }));
+
+    const copied = await handleMcpServerCopyPost({
+      serverName: 'other',
+      sourceAgentKey: 'claude-code',
+      sourceScope: 'global',
+      targets: [{ key: 'claude-code', scope: 'project' }],
+    }, { agents, homeDir: home, projectRoot: root });
+    expect(copied.body).toMatchObject({ results: [{ agent: 'claude-code', status: 'ok', path: '.mcp.json' }] });
+    expect(parseJsonc(readFileSync(join(root, '.mcp.json'), 'utf-8'))).toEqual({ mcpServers: { other: { command: 'other' } } });
+
+    const removed = handleMcpUninstallPost({
+      agents: [{ key: 'claude-code', scope: 'project', serverName: 'other' }],
+    }, { agents, homeDir: home, projectRoot: root });
+    expect(removed.body).toMatchObject({ results: [{ agent: 'claude-code', status: 'ok' }] });
+    expect(parseJsonc(readFileSync(join(root, '.mcp.json'), 'utf-8'))).toEqual({ mcpServers: {} });
+
+    const noRoot = handleMcpUninstallPost({
+      agents: [{ key: 'claude-code', scope: 'project', serverName: 'other' }],
+    }, { agents, homeDir: home });
+    expect(noRoot.status).toBe(400);
+  });
+});

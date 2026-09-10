@@ -11,6 +11,7 @@ import {
   buildYamlEntry,
   detectConfigFormat,
   getNestedPath,
+  listMcpServerNamesFromText,
   mergeTomlEntry,
   mergeYamlEntry,
   parseTomlMcpServerEntry,
@@ -36,7 +37,7 @@ function tempDir(prefix: string): string {
 }
 
 function leftovers(dir: string): string[] {
-  return readdirSync(dir).filter((name) => /\.tmp-\d+$/.test(name));
+  return readdirSync(dir).filter((name) => name.includes('.tmp-'));
 }
 
 function countOccurrences(haystack: string, needle: string): number {
@@ -231,6 +232,39 @@ describe('TOML (Codex config.toml)', () => {
     expect(parseTomlMcpServerEntry(text, 'mcp_servers', 'other')).toBeNull();
   });
 
+  it('replaces an inline table under [mcp_servers] instead of adding a duplicate definition', () => {
+    const inline = [
+      '[mcp_servers]',
+      'mindos = { command = "old", args = ["mcp"] }',
+      'other = { command = "other" }',
+      '',
+      '[projects."/tmp/x"]',
+      'trust_level = "trusted"',
+      '',
+    ].join('\n');
+
+    const merged = mergeTomlEntry(inline, 'mcp_servers', 'mindos', STDIO_ENTRY);
+    expect(merged).not.toMatch(/^mindos\s*=/m);
+    expect(countOccurrences(merged, '[mcp_servers.mindos]')).toBe(1);
+    expect(merged).toContain('other = { command = "other" }');
+    expect(merged).toContain('[projects."/tmp/x"]');
+    expect(parseTomlMcpServerEntry(merged, 'mcp_servers', 'mindos')).toEqual(STDIO_ENTRY);
+    expect(parseTomlMcpServerEntry(merged, 'mcp_servers', 'other')).toEqual({ command: 'other' });
+
+    const removed = removeTomlEntry(inline, 'mcp_servers', 'mindos');
+    expect(removed).not.toMatch(/^mindos\s*=/m);
+    expect(removed).toContain('other = { command = "other" }');
+    expect(parseTomlMcpServerEntry(removed, 'mcp_servers', 'mindos')).toBeNull();
+  });
+
+  it('strips a quoted inline key and leaves unrelated inline keys alone', () => {
+    const inline = '[mcp_servers]\n"my.server" = { command = "x" }\nmindos-old = { command = "keep" }\n';
+    const merged = mergeTomlEntry(inline, 'mcp_servers', 'my.server', { command: 'y' });
+    expect(merged).not.toContain('"my.server" = {');
+    expect(merged).toContain('mindos-old = { command = "keep" }');
+    expect(parseTomlMcpServerEntry(merged, 'mcp_servers', 'my.server')).toEqual({ command: 'y' });
+  });
+
   it('returns null for malformed TOML instead of throwing, and merge still appends a valid table', () => {
     const malformed = 'this is = not [ toml\n[mcp_servers.mindos\ncommand = "x"\n';
     expect(parseTomlMcpServerEntry(malformed, 'mcp_servers', 'mindos')).toBeNull();
@@ -338,13 +372,37 @@ describe('YAML (Hermes config.yaml)', () => {
     expect(parseYamlMcpServerEntry(text, 'mcp_servers', 'other')).toEqual({ command: 'other' });
   });
 
-  // The walkers compute indentation as `line.length - line.trimStart().length`,
-  // and `trimStart()` strips U+FEFF, so a BOM counts as one column and the
-  // first-line `mcp_servers:` header is not recognised. Pre-existing quirk kept
-  // as-is by the pure refactor; tracked in wiki/85-backlog.md.
-  it.fails('recognises the servers section when the file starts with a UTF-8 BOM (known quirk)', () => {
+  it('recognises the servers section when the file starts with a UTF-8 BOM and keeps the BOM on write', () => {
     const bom = '﻿mcp_servers:\n  other:\n    command: "other"\n';
     expect(parseYamlMcpServerEntry(bom, 'mcp_servers', 'other')).toEqual({ command: 'other' });
+
+    const merged = mergeYamlEntry(bom, 'mcp_servers', 'mindos', { command: 'mindos' });
+    expect(merged.startsWith('﻿')).toBe(true);
+    expect(countOccurrences(merged, 'mcp_servers:')).toBe(1);
+    expect(parseYamlMcpServerEntry(merged, 'mcp_servers', 'other')).toEqual({ command: 'other' });
+    expect(parseYamlMcpServerEntry(merged, 'mcp_servers', 'mindos')).toEqual({ command: 'mindos' });
+
+    const removed = removeYamlEntry(merged, 'mcp_servers', 'other');
+    expect(removed.startsWith('﻿')).toBe(true);
+    expect(parseYamlMcpServerEntry(removed, 'mcp_servers', 'other')).toBeNull();
+    expect(parseYamlMcpServerEntry(removed, 'mcp_servers', 'mindos')).toEqual({ command: 'mindos' });
+  });
+
+  it('treats an empty flow mapping `mcp_servers: {}` as an empty section instead of appending a duplicate key', () => {
+    const empty = 'model: gpt\nmcp_servers: {}\ntools:\n  - web\n';
+    expect(parseYamlMcpServerEntry(empty, 'mcp_servers', 'mindos')).toBeNull();
+
+    const merged = mergeYamlEntry(empty, 'mcp_servers', 'mindos', { command: 'mindos' });
+    expect(countOccurrences(merged, 'mcp_servers:')).toBe(1);
+    expect(merged).not.toContain('{}');
+    expect(merged).toContain('model: gpt');
+    expect(merged).toContain('tools:\n  - web');
+    expect(parseYamlMcpServerEntry(merged, 'mcp_servers', 'mindos')).toEqual({ command: 'mindos' });
+
+    const spaced = mergeYamlEntry('mcp_servers: { }\n', 'mcp_servers', 'mindos', { command: 'mindos' });
+    expect(countOccurrences(spaced, 'mcp_servers:')).toBe(1);
+    expect(parseYamlMcpServerEntry(spaced, 'mcp_servers', 'mindos')).toEqual({ command: 'mindos' });
+    expect(removeYamlEntry(empty, 'mcp_servers', 'mindos')).toBe(empty);
   });
 
   it('returns null for malformed YAML instead of throwing, and merge still appends a valid section', () => {
@@ -353,6 +411,47 @@ describe('YAML (Hermes config.yaml)', () => {
     const merged = mergeYamlEntry('{{ not: yaml\n', 'mcp_servers', 'mindos', { command: 'mindos' });
     expect(parseYamlMcpServerEntry(merged, 'mcp_servers', 'mindos')).toEqual({ command: 'mindos' });
     expect(removeYamlEntry('model: gpt\n', 'mcp_servers', 'mindos')).toBe('model: gpt\n');
+  });
+});
+
+describe('listMcpServerNamesFromText', () => {
+  it('lists JSON servers from the section key or a nested path, ignoring prototype keys', () => {
+    expect(listMcpServerNamesFromText('{"mcpServers":{"b":{},"a":{}}}', JSON_LOCATION)).toEqual(['a', 'b']);
+    expect(listMcpServerNamesFromText('{"mcp":{"clients":{"z":{},"mindos":{}}}}', { format: 'json', sectionKey: 'mcp', nestedPath: 'mcp.clients' }))
+      .toEqual(['mindos', 'z']);
+    expect(listMcpServerNamesFromText('{"other":{}}', JSON_LOCATION)).toEqual([]);
+    expect(listMcpServerNamesFromText('// comment\n{"mcpServers":{"a":{}}}', JSON_LOCATION)).toEqual(['a']);
+    expect(listMcpServerNamesFromText('not json', JSON_LOCATION)).toEqual([]);
+  });
+
+  it('lists TOML servers from tables, sub-tables, quoted headers and inline tables', () => {
+    const text = [
+      '[mcp_servers]',
+      'inline = { command = "x" }',
+      '"quoted.inline" = { command = "y" }',
+      '',
+      '[mcp_servers.table]',
+      'command = "t"',
+      '',
+      '[mcp_servers.table.env]',
+      'A = "1"',
+      '',
+      '[mcp_servers."my.server"]',
+      'command = "q"',
+      '',
+      '[projects."/tmp/x"]',
+      'trust_level = "trusted"',
+      '',
+    ].join('\n');
+    expect(listMcpServerNamesFromText(text, TOML_LOCATION)).toEqual(['inline', 'my.server', 'quoted.inline', 'table']);
+    expect(listMcpServerNamesFromText('model = "o3"\n', TOML_LOCATION)).toEqual([]);
+  });
+
+  it('lists YAML servers under the section, tolerating a BOM and an empty flow mapping', () => {
+    expect(listMcpServerNamesFromText('﻿mcp_servers:\n  b:\n    command: "b"\n  a:\n    url: "u"\ntools:\n  - web\n', YAML_LOCATION))
+      .toEqual(['a', 'b']);
+    expect(listMcpServerNamesFromText('mcp_servers: {}\n', YAML_LOCATION)).toEqual([]);
+    expect(listMcpServerNamesFromText('mcp_servers:\n  "quoted.name":\n    command: "x"\n', YAML_LOCATION)).toEqual(['quoted.name']);
   });
 });
 

@@ -242,6 +242,12 @@ export {
   handleRuntimeControlPlaneGet,
   handleRuntimeControlPlanePost,
   readRuntimeControlPlane,
+  subscribeRuntimeControlPlaneMutations,
+  RUNTIME_CONTROL_PLANE_LEASE,
+  RuntimeControlPlaneBusyError,
+  RuntimeControlPlaneCorruptError,
+  type RuntimeControlPlaneMutationEvent,
+  type RuntimeControlPlaneMutationListener,
   type RuntimeControlPlaneApprovalRequest,
   type RuntimeControlPlaneApprovalStatus,
   type RuntimeControlPlaneFailureAudit,
@@ -1114,9 +1120,13 @@ export {
 } from './handlers/agents.js';
 
 export {
+  AgentConfigProjectRootError,
+  agentConfigPathNeedsProjectRoot,
   handleMcpInstallPost,
   handleMcpServerCopyPost,
   handleMcpUninstallPost,
+  resolveAgentConfigPath,
+  type AgentConfigPathServices,
   type MindosMcpAgentDef,
   type MindosMcpInstallItem,
   type MindosMcpInstallRequest,
@@ -1132,11 +1142,23 @@ export {
 } from './handlers/mcp-install.js';
 
 export {
+  detectConfigFormat,
+  getNestedPath,
+  listMcpServerNamesFromText,
+  readMcpServerEntryFromText,
+  readOwnRecord,
+  stripBom,
+  type McpConfigFormat,
+  type McpServerEntryLocation,
+} from './handlers/mcp-config-formats.js';
+
+export {
+  detectAgentConfiguredMcpServersFromConfigs,
+  detectAgentInstalledFromConfigs,
   detectCustomAgentConfiguredMcp,
   handleMcpAgentsGet,
-  parseJsonForServers,
-  parseTomlForServers,
   resolveSkillLinkAgents,
+  type MindosAgentConfigDetectionServices,
   type MindosCustomMcpAgentDef,
   type MindosMcpAgentConfiguredServers,
   type MindosMcpAgentInstallStatus,

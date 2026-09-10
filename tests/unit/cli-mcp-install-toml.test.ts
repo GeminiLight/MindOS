@@ -192,6 +192,27 @@ describe('mergeTomlEntry', () => {
     expect(result).toContain('[mcp_servers.mindos]');
   });
 
+  it('replaces an inline table under [mcp_servers] instead of leaving a duplicate definition', async () => {
+    const { mergeTomlEntry } = await importToml();
+    const existing = [
+      '[mcp_servers]',
+      'mindos = { command = "old", args = ["mcp"] }',
+      'other = { command = "other" }',
+      '',
+      '[projects."/tmp/x"]',
+      'trust_level = "trusted"',
+      '',
+    ].join('\n');
+
+    const result = mergeTomlEntry(existing, 'mcp_servers', 'mindos', { type: 'stdio', command: 'mindos' });
+
+    expect(result).not.toMatch(/^mindos\s*=/m);
+    expect(result.split('[mcp_servers.mindos]').length - 1).toBe(1);
+    expect(result).toContain('other = { command = "other" }');
+    expect(result).toContain('[projects."/tmp/x"]');
+    expect(result).toContain('command = "mindos"');
+  });
+
   it('replaces existing mindos section', async () => {
     const { mergeTomlEntry } = await importToml();
     const existing = [

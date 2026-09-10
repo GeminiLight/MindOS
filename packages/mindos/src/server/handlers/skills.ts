@@ -8,7 +8,9 @@ import {
   disableNativeSkill,
   enableNativeSkill,
   linkSkillToAgent,
+  migrateInstalledSkillAgents,
   unlinkSkillFromAgent,
+  type MindosSkillInstallRecord,
   type MindosSkillLinkAgent,
   type MindosSkillLinkOutcome,
   type MindosSkillMatrix,
@@ -61,7 +63,6 @@ export type SkillsPostAction =
   | 'toggle'
   | 'read'
   | 'read-native'
-  | 'record-install'
   | 'link'
   | 'unlink'
   | 'disable-native'
@@ -75,7 +76,6 @@ export type SkillsPostPayload = {
   enabled?: boolean;
   sourcePath?: string;
   agentKey?: string;
-  installPath?: string;
 };
 
 export type SkillsPostHandlerServices = {
@@ -191,9 +191,6 @@ function dispatchSkillsPost(
       }
       return readNativeSkill(name, payload.sourcePath, services.skillRoots, services.trustedNativeSkillRoots);
 
-    case 'record-install':
-      return recordSkillInstall(payload, settings, services);
-
     case 'link':
     case 'unlink':
     case 'disable-native':
@@ -201,11 +198,42 @@ function dispatchSkillsPost(
       if (!name || !payload.agentKey) {
         return json({ error: 'name and agentKey required' }, { status: 400 });
       }
+      migrateLegacyInstalledSkillAgents(settings, services);
       return setSkillLinked(action, name, payload.agentKey, services);
 
     default:
       return json({ error: `Unknown action: ${String(action)}` }, { status: 400 });
   }
+}
+
+/**
+ * One-time replay of the legacy `installedSkillAgents[]` copy ledger
+ * (spec-skill-management-fix §5): links on disk are the truth, so identical
+ * copies become links, user-modified copies stay (and are reported), and the
+ * field is dropped from settings. Runs on the first matrix write, never on a
+ * read, so opening a page never rewrites config or agent skill directories.
+ */
+function migrateLegacyInstalledSkillAgents(settings: MindosSkillsSettings, services: SkillsPostHandlerServices): void {
+  if (!('installedSkillAgents' in settings)) return;
+  const records = Array.isArray(settings.installedSkillAgents)
+    ? settings.installedSkillAgents.filter(isSkillInstallRecord)
+    : [];
+  if (records.length > 0) {
+    migrateInstalledSkillAgents({
+      records,
+      skillRoots: services.skillRoots,
+      agents: services.listLinkAgents?.() ?? [],
+      warn: (message) => console.warn(`[skills] legacy install migration: ${message}`),
+    });
+  }
+  const { installedSkillAgents: _legacy, ...rest } = settings;
+  services.writeSettings(rest);
+}
+
+function isSkillInstallRecord(value: unknown): value is MindosSkillInstallRecord {
+  if (!value || typeof value !== 'object') return false;
+  const record = value as Record<string, unknown>;
+  return typeof record.agent === 'string' && typeof record.skill === 'string' && typeof record.path === 'string';
 }
 
 /* ── Unified write interface for the (skill × agent) matrix (spec 4.3) ── */
@@ -474,28 +502,4 @@ function readNativeSkill(
 function isRegisteredSkillRoot(sourcePath: string, skillRoots: MindosSkillRoot[], trustedNativeSkillRoots: string[]): boolean {
   if (skillRoots.some((root) => resolve(root.path) === sourcePath)) return true;
   return trustedNativeSkillRoots.some((root) => resolve(root) === sourcePath);
-}
-
-function recordSkillInstall(
-  payload: SkillsPostPayload,
-  settings: MindosSkillsSettings,
-  services: SkillsPostHandlerServices,
-): MindosServerResponse<{ ok: true } | { error: string }> {
-  const agentKey = payload.agentKey;
-  const skillName = payload.name;
-  const installPath = payload.installPath;
-  if (!agentKey || !skillName || !installPath) {
-    return json({ error: 'agentKey, name, and installPath are required' }, { status: 400 });
-  }
-
-  const installed = Array.isArray(settings.installedSkillAgents)
-    ? [...settings.installedSkillAgents]
-    : [];
-  const entry = { agent: agentKey, skill: skillName, path: installPath };
-  const index = installed.findIndex((item) => item.agent === agentKey && item.skill === skillName);
-  if (index >= 0) installed[index] = entry;
-  else installed.push(entry);
-
-  services.writeSettings({ ...settings, installedSkillAgents: installed });
-  return json({ ok: true });
 }

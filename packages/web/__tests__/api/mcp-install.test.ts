@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { resetAgentPresenceCache } from '@/lib/mcp-agents';
+import { effectiveMindRoot } from '@geminilight/mindos/foundation';
 import { NextRequest } from 'next/server';
 import fs from 'fs';
 import os from 'os';
@@ -277,10 +278,11 @@ describe('POST /api/mcp/install', () => {
     expect(config.servers.mindos.type).toBe('stdio');
   });
 
-  it('installs github-copilot project scope with servers key', async () => {
+  it('installs github-copilot project scope under the mind root, never the server cwd', async () => {
     markAgentPresent('github-copilot');
-    // Create the .vscode directory first
-    fs.mkdirSync(path.join(process.cwd(), '.vscode'), { recursive: true });
+    const mindRoot = effectiveMindRoot();
+    const cwdFile = path.join(process.cwd(), '.vscode', 'mcp.json');
+    const cwdHadFile = fs.existsSync(cwdFile);
 
     const { POST } = await importInstallRoute();
     const req = new NextRequest('http://localhost/api/mcp/install', {
@@ -294,17 +296,19 @@ describe('POST /api/mcp/install', () => {
     const res = await POST(req);
     const body = await res.json();
     expect(body.results[0].status).toBe('ok');
+    expect(body.results[0].path).toBe('.vscode/mcp.json');
 
-    const absPath = path.join(process.cwd(), '.vscode', 'mcp.json');
-    if (fs.existsSync(absPath)) {
-      const config = JSON.parse(fs.readFileSync(absPath, 'utf-8'));
-      // Project scope uses flat key 'servers', not nested mcp.servers
-      expect(config.servers).toBeDefined();
-      expect(config.servers.mindos).toBeDefined();
-      expect(config.servers.mindos.type).toBe('stdio');
-      // Clean up
-      fs.rmSync(absPath);
-    }
+    const absPath = path.join(mindRoot, '.vscode', 'mcp.json');
+    expect(fs.existsSync(absPath)).toBe(true);
+    const config = JSON.parse(fs.readFileSync(absPath, 'utf-8'));
+    // Project scope uses flat key 'servers', not nested mcp.servers
+    expect(config.servers.mindos.type).toBe('stdio');
+    expect(fs.existsSync(cwdFile)).toBe(cwdHadFile);
+
+    // The agents route resolves project configs against the same root, so the install is visible.
+    const { GET } = await importAgentsRoute();
+    const agents = (await (await GET()).json()).agents as Array<{ key: string; installed: boolean; scope?: string }>;
+    expect(agents.find((a) => a.key === 'github-copilot')).toMatchObject({ installed: true, scope: 'project' });
   });
 
   it('installs copaw agent with nested mcp.clients structure', async () => {
@@ -668,6 +672,23 @@ describe('GET /api/mcp/agents', () => {
     expect(claude.installedSkillNames).toContain('mindos');
     expect(claude.installedSkillNames).toContain('project-wiki');
     expect(claude.installedSkillCount).toBe(2);
+  });
+
+  it('reports a Codex-native command-only [mcp_servers.mindos] table as installed', async () => {
+    markAgentPresent('codex');
+    fs.writeFileSync(path.join(tempHome, '.codex', 'config.toml'), 'model = "o3"\n\n[mcp_servers.mindos]\ncommand = "mindos"\nargs = ["mcp"]\n', 'utf-8');
+
+    const { GET } = await importAgentsRoute();
+    const res = await GET();
+    const body = await res.json();
+    const codex = body.agents.find((a: { key: string }) => a.key === 'codex');
+    expect(codex).toMatchObject({
+      installed: true,
+      scope: 'global',
+      transport: 'stdio',
+      configPath: '~/.codex/config.toml',
+      configuredMcpServers: ['mindos'],
+    });
   });
 
   it('reports not installed when no config exists', async () => {

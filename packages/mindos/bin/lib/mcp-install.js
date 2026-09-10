@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync, renameSync, unlinkSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
 import { resolve } from 'node:path';
 import { CONFIG_PATH } from './constants.js';
 import { bold, dim, cyan, green, red, yellow } from './colors.js';
@@ -28,10 +29,11 @@ function readNestedPath(obj, dotPath) {
 /**
  * Write via same-directory temp file + rename so a crash mid-write can never
  * leave a third-party agent config truncated. Mirrors
- * src/server/handlers/mcp-install.ts#writeFileAtomically.
+ * src/server/handlers/mcp-config-formats.ts#writeFileAtomically: the temp name
+ * carries pid, time and a random tail so concurrent writers never collide.
  */
 export function writeFileAtomically(absPath, content) {
-  const tmpPath = `${absPath}.tmp-${process.pid}`;
+  const tmpPath = `${absPath}.tmp-${process.pid}.${Date.now().toString(36)}.${randomBytes(3).toString('hex')}`;
   try {
     writeFileSync(tmpPath, content, 'utf-8');
     renameSync(tmpPath, absPath);
@@ -343,7 +345,9 @@ export async function mcpInstall() {
     if (!url) {
       let mcpPort = 8781;
       try { mcpPort = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')).mcpPort || 8781; } catch {}
-      const defaultUrl = `http://localhost:${mcpPort}/mcp`;
+      // 127.0.0.1 (not localhost): the MCP server binds IPv4 and some Windows
+      // stacks resolve localhost to ::1 first; keep in sync with src/server/handlers/mcp-install.ts
+      const defaultUrl = `http://127.0.0.1:${mcpPort}/mcp`;
       url = hasYesFlag ? defaultUrl : (await ask2(`${bold('MCP URL')} ${dim(`[${defaultUrl}]:`)} `)).trim() || defaultUrl;
     }
 

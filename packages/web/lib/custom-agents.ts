@@ -8,7 +8,8 @@
 
 import fs from 'fs';
 import path from 'path';
-import { expandHome, MCP_AGENTS, parseJsonc } from './mcp-agents';
+import { listMcpServerNamesFromText } from '@geminilight/mindos/server';
+import { expandHome, MCP_AGENTS } from './mcp-agents';
 import type { AgentDef } from './mcp-agents';
 import { readSettings, writeSettings } from './settings';
 
@@ -317,41 +318,12 @@ export function scanCustomAgentSkills(custom: CustomAgentDef): { skills: string[
 /* ─── Enhanced Skill & MCP Detection ─── */
 
 /**
- * Parse JSON config to extract MCP server names from a config key.
+ * MCP server names configured under `key` in `content`, through the shared
+ * per-format readers (`@geminilight/mindos/server`). An unparsable config
+ * configures nothing.
  */
-function parseJsonMcpServers(content: string, key: string): string[] {
-  try {
-    const config = parseJsonc(content);
-    const servers = config[key];
-    if (servers && typeof servers === 'object') {
-      return Object.keys(servers).sort();
-    }
-  } catch {
-    return [];
-  }
-  return [];
-}
-
-/**
- * Parse TOML config to extract MCP server names from a section key.
- */
-function parseTomlMcpServers(content: string, sectionKey: string): string[] {
-  const names = new Set<string>();
-  const lines = content.split('\n');
-  const sectionPrefix = `${sectionKey}.`;
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
-      const section = trimmed.slice(1, -1).trim();
-      if (section.startsWith(sectionPrefix)) {
-        const name = section.slice(sectionPrefix.length).split('.')[0];
-        if (name) names.add(name);
-      }
-    }
-  }
-
-  return [...names].sort();
+function listConfiguredMcpServers(content: string, key: string, format: 'json' | 'toml'): string[] {
+  return listMcpServerNamesFromText(content, { format, sectionKey: key });
 }
 
 /**
@@ -391,10 +363,7 @@ export function detectCustomAgentProfile(
   if (fs.existsSync(configAbsPath)) {
     try {
       const content = fs.readFileSync(configAbsPath, 'utf-8');
-      result.mcpServers =
-        result.configFormat === 'json'
-          ? parseJsonMcpServers(content, configKey)
-          : parseTomlMcpServers(content, configKey);
+      result.mcpServers = listConfiguredMcpServers(content, configKey, result.configFormat);
     } catch (err) {
       result.parseError = `Failed to parse MCP config: ${err instanceof Error ? err.message : 'Unknown error'}`;
     }

@@ -54,11 +54,14 @@ export const mcpRoutes = defineRoutes([
       readSettings: services.readSettings,
       env: process.env,
       projectRoot: services.runtimeRoot ?? process.cwd(),
+      homeDir: services.homeDir,
       events: services.events,
     }) },
   { id: 'mcp.uninstall', method: 'POST', path: '/api/mcp/uninstall', auth: 'required',
     handler: async ({ readJsonBody, services }) => handleMcpUninstallPost(await readJsonBody() as MindosMcpUninstallRequest, {
       agents: services.mcpAgents ?? {},
+      homeDir: services.homeDir,
+      projectRoot: services.mindRoot,
       events: services.events,
     }) },
 ]);
@@ -67,6 +70,8 @@ export const mcpRoutes = defineRoutes([
  * Shared by GET /api/mcp/agents and the runtime projection services. Host
  * enrichers (`mcpAgentServices`: presence probes, installed-config detection,
  * custom agents, MindOS skill listing) layer over the product defaults.
+ * Relative project-scoped agent configs resolve against the mind root, the
+ * same base the install handlers write to; never against the server cwd.
  */
 export function createHttpMcpAgentsServices(services: MindosHttpServices): MindosMcpAgentsServices {
   const { requireAgentPresence: _requireAgentPresence, ...host } = services.mcpAgentServices ?? {};
@@ -76,7 +81,7 @@ export function createHttpMcpAgentsServices(services: MindosHttpServices): Mindo
     env: process.env,
     homeDir: services.homeDir,
     mindRoot: services.mindRoot,
-    projectRoot: services.runtimeRoot ?? process.cwd(),
+    projectRoot: services.mindRoot,
     skillAgentRegistry: createDefaultSkillAgentRegistry(),
     ...host,
   };
@@ -86,6 +91,8 @@ export function createHttpMcpAgentsServices(services: MindosHttpServices): Mindo
 function createHttpMcpInstallServices(services: MindosHttpServices) {
   return {
     agents: services.mcpAgents ?? {},
+    homeDir: services.homeDir,
+    projectRoot: services.mindRoot,
     requireAgentPresence: services.mcpAgentServices?.requireAgentPresence,
     detectAgentPresence: services.mcpAgentServices?.detectAgentPresence,
     readSettings: services.readSettings,

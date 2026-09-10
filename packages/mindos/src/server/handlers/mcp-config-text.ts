@@ -9,6 +9,20 @@ export function quotedConfigString(value: unknown): string {
   return JSON.stringify(String(value));
 }
 
+/**
+ * Drop a leading UTF-8 BOM. The line walkers measure indentation as
+ * `line.length - line.trimStart().length`, and `trimStart()` strips U+FEFF, so
+ * an un-stripped BOM would count as one column and hide a first-line header.
+ */
+export function stripBom(text: string): string {
+  return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+}
+
+/** The BOM (or empty string) a rewrite must put back so the file keeps its original prefix. */
+export function bomPrefix(text: string): string {
+  return text.charCodeAt(0) === 0xfeff ? '﻿' : '';
+}
+
 /** TOML bare keys and the YAML plain scalars we emit share one safe charset. */
 export function bareOrQuotedKey(key: string): string {
   return /^[A-Za-z0-9_-]+$/.test(key) ? key : quotedConfigString(key);

@@ -1,10 +1,21 @@
 import { execFileSync, spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
-import { resolve } from 'node:path';
+import { homedir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 import { resolveMcpBindHost } from '../../protocols/mcp-server/http-security.js';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
 import type { MindosServerEventEmitter } from '../events/bus.js';
+
+/**
+ * Marker the managed restart writes before killing the MCP so the Desktop
+ * ProcessManager (which owns the process) can tell the exit apart from a
+ * crash. Desktop passes the exact path in `MINDOS_MCP_RESTART_INTENT`; the
+ * default mirrors its config dir.
+ */
+export const MINDOS_MCP_RESTART_INTENT_FILE = 'mcp-restart.intent';
+/** How long a managed or spawned MCP may take to answer /api/health before the restart reports `healthy: false`. */
+const MCP_HEALTH_TIMEOUT_MS = 15_000;
 
 export type MindosMcpRestartSettings = {
   mcpPort?: number;
@@ -15,9 +26,14 @@ export type MindosMcpRestartServices = {
   readSettings?(): unknown;
   env?: NodeJS.ProcessEnv;
   projectRoot: string;
+  homeDir?: string;
+  /** Overrides the intent file location (tests); otherwise env `MINDOS_MCP_RESTART_INTENT`, then `~/.mindos/mcp-restart.intent`. */
+  restartIntentPath?: string;
   execPath?: string;
   killByPort?(port: number): void;
   waitForPortFree?(port: number, timeoutMs: number): Promise<boolean>;
+  /** Polls the MCP `/api/health` until it answers or `timeoutMs` passes. */
+  waitForMcpHealth?(port: number, timeoutMs: number): Promise<boolean>;
   pathExists?(path: string): boolean;
   spawnDetached?(command: string, args: string[], options: {
     cwd: string;
@@ -25,13 +41,13 @@ export type MindosMcpRestartServices = {
     stdio: 'ignore';
     env: NodeJS.ProcessEnv;
   }): { pid?: number; unref(): void };
-  /** Receives `mcp.changed` once the restart was issued. */
+  /** Receives `mcp.changed` once the restarted MCP answers /api/health. */
   events?: MindosServerEventEmitter;
 };
 
 export type MindosMcpRestartPayload =
-  | { ok: true; port: number; note: string }
-  | { ok: true; pid?: number; port: number }
+  | { ok: true; port: number; note: string; healthy: boolean }
+  | { ok: true; pid?: number; port: number; healthy: boolean }
   | { error: string };
 
 export type FindMcpProcessIdsOptions = {
@@ -39,6 +55,28 @@ export type FindMcpProcessIdsOptions = {
   execFile?(command: string, args: string[]): string;
   getCommandLine?(pid: number, platform: NodeJS.Platform): string | null;
 };
+
+export function resolveMcpRestartIntentPath(
+  services: Pick<MindosMcpRestartServices, 'homeDir' | 'restartIntentPath' | 'env'>,
+): string {
+  if (services.restartIntentPath) return services.restartIntentPath;
+  const fromEnv = services.env?.MINDOS_MCP_RESTART_INTENT?.trim();
+  if (fromEnv) return fromEnv;
+  return join(services.homeDir ?? homedir(), '.mindos', MINDOS_MCP_RESTART_INTENT_FILE);
+}
+
+function writeMcpRestartIntent(intentPath: string, port: number): void {
+  mkdirSync(dirname(intentPath), { recursive: true });
+  const payload = { port, requestedAt: new Date().toISOString(), requestedBy: process.pid };
+  const tmp = `${intentPath}.${process.pid}.${Date.now().toString(36)}.tmp`;
+  try {
+    writeFileSync(tmp, `${JSON.stringify(payload)}\n`, { encoding: 'utf-8', mode: 0o600 });
+    renameSync(tmp, intentPath);
+  } catch (error) {
+    try { unlinkSync(tmp); } catch { /* best-effort cleanup */ }
+    throw error;
+  }
+}
 
 export async function handleMcpRestartPost(
   services: MindosMcpRestartServices,
@@ -50,14 +88,26 @@ export async function handleMcpRestartPost(
     const webPort = env.MINDOS_WEB_PORT || '3456';
     const authToken = readSettingsString(settings, 'authToken') || env.AUTH_TOKEN;
     const managed = env.MINDOS_MANAGED === '1';
+    const waitForMcpHealth = services.waitForMcpHealth ?? defaultWaitForMcpHealth;
 
     const kill = services.killByPort ?? killMcpProcessesByPort;
-    kill(mcpPort);
 
     if (managed) {
-      services.events?.emit({ type: 'mcp.changed' });
-      return json({ ok: true, port: mcpPort, note: 'ProcessManager will respawn' });
+      // The ProcessManager owns the MCP: leave it a marker first so the exit we
+      // are about to cause is respawned as a restart, not counted as a crash.
+      writeMcpRestartIntent(resolveMcpRestartIntentPath({ ...services, env }), mcpPort);
+      kill(mcpPort);
+      const healthy = await waitForMcpHealth(mcpPort, MCP_HEALTH_TIMEOUT_MS);
+      if (healthy) services.events?.emit({ type: 'mcp.changed' });
+      return json({
+        ok: true,
+        port: mcpPort,
+        healthy,
+        note: healthy ? 'ProcessManager will respawn' : 'ProcessManager is respawning; MCP not healthy yet',
+      });
     }
+
+    kill(mcpPort);
 
     const waitForPortFree = services.waitForPortFree ?? defaultWaitForPortFree;
     const portFree = await waitForPortFree(mcpPort, 5000);
@@ -90,10 +140,37 @@ export async function handleMcpRestartPost(
     });
     child.unref();
 
-    services.events?.emit({ type: 'mcp.changed' });
-    return json({ ok: true, pid: child.pid, port: mcpPort });
+    const healthy = await waitForMcpHealth(mcpPort, MCP_HEALTH_TIMEOUT_MS);
+    if (healthy) services.events?.emit({ type: 'mcp.changed' });
+    return json({ ok: true, pid: child.pid, port: mcpPort, healthy });
   } catch (error) {
     return errorResponse(error);
+  }
+}
+
+/** Poll the MCP `/api/health` (loopback) until it reports `{ ok: true, service: 'mindos' }` or the deadline passes. */
+export async function defaultWaitForMcpHealth(port: number, timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await probeMcpHealth(port, 2000)) return true;
+    await new Promise((resolveWait) => setTimeout(resolveWait, 300));
+  }
+  return false;
+}
+
+async function probeMcpHealth(port: number, timeoutMs: number): Promise<boolean> {
+  if (typeof fetch !== 'function') return false;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/api/health`, { signal: controller.signal });
+    if (!response.ok) return false;
+    const body = await response.json().catch(() => null) as { ok?: unknown; service?: unknown } | null;
+    return body?.ok === true && body.service === 'mindos';
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
   }
 }
 

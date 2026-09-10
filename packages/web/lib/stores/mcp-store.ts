@@ -126,7 +126,9 @@ export const useMcpStore = create<McpStoreState>((set, get) => ({
         body: JSON.stringify({
           agents: [{
             key,
-            scope: opts?.scope ?? (agent.hasProjectScope ? 'project' : 'global'),
+            // Global unless the user explicitly chose project scope: a project
+            // install needs a root the caller picked, never an implicit one.
+            scope: opts?.scope ?? 'global',
             transport: opts?.transport ?? agent.preferredTransport,
           }],
           transport: 'auto',

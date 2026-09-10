@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync, copyFileSync, mkdirSync } from 'node:fs';
+import { existsSync, readFileSync, copyFileSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { createInterface } from 'node:readline';
@@ -36,7 +36,7 @@ export function extractSkillVersion(filePath) {
   }
 }
 
-/* ── Config helpers (read/write installedSkillAgents) ─────────── */
+/* ── Config helpers (read-only view of the legacy installedSkillAgents ledger) ── */
 
 /**
  * Read config.json, best-effort.
@@ -50,50 +50,14 @@ function readConfig() {
 }
 
 /**
- * Merge fields into config.json (preserves all existing fields).
- */
-function mergeConfig(patch) {
-  const config = readConfig();
-  Object.assign(config, patch);
-  const dir = dirname(CONFIG_PATH);
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n', 'utf-8');
-}
-
-/**
- * Read the installed-skill-agents list from config.
+ * Read the legacy installed-skill-agents list from config. The CLI never
+ * writes this field any more: links on disk are the only truth, and the
+ * product server drops the ledger after its one-time migration.
  * @returns {Array<{ agent: string, skill: string, path: string }>}
  */
 export function getInstalledSkillAgents() {
   const config = readConfig();
   return Array.isArray(config.installedSkillAgents) ? config.installedSkillAgents : [];
-}
-
-/**
- * Record that a skill was installed to a specific agent.
- * Idempotent — updates existing entry if agent+skill already recorded.
- */
-export function recordSkillInstall(agentKey, skillName, installPath) {
-  const list = getInstalledSkillAgents();
-  const idx = list.findIndex(e => e.agent === agentKey && e.skill === skillName);
-  const entry = { agent: agentKey, skill: skillName, path: installPath };
-  if (idx >= 0) {
-    list[idx] = entry;
-  } else {
-    list.push(entry);
-  }
-  mergeConfig({ installedSkillAgents: list });
-}
-
-/**
- * Remove a skill record for an agent.
- */
-export function removeSkillRecord(agentKey, skillName) {
-  const list = getInstalledSkillAgents();
-  const filtered = list.filter(e => !(e.agent === agentKey && e.skill === skillName));
-  if (filtered.length !== list.length) {
-    mergeConfig({ installedSkillAgents: filtered });
-  }
 }
 
 /* ── Version checking ─────────────────────────────────────────── */

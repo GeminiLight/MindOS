@@ -257,6 +257,31 @@ api_key: "sk-xxx"
     expect(result).toContain('    args: ["mcp"]');
   });
 
+  it('recognises the section behind a UTF-8 BOM and keeps the BOM on write', async () => {
+    const { mergeYamlEntry } = await importYaml();
+    const existing = '﻿mcp_servers:\n  other:\n    command: "other"\n';
+
+    const result = mergeYamlEntry(existing, 'mcp_servers', 'mindos', { command: 'mindos' });
+
+    expect(result.startsWith('﻿')).toBe(true);
+    expect(result.split('mcp_servers:').length - 1).toBe(1);
+    expect(result).toContain('  other:\n    command: "other"');
+    expect(result).toContain('  mindos:\n    command: "mindos"');
+  });
+
+  it('treats an empty flow mapping `mcp_servers: {}` as an empty section', async () => {
+    const { mergeYamlEntry } = await importYaml();
+    const existing = 'model: gpt\nmcp_servers: {}\ntools:\n  - web\n';
+
+    const result = mergeYamlEntry(existing, 'mcp_servers', 'mindos', { command: 'mindos' });
+
+    expect(result.split('mcp_servers:').length - 1).toBe(1);
+    expect(result).not.toContain('{}');
+    expect(result).toContain('model: gpt');
+    expect(result).toContain('mcp_servers:\n  mindos:\n    command: "mindos"');
+    expect(result).toContain('tools:\n  - web');
+  });
+
   it('writes to actual file correctly', async () => {
     const { mergeYamlEntry } = await importYaml();
     const configPath = path.join(tempDir, 'config.yaml');

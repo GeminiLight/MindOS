@@ -365,6 +365,86 @@ export class ProcessManager extends EventEmitter {
     this.crashCount.mcp = 0;
   }
 
+  /** Where the Web server's /api/mcp/restart leaves its managed-restart marker (also passed as `MINDOS_MCP_RESTART_INTENT`). */
+  static mcpRestartIntentFile(): string {
+    return path.join(getDesktopConfigDir(), 'mcp-restart.intent');
+  }
+
+  /**
+   * Read and delete the managed-restart marker. True only for a fresh
+   * (< 60s) intent naming our MCP port; anything stale, foreign or unparsable
+   * is removed and reported as "no intent" so the exit counts as a crash.
+   */
+  private consumeMcpRestartIntent(): boolean {
+    const file = ProcessManager.mcpRestartIntentFile();
+    let raw: string;
+    try {
+      if (!existsSync(file)) return false;
+      raw = readFileSync(file, 'utf-8');
+    } catch {
+      return false;
+    }
+    try { unlinkSync(file); } catch { /* best effort */ }
+    try {
+      const intent = JSON.parse(raw) as { port?: unknown; requestedAt?: unknown };
+      const requestedAt = typeof intent.requestedAt === 'string' ? Date.parse(intent.requestedAt) : Number.NaN;
+      if (!Number.isFinite(requestedAt) || Date.now() - requestedAt > ProcessManager.MCP_RESTART_INTENT_MAX_AGE_MS) return false;
+      return Number(intent.port) === this.opts.mcpPort;
+    } catch {
+      return false;
+    }
+  }
+
+  private static readonly MCP_RESTART_INTENT_MAX_AGE_MS = 60_000;
+  private static readonly MANAGED_RESTART_DELAY_MS = 500;
+
+  /** Respawn the MCP on its own port after a managed restart; the port is never switched. */
+  private respawnMcpAfterManagedRestart(): void {
+    const port = this.opts.mcpPort;
+    const timer = setTimeout(async () => {
+      if (this.stopped) return;
+      try {
+        const portFree = await this.waitForMcpPortFree(port, 5000);
+        if (this.stopped) return;
+        if (!portFree) {
+          if (await this.checkMcpHealth(port)) {
+            console.info(`[MindOS] External MCP now available on port ${port} — reusing`);
+            this.externalMcp = true;
+            this.mcpProcess = null;
+            return;
+          }
+          console.error(`[MindOS:mcp] port ${port} still occupied after managed restart, cannot respawn`);
+          this.emit('mcp-port-blocked', port);
+          return;
+        }
+        const proc = this.spawnMcp();
+        this.mcpProcess = proc;
+        this.externalMcp = false;
+        this.guardSpawnError(proc, 'mcp');
+        this.setupCrashHandler(proc, 'mcp');
+        this.writeChildPids();
+        console.info(`[MindOS:mcp] respawned after managed restart on port ${port}`);
+      } catch (err) {
+        console.error('[MindOS:mcp] managed restart respawn failed:', err);
+      }
+    }, ProcessManager.MANAGED_RESTART_DELAY_MS);
+    this.respawnTimers.push(timer);
+  }
+
+  /** Poll until `port` accepts a bind or `timeoutMs` passes; never falls back to another port. */
+  private async waitForMcpPortFree(port: number, timeoutMs: number): Promise<boolean> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if (this.stopped) return false;
+      try {
+        await this.findFreePort(port).then((free) => { if (free !== port) throw new Error('occupied'); });
+        return true;
+      } catch { /* still occupied */ }
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    return false;
+  }
+
   // ── Private ──
 
   private spawnMcp(): ChildProcess {
@@ -431,6 +511,9 @@ export class ProcessManager extends EventEmitter {
       MINDOS_PROJECT_ROOT: projectRoot,
       MINDOS_CLI_PATH: resolveCliPath(projectRoot),
       MINDOS_MANAGED: '1',
+      // /api/mcp/restart drops a marker here before killing the MCP so the
+      // exit below is respawned as a restart instead of counted as a crash.
+      MINDOS_MCP_RESTART_INTENT: ProcessManager.mcpRestartIntentFile(),
     };
     if (authToken) env.AUTH_TOKEN = authToken;
     if (webPassword) env.WEB_PASSWORD = webPassword;
@@ -643,6 +726,16 @@ export class ProcessManager extends EventEmitter {
       console.error(`[MindOS:${which}] process exited code=${code} signal=${signal}`);
       if (which === 'web') this.webProcessDied = true;
       if (this.stopped) return;
+
+      // /api/mcp/restart (managed mode) leaves an intent file, then kills the
+      // MCP by port. That exit is a restart we own: respawn promptly and keep
+      // crashCount untouched so three user-driven restarts never disable respawn.
+      if (which === 'mcp' && this.consumeMcpRestartIntent()) {
+        this.mcpRestartInProgress = false;
+        this.emit('mcp-restart', this.opts.mcpPort);
+        this.respawnMcpAfterManagedRestart();
+        return;
+      }
 
       // /api/mcp/restart kills the old MCP and spawns its own replacement.
       // Don't race with it by also respawning here.
