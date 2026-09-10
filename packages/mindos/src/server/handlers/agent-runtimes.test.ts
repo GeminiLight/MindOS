@@ -49,6 +49,7 @@ const { createMindosApp } = await import('../app.js');
 const { createDefaultMindosHttpServices } = await import('../services.js');
 const { handleAgentRuntimesGet } = await import('./agent-runtimes.js');
 const { resetRuntimeDetectionCacheForTest } = await import('./runtime-detection-cache.js');
+const { rememberAcpHandshakeHealth, resetAcpHandshakeHealthCacheForTest } = await import('../../protocols/acp/handshake-health.js');
 
 const cleanups: Array<() => void> = [];
 
@@ -59,9 +60,9 @@ function makeRoot(): string {
 }
 
 /** Product-default health checks (real `spawn` path) with injected command resolution so no PATH lookup happens. */
-function detectionOverrides(root: string) {
+function detectionOverrides(root: string, acpInstalled: Array<{ id: string; name: string; binaryPath: string }> = []) {
   return {
-    detectLocalAcpAgents: async () => ({ installed: [], notInstalled: [] }),
+    detectLocalAcpAgents: async () => ({ installed: acpInstalled, notInstalled: [] }),
     resolveRuntimeCommand: async (command: string) => (command === 'codex' || command === 'claude' ? `/opt/bin/${command}` : null),
     resolveRuntimeCommandCandidates: async () => [],
     readSettings: () => ({
@@ -73,8 +74,8 @@ function detectionOverrides(root: string) {
   };
 }
 
-function makeServices(root: string): MindosHttpServices {
-  const overrides = detectionOverrides(root);
+function makeServices(root: string, acpInstalled: Array<{ id: string; name: string; binaryPath: string }> = []): MindosHttpServices {
+  const overrides = detectionOverrides(root, acpInstalled);
   const services = createDefaultMindosHttpServices({
     homeDir: root,
     readSettings: overrides.readSettings,
@@ -82,6 +83,9 @@ function makeServices(root: string): MindosHttpServices {
   cleanups.push(() => services.dispose?.());
   return {
     ...services,
+    // handleAgentRuntimesGet reads the ACP detector from the TOP-LEVEL service
+    // key (getAcpRuntimeDetection), not from the agentRuntimes slot.
+    detectLocalAcpAgents: overrides.detectLocalAcpAgents,
     agentRuntimes: {
       detectLocalAcpAgents: overrides.detectLocalAcpAgents,
       resolveRuntimeCommand: overrides.resolveRuntimeCommand,
@@ -103,11 +107,13 @@ const PANEL_ROUTES = [
 beforeEach(() => {
   spawnCalls.length = 0;
   resetRuntimeDetectionCacheForTest();
+  resetAcpHandshakeHealthCacheForTest();
 });
 
 afterEach(() => {
   while (cleanups.length) cleanups.pop()?.();
   resetRuntimeDetectionCacheForTest();
+  resetAcpHandshakeHealthCacheForTest();
 });
 
 describe('runtime detection spawn budget', () => {
@@ -153,5 +159,42 @@ describe('runtime detection spawn budget', () => {
     expect(warm).toBe(3);
     console.info(`[spawn-budget] picker + panel: before=27 after=${spawnCalls.length}`);
     expect(spawnCalls).toHaveLength(3);
+  });
+});
+
+describe('ACP handshake enhancement on the runtime list', () => {
+  const GEMINI = [{ id: 'gemini', name: 'Gemini CLI', binaryPath: '/opt/bin/gemini' }];
+
+  async function listRuntimes(services: MindosHttpServices) {
+    const response = await handleAgentRuntimesGet(new URLSearchParams(), services);
+    expect(response.status ?? 200).toBe(200);
+    const body = response.body as { runtimes: Array<Record<string, any>> };
+    return body.runtimes;
+  }
+
+  it('derives supportsResume for an available ACP runtime from the cached initialize handshake', async () => {
+    const runtimes = await listRuntimes(makeServices(makeRoot(), GEMINI));
+    const before = runtimes.find((runtime) => runtime.id === 'gemini');
+    expect(before?.capabilities).toMatchObject({ supportsResume: false });
+
+    rememberAcpHandshakeHealth({ agentId: 'gemini', status: 'ready', stage: 'session-new', capabilities: { loadSession: true } });
+    const after = (await listRuntimes(makeServices(makeRoot(), GEMINI))).find((runtime) => runtime.id === 'gemini');
+    expect(after?.capabilities).toMatchObject({ supportsResume: true });
+    expect(after?.availability?.sources).toContain('acp-session');
+  });
+
+  it('maps a cached authenticate failure to signed-out on the list route', async () => {
+    rememberAcpHandshakeHealth({ agentId: 'gemini', status: 'failed', stage: 'authenticate', message: 'agent demanded sign-in' });
+    const runtimes = await listRuntimes(makeServices(makeRoot(), GEMINI));
+    expect(runtimes.find((runtime) => runtime.id === 'gemini')).toMatchObject({ status: 'signed-out' });
+  });
+
+  it('leaves runtimes untouched when no handshake is cached and never probes', async () => {
+    const runtimes = await listRuntimes(makeServices(makeRoot(), GEMINI));
+    const gemini = runtimes.find((runtime) => runtime.id === 'gemini');
+    expect(gemini?.status).toBe('available');
+    expect(gemini?.capabilities).toMatchObject({ supportsResume: false });
+    // only the native health-check spawns happened (codex x2 + claude x1 budget from the cold-detection test)
+    expect(spawnCalls.length).toBeLessThanOrEqual(3);
   });
 });

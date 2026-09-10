@@ -4,6 +4,9 @@ import {
   resolveCommandPath,
   resolveCommandPathCandidates,
 } from '../../protocols/acp/index.js';
+import { applyAcpHandshakeToRuntime } from '../../agent/runtime/descriptors.js';
+import { listCachedAcpHandshakeHealth } from '../../protocols/acp/handshake-health.js';
+import { runtimeKey } from './runtime-projection-shared.js';
 import {
   readCodexConfigText,
   resolveCodexProviderEnvironment,
@@ -722,6 +725,21 @@ export function compactNativeRuntimeDescriptor(runtime: AgentRuntimeDescriptor):
   };
 }
 
+/**
+ * Cached-handshake enhancement for the runtime list: readiness and the
+ * projections already refine ACP descriptors with `applyAcpHandshakeToRuntime`,
+ * so the picker (this route) must see the same derived capabilities —
+ * `supportsResume` from a declared `loadSession`, `signed-out` from a failed
+ * `authenticate`. Reads the handshake-health cache only; never probes.
+ */
+function applyCachedAcpHandshakes(runtimes: AgentRuntimeDescriptor[]): AgentRuntimeDescriptor[] {
+  const acpIds = runtimes.filter((runtime) => runtime.kind === 'acp').map((runtime) => runtimeKey(runtime));
+  if (acpIds.length === 0) return runtimes;
+  const byKey = new Map(listCachedAcpHandshakeHealth(acpIds).map((health) => [health.agentId, health] as const));
+  if (byKey.size === 0) return runtimes;
+  return runtimes.map((runtime) => applyAcpHandshakeToRuntime(runtime, byKey.get(runtimeKey(runtime))));
+}
+
 export async function handleAgentRuntimesGet(
   searchParams: URLSearchParams,
   services: AgentRuntimeDetectionServices = {},
@@ -777,7 +795,7 @@ export async function handleAgentRuntimesGet(
     });
     return json({
       ...payload,
-      runtimes: payload.runtimes.map(compactNativeRuntimeDescriptor),
+      runtimes: applyCachedAcpHandshakes(payload.runtimes).map(compactNativeRuntimeDescriptor),
       installed: acpDetection.installed.map(normalizeInstalled).filter((agent): agent is DetectedRuntimeAgent => !!agent),
       notInstalled: acpDetection.notInstalled.map(normalizeMissing).filter((agent): agent is MissingRuntimeAgent => !!agent),
     }, { headers: listHeaders });
