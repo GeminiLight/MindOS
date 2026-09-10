@@ -6,6 +6,8 @@ import { installAgentRunLedgerBridge } from './events/ledger-bridge.js';
 import { CORS_HEADERS } from './response.js';
 import type { MindosRuntimeOptions } from './runtime.js';
 import { createDefaultMindosHttpServices, type MindosHttpServices } from './services.js';
+import { closeAllSessions as closeAllAcpSessions } from '../protocols/acp/session.js';
+import { registerAcpShutdownHooks } from '../protocols/acp/shutdown.js';
 
 function isBodyless(status: number): boolean {
   return status === 204 || status === 304;
@@ -60,6 +62,8 @@ export function createMindosHttpServer(options: MindosHttpServerOptions = {}): M
   });
   // Agent run ledger events reach GET /api/events through the process bus.
   if (services.events) installAgentRunLedgerBridge(services.events);
+  // ACP agents are children of this server process: make sure they die with it.
+  registerAcpShutdownHooks();
 
   const app = createMindosApp({ services, runtimeRoot: options.runtimeRoot, auth: 'contract', staticFallback: true });
   const listener = getRequestListener(async (request, env) => {
@@ -108,8 +112,12 @@ export function createMindosHttpServer(options: MindosHttpServerOptions = {}): M
       return new Promise((resolve, reject) => {
         server.close((error) => {
           if (ownsServices) services.dispose?.();
-          if (error) reject(error);
-          else resolve();
+          // Sessions still open belong to this process; close them gracefully
+          // (session/close under its deadline, then kill) before reporting.
+          void closeAllAcpSessions().catch(() => {}).finally(() => {
+            if (error) reject(error);
+            else resolve();
+          });
         });
       });
     },

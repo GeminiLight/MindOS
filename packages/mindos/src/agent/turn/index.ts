@@ -1056,6 +1056,14 @@ export type MindosAcpAgentTurnSession = {
 export type MindosAcpAgentTurnSessionOptions = {
   cwd: string;
   permissionMode?: 'readonly' | 'ask' | 'auto' | 'full';
+  /** Aborts the handshake and kills the agent process when the turn is cancelled. */
+  signal?: AbortSignal;
+};
+
+export type MindosAcpAgentTurnPromptOptions = {
+  signal?: AbortSignal;
+  /** Remaining lane budget for this prompt; the session layer cancels the agent when it elapses. */
+  timeoutMs?: number;
 };
 
 export type MindosAcpAgentTurnCloseOptions = {
@@ -1073,7 +1081,7 @@ export type MindosAcpAgentTurnServices = {
     sessionId: string,
     prompt: string,
     onUpdate: (update: MindosAcpSessionUpdate) => void,
-    signal?: AbortSignal,
+    options?: MindosAcpAgentTurnPromptOptions,
   ): Promise<void>;
   cancelPrompt?(sessionId: string): Promise<void>;
   closeSession(sessionId: string, options?: MindosAcpAgentTurnCloseOptions): Promise<void>;
@@ -1105,6 +1113,41 @@ export type MindosAcpAgentTurnResult = {
   error?: Error;
 };
 
+/**
+ * An `error` update reported by the ACP agent during a prompt. The lane
+ * carries it out of the attempt so the turn ends as a failure (ledger
+ * `failed`, no `done`), mirroring the native lane's reported-error contract.
+ */
+export class MindosAcpReportedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'MindosAcpReportedError';
+  }
+}
+
+function abortReasonOf(signal: AbortSignal): unknown {
+  return signal.reason ?? new DOMException('The operation was aborted.', 'AbortError');
+}
+
+/** Reject as soon as `signal` aborts; `onAbort` runs once before the rejection. */
+function raceWithAbort<T>(promise: Promise<T>, signal: AbortSignal | undefined, onAbort?: () => void): Promise<T> {
+  if (!signal) return promise;
+  if (signal.aborted) {
+    onAbort?.();
+    return Promise.reject(abortReasonOf(signal));
+  }
+  let cleanup = () => {};
+  const aborted = new Promise<never>((_resolve, reject) => {
+    const handler = () => {
+      onAbort?.();
+      reject(abortReasonOf(signal));
+    };
+    signal.addEventListener('abort', handler, { once: true });
+    cleanup = () => signal.removeEventListener('abort', handler);
+  });
+  return Promise.race([promise, aborted]).finally(cleanup);
+}
+
 export async function runMindosAcpAgentTurn(options: MindosAcpAgentTurnOptions): Promise<MindosAcpAgentTurnResult> {
   let sessionId: string | undefined;
   let closeAgentSessionOnCleanup = true;
@@ -1120,6 +1163,7 @@ export async function runMindosAcpAgentTurn(options: MindosAcpAgentTurnOptions):
 
   try {
     const timeoutMs = options.timeoutMs ?? resolveMindosAgentTimeoutMs();
+    const timeoutMessage = options.timeoutMessage?.(timeoutMs) ?? `ACP agent execution timeout after ${timeoutMs / 1000} seconds`;
     const lastError = await runMindosAgentTurnWithRetry({
       maxRetries: options.maxRetries,
       signal: options.signal,
@@ -1130,7 +1174,13 @@ export async function runMindosAcpAgentTurn(options: MindosAcpAgentTurnOptions):
       onAttemptError: closeCurrentSession,
       execute: async () => {
         await closeCurrentSession();
-        const sessionOpen = await openAcpTurnSession(options);
+        // One budget per attempt covers session open and the prompt: a
+        // handshake that hangs must time out (and honour cancel) exactly like
+        // a hanging prompt does.
+        const deadline = Date.now() + timeoutMs;
+        const remainingMs = () => Math.max(1, deadline - Date.now());
+
+        const sessionOpen = await openAcpTurnSessionScoped(options, remainingMs(), timeoutMessage);
         const session = sessionOpen.session;
         sessionId = session.id;
         closeAgentSessionOnCleanup = true;
@@ -1152,37 +1202,31 @@ export async function runMindosAcpAgentTurn(options: MindosAcpAgentTurnOptions):
             status: 'active',
           });
         }
-        let removeAbortListener: (() => void) | undefined;
-        const abortPrompt = new Promise<never>((_resolve, reject) => {
-          if (!options.signal) return;
-          const abortReason = () => options.signal?.reason ?? new DOMException('The operation was aborted.', 'AbortError');
-          if (options.signal.aborted) {
-            void options.cancelPrompt?.(session.id).catch(() => {});
-            reject(abortReason());
-            return;
-          }
-          const onAbort = () => {
-            void options.cancelPrompt?.(session.id).catch(() => {});
-            reject(abortReason());
-          };
-          options.signal.addEventListener('abort', onAbort, { once: true });
-          removeAbortListener = () => options.signal?.removeEventListener('abort', onAbort);
-        });
+
+        let reportedError: MindosAcpReportedError | undefined;
+        const promptTimeoutMs = remainingMs();
         await runMindosWithTimeout(
-          Promise.race([
+          raceWithAbort(
             options.promptStream(sessionId, options.prompt, (update) => {
+              if (update.type === 'error') {
+                // Recorded, not forwarded: the retry wrapper emits exactly one
+                // SSE error for the terminal failure of the whole turn.
+                reportedError ??= new MindosAcpReportedError(update.error ?? 'ACP agent error');
+                return;
+              }
               const mapped = mapMindosAcpUpdateToSseEvents(update, {
-                suppressErrors: options.hasContent(),
                 permissionRunId: options.permissionRunId,
               });
               if (mapped.hasVisibleContent) options.onVisibleContent?.();
               for (const event of mapped.events) options.send(event);
-            }, options.signal),
-            abortPrompt,
-          ]).finally(() => removeAbortListener?.()),
-          timeoutMs,
-          options.timeoutMessage?.(timeoutMs) ?? `ACP agent execution timeout after ${timeoutMs / 1000} seconds`,
+            }, { signal: options.signal, timeoutMs: promptTimeoutMs }),
+            options.signal,
+            () => { void options.cancelPrompt?.(session.id).catch(() => {}); },
+          ),
+          promptTimeoutMs,
+          timeoutMessage,
         );
+        if (reportedError) throw reportedError;
       },
     });
 
@@ -1198,17 +1242,48 @@ export async function runMindosAcpAgentTurn(options: MindosAcpAgentTurnOptions):
   }
 }
 
+/**
+ * Open (resume or create) the session under the attempt's remaining budget
+ * and abort signal. A session that arrives after the lane already gave up is
+ * closed so the agent process does not outlive the turn.
+ */
+async function openAcpTurnSessionScoped(
+  options: MindosAcpAgentTurnOptions,
+  timeoutMs: number,
+  timeoutMessage: string,
+): Promise<{ session: MindosAcpAgentTurnSession; resumed: boolean }> {
+  let gaveUp = false;
+  const opening = openAcpTurnSession(options);
+  opening.then((late) => {
+    if (!gaveUp) return;
+    const keepAgentSession = !!resumableAcpSessionId(late.session, late.resumed ? options.externalSessionId : undefined);
+    void options.closeSession(late.session.id, { closeAgentSession: !keepAgentSession }).catch(() => {});
+  }, () => {});
+  try {
+    return await runMindosWithTimeout(raceWithAbort(opening, options.signal), timeoutMs, timeoutMessage);
+  } catch (error) {
+    gaveUp = true;
+    throw error;
+  }
+}
+
 async function openAcpTurnSession(
   options: MindosAcpAgentTurnOptions,
 ): Promise<{ session: MindosAcpAgentTurnSession; resumed: boolean }> {
   const externalSessionId = options.externalSessionId?.trim();
+  const sessionOptions: MindosAcpAgentTurnSessionOptions = {
+    cwd: options.cwd,
+    ...(options.signal ? { signal: options.signal } : {}),
+  };
   if (externalSessionId && options.loadSession) {
     try {
       return {
-        session: await options.loadSession(options.agentId, externalSessionId, { cwd: options.cwd }),
+        session: await options.loadSession(options.agentId, externalSessionId, sessionOptions),
         resumed: true,
       };
-    } catch {
+    } catch (error) {
+      // A cancelled turn must not fall through to a fresh session.
+      if (options.signal?.aborted) throw error;
       options.send({
         type: 'status',
         runtime: 'acp',
@@ -1219,7 +1294,7 @@ async function openAcpTurnSession(
   }
 
   return {
-    session: await options.createSession(options.agentId, { cwd: options.cwd }),
+    session: await options.createSession(options.agentId, sessionOptions),
     resumed: false,
   };
 }

@@ -172,8 +172,8 @@ async function runAcpRuntimeTurn(
         hasContent: () => hasContent,
         onVisibleContent: () => { hasContent = true; },
         send: sendWithLedger,
-        promptStream: async (sessionId, prompt, onUpdate) => {
-          await promptStream(sessionId, prompt, onUpdate);
+        promptStream: async (sessionId, prompt, onUpdate, options) => {
+          await promptStream(sessionId, prompt, onUpdate, options);
         },
         cancelPrompt,
         closeSession,
@@ -285,7 +285,12 @@ function recordModeArtifacts(
 
 function acpSessionOptions(
   input: RunAcpRuntimeLaneTurnInput,
-  options: { cwd: string; permissionMode?: 'readonly' | 'ask' | 'auto' | 'full'; env?: Record<string, string | undefined> },
+  options: {
+    cwd: string;
+    permissionMode?: 'readonly' | 'ask' | 'auto' | 'full';
+    env?: Record<string, string | undefined>;
+    signal?: AbortSignal;
+  },
   resolvePermissionRequest?: AcpClientCallbacks['resolvePermissionRequest'],
 ) {
   const { env: optionRawEnv, ...baseOptions } = options;

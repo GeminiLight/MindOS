@@ -301,6 +301,8 @@ export interface AcpPermissionEvent {
   outcome?: AcpPermissionOutcome | 'cancelled';
   requestedAt: string;
   resolvedAt?: string;
+  /** Why MindOS resolved the request without a user answer (e.g. the wait expired). */
+  reason?: string;
 }
 
 export type AcpSessionSnapshotFactSource =

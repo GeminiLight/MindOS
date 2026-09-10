@@ -5,6 +5,8 @@ export type AcpHandshakeHealthStatus = 'ready' | 'failed';
 
 export type AcpHandshakeHealthStage =
   | 'initialize'
+  /** The agent demanded sign-in and MindOS could not satisfy it (readiness shows it as signed out). */
+  | 'authenticate'
   | 'session-new'
   | 'session-load'
   | 'session-list';

@@ -22,6 +22,8 @@ import {
   type AcpAgentOverride,
   type AcpSessionSnapshot,
 } from '../../protocols/acp/index.js';
+import { toAcpSessionPublicView } from '../../protocols/acp/session-snapshot.js';
+import { getMindosServerEventBus, type MindosServerEventEmitter } from '../events/bus.js';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
 
 export type AcpSettings = {
@@ -31,6 +33,8 @@ export type AcpSettings = {
 export type AcpConfigServices = {
   readSettings(): AcpSettings;
   writeSettings(settings: AcpSettings): void;
+  /** Receives `settings.changed` after an `acpAgents` write; defaults to the process bus. */
+  events?: MindosServerEventEmitter;
 };
 
 export type AcpDetectServices = {
@@ -88,6 +92,20 @@ export type AcpServices =
 const DETECT_CACHE_TTL_MS = 30 * 60 * 1000;
 let detectCache: { data: { installed: unknown[]; notInstalled: unknown[] }; ts: number } | null = null;
 
+/** Drop the detect cache; called whenever the ACP agent overrides change so a new agent shows up immediately. */
+export function invalidateAcpDetectCache(): void {
+  detectCache = null;
+}
+
+/**
+ * An `acpAgents` write changes what /api/acp/detect and the runtime catalog
+ * report: drop the detect cache and tell SSE consumers the settings changed.
+ */
+function afterAcpAgentsWrite(services: Pick<AcpConfigServices, 'events'>): void {
+  invalidateAcpDetectCache();
+  (services.events ?? getMindosServerEventBus()).emit({ type: 'settings.changed' });
+}
+
 function isUnsafeObjectKey(key: string): boolean {
   return key === '__proto__' || key === 'prototype' || key === 'constructor';
 }
@@ -144,6 +162,7 @@ export function handleAcpConfigPost(
   }
 
   services.writeSettings({ ...settings, acpAgents: existing });
+  afterAcpAgentsWrite(services);
   return json({ ok: true, agents: existing });
 }
 
@@ -164,6 +183,7 @@ export function handleAcpConfigDelete(
     ? { ...settings, acpAgents: existing }
     : { ...settings, acpAgents: undefined };
   services.writeSettings(next);
+  afterAcpAgentsWrite(services);
   return json({ ok: true, agents: next.acpAgents ?? {} });
 }
 
@@ -238,7 +258,9 @@ export function handleAcpSessionGet(
   services: AcpSessionServices = {},
 ): MindosServerResponse<{ sessions: unknown[] } | { error: string }> {
   try {
-    return json({ sessions: (services.getActiveSessions ?? defaultGetActiveSessions)() });
+    const sessions = (services.getActiveSessions ?? defaultGetActiveSessions)();
+    // Never hand out the live session objects: bounded, detached copies only.
+    return json({ sessions: sessions.map(toAcpSessionPublicView) });
   } catch (error) {
     return errorResponse(error);
   }

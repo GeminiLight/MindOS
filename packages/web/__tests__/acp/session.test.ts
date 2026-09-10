@@ -136,7 +136,7 @@ describe('ACP Session (SDK-based)', () => {
       await expect(createSessionFromEntry(MOCK_ENTRY)).rejects.toThrow('timeout');
     });
 
-    it('authenticates when agent declares auth methods', async () => {
+    it('does not authenticate up front when agent declares auth methods', async () => {
       mockInitialize.mockResolvedValueOnce({
         agentCapabilities: {},
         authMethods: [{ id: 'terminal', name: 'Terminal Login' }],
@@ -144,7 +144,7 @@ describe('ACP Session (SDK-based)', () => {
 
       const session = await createSessionFromEntry(MOCK_ENTRY);
       expect(session).toBeDefined();
-      expect(mockAuthenticate).toHaveBeenCalledWith({ methodId: 'terminal' });
+      expect(mockAuthenticate).not.toHaveBeenCalled();
     });
 
     it('declares readonly client capabilities when permissionMode is readonly', async () => {
@@ -307,7 +307,8 @@ describe('ACP Session (SDK-based)', () => {
       await closeSession('nonexistent');
     });
 
-    it('calls closeSession on SDK connection', async () => {
+    it('calls closeSession on SDK connection when the agent declares the close capability', async () => {
+      mockInitialize.mockResolvedValueOnce({ agentCapabilities: { sessionCapabilities: { close: {} } } });
       mockNewSession.mockResolvedValueOnce({ sessionId: 'agent-ses-close' });
       const session = await createSessionFromEntry(MOCK_ENTRY);
       await closeSession(session.id);
