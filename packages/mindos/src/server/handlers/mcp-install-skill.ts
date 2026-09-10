@@ -1,4 +1,3 @@
-import { execFileSync } from 'child_process';
 import { existsSync, statSync } from 'fs';
 import type { Stats } from 'fs';
 import { dirname, join, resolve } from 'path';
@@ -26,27 +25,8 @@ export type MindosMcpInstallSkillServices = {
   projectRoot?: string;
   cwd?: string;
   homeDir?: string;
-  env?: NodeJS.ProcessEnv;
   pathExists?(path: string): boolean;
   stat?(path: string): Stats;
-  runCommand?(command: string, args: string[], options: {
-    encoding: 'utf-8';
-    timeout: number;
-    env: NodeJS.ProcessEnv;
-    stdio: 'pipe';
-  }): string;
-};
-
-export type MindosNpxInvocationOptions = {
-  env?: NodeJS.ProcessEnv;
-  nodeExecPath?: string;
-  pathExists?(path: string): boolean;
-  platform?: NodeJS.Platform;
-};
-
-export type MindosNpxInvocation = {
-  command: string;
-  args: string[];
 };
 
 export type MindosMcpInstallSkillLocalResult = {
@@ -64,7 +44,7 @@ export type MindosMcpInstallSkillResult =
       ok: true;
       skill: string;
       agents: string[];
-      method: 'local-copy' | 'npx';
+      method: 'local-copy';
       cmd: string;
       stdout: string;
       results?: MindosMcpInstallSkillLocalResult[];
@@ -73,7 +53,7 @@ export type MindosMcpInstallSkillResult =
       ok: false;
       skill: string;
       agents: string[];
-      method: 'local-copy' | 'npx';
+      method: 'local-copy';
       cmd: string;
       stdout: string;
       stderr: string;
@@ -81,7 +61,6 @@ export type MindosMcpInstallSkillResult =
     }
   | { error: string };
 
-const GITHUB_SOURCE = 'GeminiLight/MindOS';
 const VALID_SKILLS = new Set(['mindos', 'mindos-zh']);
 
 export function handleMcpInstallSkillPost(
@@ -105,13 +84,9 @@ export function handleMcpInstallSkillPost(
     }
 
     const requestedAgentKeys = [...new Set(requestedAgents.map((agent) => agent.trim()))];
-    const additionalAgents = filterAdditionalSkillAgents(
-      requestedAgentKeys,
-      services.skillAgentRegistry ?? {},
-    );
 
     const localInstall = installSkillFromLocalSource(skill, requestedAgentKeys, services);
-    if (localInstall.attempted && localInstall.ok) {
+    if (localInstall.ok) {
       return json({
         ok: true,
         skill,
@@ -123,49 +98,23 @@ export function handleMcpInstallSkillPost(
       });
     }
 
-    const sources = [GITHUB_SOURCE];
-    if (localInstall.sourceRoot) sources.push(localInstall.sourceRoot);
-
-    let lastCmd = '';
-    let lastStdout = '';
-    let lastStderr = localInstall.stderr ?? '';
-    const runCommand = services.runCommand ?? defaultRunCommand;
-
-    for (const source of sources) {
-      const args = buildMcpInstallSkillArgs(source, skill, additionalAgents);
-      const cmd = formatCommandForDisplay('npx', args);
-      lastCmd = cmd;
-      try {
-        lastStdout = runCommand('npx', args, {
-          encoding: 'utf-8',
-          timeout: 30_000,
-          env: { ...process.env, ...(services.env ?? {}), NODE_ENV: 'production' },
-          stdio: 'pipe',
-        });
-        return json({
-          ok: true,
-          skill,
-          agents: additionalAgents,
-          method: 'npx',
-          cmd,
-          stdout: lastStdout.trim(),
-          ...(localInstall.results ? { results: localInstall.results } : {}),
-        });
-      } catch (error) {
-        const commandError = error as { stdout?: string; stderr?: string; message?: string };
-        lastStdout = commandError.stdout || '';
-        lastStderr = commandError.stderr || commandError.message || 'Unknown error';
-      }
-    }
-
+    // No network fallback: the old remote-installer path executed third-party
+    // code for up to 30 s inside a POST handler. A missing packaged skill is a
+    // broken installation and must be reported, not papered over.
+    const stderr = localInstall.stderr
+      || (localInstall.results ?? [])
+        .filter((result) => result.status !== 'exists' && result.status !== 'copied' && result.status !== 'repaired')
+        .map((result) => `${result.agent}: ${result.message ?? result.status}`)
+        .join('\n')
+      || 'Local skill installation failed';
     return json({
       ok: false,
       skill,
-      agents: additionalAgents,
-      method: lastCmd ? 'npx' : 'local-copy',
-      cmd: lastCmd,
-      stdout: lastStdout,
-      stderr: lastStderr,
+      agents: requestedAgentKeys,
+      method: 'local-copy',
+      cmd: localInstall.cmd,
+      stdout: '',
+      stderr,
       ...(localInstall.results ? { results: localInstall.results } : {}),
     });
   } catch (error) {
@@ -173,19 +122,6 @@ export function handleMcpInstallSkillPost(
   }
 }
 
-export function filterAdditionalSkillAgents(
-  agentKeys: string[],
-  registry: Record<string, MindosSkillAgentRegistration>,
-): string[] {
-  return agentKeys.flatMap((key) => {
-    if (!isValidSkillAgentName(key)) return [];
-    const registration = Object.prototype.hasOwnProperty.call(registry, key) ? registry[key] : undefined;
-    if (!registration) return [key];
-    if (registration.mode === 'unsupported' || registration.mode === 'universal') return [];
-    const skillAgentName = registration.skillAgentName || key;
-    return isValidSkillAgentName(skillAgentName) ? [skillAgentName] : [];
-  });
-}
 
 function isValidSkillAgentName(value: string): boolean {
   return (
@@ -196,31 +132,6 @@ function isValidSkillAgentName(value: string): boolean {
   );
 }
 
-export function buildMcpInstallSkillCommand(
-  source: string,
-  skill: string,
-  additionalAgents: string[],
-): string {
-  return formatCommandForDisplay('npx', buildMcpInstallSkillArgs(source, skill, additionalAgents));
-}
-
-export function buildMcpInstallSkillArgs(
-  source: string,
-  skill: string,
-  additionalAgents: string[],
-): string[] {
-  const agents = additionalAgents.length > 0 ? additionalAgents : ['universal'];
-  return [
-    'skills',
-    'add',
-    source,
-    '--skill',
-    skill,
-    ...agents.flatMap((agent) => ['-a', agent]),
-    '-g',
-    '-y',
-  ];
-}
 
 type LocalSkillInstallAttempt = {
   attempted: boolean;
@@ -385,29 +296,6 @@ function copyLocalSkill(
   return { ...base, status: repaired ? 'repaired' : 'copied' };
 }
 
-export function resolveNpxInvocation(
-  args: string[],
-  options: MindosNpxInvocationOptions = {},
-): MindosNpxInvocation {
-  const env = options.env ?? process.env;
-  const nodeExecPath = options.nodeExecPath ?? process.execPath;
-  const pathExists = options.pathExists ?? existsSync;
-  const npxCliPath = findNpxCliPath(nodeExecPath, env, pathExists);
-
-  if (npxCliPath) {
-    return { command: nodeExecPath, args: [npxCliPath, ...args] };
-  }
-
-  if ((options.platform ?? process.platform) === 'win32') {
-    throw new Error('Unable to locate npm npx-cli.js for shell-free skill installation on Windows');
-  }
-
-  return { command: 'npx', args };
-}
-
-function formatCommandForDisplay(command: string, args: string[]): string {
-  return [command, ...args].map(formatArgForDisplay).join(' ');
-}
 
 function formatArgForDisplay(arg: string): string {
   if (/^[A-Za-z0-9._=-]+$/.test(arg)) return arg;
@@ -432,40 +320,4 @@ function findLocalSkillSourceRoot(skill: string, services: MindosMcpInstallSkill
 
 function normalizeInstallSkillRequest(body: unknown): MindosMcpInstallSkillRequest {
   return body && typeof body === 'object' ? body as MindosMcpInstallSkillRequest : {};
-}
-
-function defaultRunCommand(
-  command: string,
-  args: string[],
-  options: {
-    encoding: 'utf-8';
-    timeout: number;
-    env: NodeJS.ProcessEnv;
-    stdio: 'pipe';
-  },
-): string {
-  const invocation = command === 'npx'
-    ? resolveNpxInvocation(args, { env: options.env })
-    : { command, args };
-  return execFileSync(invocation.command, invocation.args, options);
-}
-
-function findNpxCliPath(
-  nodeExecPath: string,
-  env: NodeJS.ProcessEnv,
-  pathExists: (path: string) => boolean,
-): string | null {
-  const candidates = new Set<string>();
-  if (env.npm_execpath) {
-    candidates.add(join(dirname(env.npm_execpath), 'npx-cli.js'));
-  }
-
-  const nodeDir = dirname(nodeExecPath);
-  candidates.add(join(nodeDir, 'node_modules', 'npm', 'bin', 'npx-cli.js'));
-  candidates.add(resolve(nodeDir, '..', 'lib', 'node_modules', 'npm', 'bin', 'npx-cli.js'));
-
-  for (const candidate of candidates) {
-    if (pathExists(candidate)) return candidate;
-  }
-  return null;
 }

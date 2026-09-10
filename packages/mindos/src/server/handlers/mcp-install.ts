@@ -167,15 +167,31 @@ async function verifyHttpConnection(
   fetcher: typeof fetch = fetch,
 ): Promise<{ verified: boolean; verifyError?: string }> {
   try {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    // Streamable HTTP requires the initialize handshake first: a bare
+    // tools/list is rejected with 400 by spec-compliant servers (including
+    // our own) when it carries no session id. Accept must advertise both
+    // JSON and SSE so servers may answer either way.
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      Accept: 'application/json, text/event-stream',
+    };
     if (token) headers.Authorization = `Bearer ${token}`;
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 2000);
+    const timeout = setTimeout(() => controller.abort(), 5000);
     try {
       const res = await fetcher(mcpUrl, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'initialize',
+          params: {
+            protocolVersion: '2025-06-18',
+            capabilities: {},
+            clientInfo: { name: 'mindos-install-verify', version: '1' },
+          },
+        }),
         signal: controller.signal,
       });
       if (res.ok) return { verified: true };

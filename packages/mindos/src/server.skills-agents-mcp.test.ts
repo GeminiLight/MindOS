@@ -27,7 +27,6 @@ import {
   handleMcpAgentsGet,
   handleMcpInstallPost,
   handleMcpInstallSkillPost,
-  resolveNpxInvocation,
   findMcpProcessIdsByPort,
   handleMcpRestartPost,
   handleMcpUninstallPost,
@@ -1147,80 +1146,39 @@ describe('MindOS server contract: skills, custom agents, MCP management', () => 
     expect(readFileSync(join(home, '.claude', 'skills', 'mindos', 'SKILL.md'), 'utf-8')).toContain('name: mindos');
   });
 
-  it('falls back to argv-safe npx skill installation when no local skill source exists', () => {
-    const root = mkdtempSync(join(tmpdir(), 'mindos-install-skill-fallback-'));
+  it('reports a missing packaged skill without running any subprocess', () => {
+    const root = mkdtempSync(join(tmpdir(), 'mindos-install-skill-missing-'));
     const commands: Array<{ command: string; args: string[] }> = [];
 
-    expect(handleMcpInstallSkillPost({
+    const res = handleMcpInstallSkillPost({
       skill: 'mindos-zh',
-      agents: ['cursor', 'claude-code', 'unknown-agent'],
+      agents: ['cursor', 'claude-code'],
     }, {
       projectRoot: root,
       skillAgentRegistry: {
         cursor: { mode: 'universal' },
         'claude-code': { mode: 'additional', skillAgentName: 'claude-code' },
       },
-      runCommand: (command, args) => {
-        commands.push({ command, args });
-        return 'Done!\n';
-      },
-    })).toMatchObject({
-      status: 200,
-      body: {
-        ok: true,
-        method: 'npx',
-        skill: 'mindos-zh',
-        agents: ['claude-code', 'unknown-agent'],
-        stdout: 'Done!',
-      },
-    });
-
-    expect(commands).toEqual([{
-      command: 'npx',
-      args: ['skills', 'add', 'GeminiLight/MindOS', '--skill', 'mindos-zh', '-a', 'claude-code', '-a', 'unknown-agent', '-g', '-y'],
-    }]);
-  });
-
-  it('runs MindOS skill installation through argv-safe subprocess args', () => {
-    const calls: Array<{ command: string; args: string[] }> = [];
-
-    expect(handleMcpInstallSkillPost({ skill: 'mindos', agents: ['claude-code'] }, {
-      skillAgentRegistry: { 'claude-code': { mode: 'additional', skillAgentName: 'claude-code' } },
       pathExists: () => false,
-      runCommand: (command, args) => {
-        calls.push({ command, args });
-        return 'Done!\n';
-      },
-    })).toMatchObject({
-      status: 200,
-      body: {
-        ok: true,
-        cmd: 'npx skills add "GeminiLight/MindOS" --skill mindos -a claude-code -g -y',
-      },
     });
 
-    expect(calls).toEqual([{
-      command: 'npx',
-      args: ['skills', 'add', 'GeminiLight/MindOS', '--skill', 'mindos', '-a', 'claude-code', '-g', '-y'],
-    }]);
-
-    const source = readFileSync(join(__dirname, 'server', 'handlers', 'mcp-install-skill.ts'), 'utf-8');
-    expect(source).not.toContain('execSync(cmd');
-    expect(source).toContain('execFileSync(invocation.command, invocation.args');
+    expect(res).toMatchObject({
+      status: 200,
+      body: { ok: false, method: 'local-copy', skill: 'mindos-zh' },
+    });
+    expect((res.body as { stderr: string }).stderr).toMatch(/not found/i);
+    // The POST handler must never shell out to the network (`npx skills add`):
+    // a 30 s remote code execution inside an API request is not an install path.
+    expect(commands).toEqual([]);
   });
 
-  it('resolves npx through the npm CLI on Windows without shell shims', () => {
-    const npxCliPath = '/node/node_modules/npm/bin/npx-cli.js';
-
-    expect(resolveNpxInvocation(['skills', 'add', 'GeminiLight/MindOS'], {
-      platform: 'win32',
-      nodeExecPath: '/node/node.exe',
-      pathExists: (path) => path === npxCliPath,
-      env: {},
-    })).toEqual({
-      command: '/node/node.exe',
-      args: [npxCliPath, 'skills', 'add', 'GeminiLight/MindOS'],
-    });
+  it('keeps the install-skill handler free of subprocess and network install paths', () => {
+    const source = readFileSync(join(__dirname, 'server', 'handlers', 'mcp-install-skill.ts'), 'utf-8');
+    expect(source).not.toContain('execFileSync');
+    expect(source).not.toContain('execSync');
+    expect(source).not.toContain('npx');
+    expect(source).not.toContain('GeminiLight/MindOS');
+    expect(source).not.toContain('runCommand');
   });
 
   it('restarts MCP through the product process-control handler', async () => {

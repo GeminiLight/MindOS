@@ -47,7 +47,6 @@ export const mcpRoutes = defineRoutes([
       projectRoot: services.runtimeRoot ?? runtimeRoot ?? process.cwd(),
       cwd: services.runtimeRoot ?? runtimeRoot ?? process.cwd(),
       homeDir: services.homeDir,
-      env: process.env,
     }) },
   { id: 'mcp.restart', method: 'POST', path: '/api/mcp/restart', auth: 'required',
     handler: ({ services }) => handleMcpRestartPost({
