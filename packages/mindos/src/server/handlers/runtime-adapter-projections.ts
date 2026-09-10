@@ -20,6 +20,7 @@ import type {
   AcpPromptCapabilities,
   AcpSessionCapabilities,
 } from '../../protocols/acp/index.js';
+import { applyAcpHandshakeToRuntime } from '../../agent/runtime/descriptors.js';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
 import {
   filterProjectionsByRuntime,
@@ -189,7 +190,11 @@ export function buildAgentRuntimeAdapterProjectionsPayload(input: {
   const handshakeByRuntime = byAcpHandshake(input.acpHandshakeHealth ?? []);
   return {
     schemaVersion: 1,
-    projections: input.runtimes.map((runtime) => buildRuntimeAdapterProjection(runtime, handshakeByRuntime.get(runtimeKey(runtime)))),
+    projections: input.runtimes.map((runtime) => {
+      const handshake = handshakeByRuntime.get(runtimeKey(runtime));
+      // The cached initialize handshake refines the descriptor (declared capabilities, signed-out) before projecting it.
+      return buildRuntimeAdapterProjection(applyAcpHandshakeToRuntime(runtime, handshake), handshake);
+    }),
   };
 }
 
@@ -443,8 +448,10 @@ function buildHealthProjection(
   const blockers: string[] = [];
   const handshakeFailed = runtime.kind === 'acp' && handshake?.status === 'failed';
   const handshakeReady = runtime.kind === 'acp' && handshake?.status === 'ready';
+  const signedOut = handshakeFailed && handshake?.stage === 'authenticate';
   if (runtime.status !== 'available') blockers.push('runtime-available');
   if (handshakeFailed) blockers.push('acp-handshake');
+  if (signedOut) blockers.push('runtime-signed-out');
   if (!handshakeReady && (contract.mode === 'unknown' || contract.mode === 'unsupported')) blockers.push('adapter-health-contract');
   const status = runtime.status !== 'available'
     ? 'blocked'
@@ -487,6 +494,12 @@ function buildHealthProjection(
             ? `${runtime.name} completed ACP handshake stage ${handshake.stage}.`
             : `${runtime.name} failed ACP handshake stage ${handshake.stage}${handshake.message ? `: ${handshake.message}` : '.'}`,
       )] : []),
+      ...(signedOut ? [reason(
+        'runtime-signed-out',
+        'missing',
+        'external',
+        `${runtime.name} is installed but demanded sign-in that MindOS could not complete; sign in to the agent in a terminal from the environment that starts MindOS, then retry.`,
+      )] : []),
     ],
     ...(blockers.length > 0 ? { blockers: uniqSorted(blockers) } : {}),
   };
@@ -515,6 +528,9 @@ function handshakeProjection(handshake: AcpHandshakeHealthResult | undefined): N
 function acpHandshakeSummary(runtimeName: string, handshake: AcpHandshakeHealthResult): string {
   if (handshake.status === 'ready') {
     return `${runtimeName} completed a cached ACP ${handshake.stage} handshake.`;
+  }
+  if (handshake.stage === 'authenticate') {
+    return `${runtimeName} is signed out: the agent required authentication that MindOS could not complete.`;
   }
   return `${runtimeName} failed a cached ACP ${handshake.stage} handshake.`;
 }

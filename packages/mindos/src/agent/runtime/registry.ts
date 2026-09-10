@@ -1,11 +1,13 @@
 import type {
   AcpAdapterConnectionType,
   AcpMcpCapabilities,
-  AcpAdapterOutputCapabilities,
   AcpPromptCapabilities,
-  AcpSessionCapabilities,
-  AcpAgentOverride,
-} from '../../protocols/acp/index.js';
+} from './acp-types.js';
+import type {
+  AcpAgentAdapterMetadata,
+  AcpAgentAdapterSessionCapabilities,
+} from './adapter-metadata.js';
+import type { AcpAgentOverride } from './agent-descriptor-table.js';
 import {
   attachRuntimeDiagnostics,
   buildAgentRuntimeCatalogPayload,
@@ -25,11 +27,14 @@ import {
 } from './descriptors.js';
 import {
   classifyRuntimeFailure,
-  isClaudeAgent,
-  isCodexAgent,
   normalizeInstalled,
   normalizeMissing,
 } from './detection.js';
+import {
+  NATIVE_RUNTIME_DEFINITIONS,
+  matchesNativeRuntime,
+  nativeRuntimeIdForAgent,
+} from './native-runtimes.js';
 import type { AgentRuntimeEnvironmentSettings } from './runtime-env.js';
 
 export type AgentRuntimeKind = 'mindos' | 'acp' | 'codex' | 'claude';
@@ -250,31 +255,8 @@ export type AgentRuntimeAdapterDeclaredCommand = {
   source: AgentRuntimeAdapterCommandSource;
 };
 
-export type AgentRuntimeAdapterMetadata = {
-  connectionType?: AcpAdapterConnectionType;
-  authRequired?: boolean;
-  supportsStreaming?: boolean;
-  models?: Array<{
-    id: string;
-    label?: string;
-    description?: string;
-  }>;
-  promptCapabilities?: AcpPromptCapabilities;
-  mcpCapabilities?: AcpMcpCapabilities;
-  sessionCapabilities?: AcpSessionCapabilities & {
-    loadSession?: boolean;
-  };
-  healthCheck?: {
-    command?: string;
-    timeoutMs?: number;
-    summary?: string;
-  };
-  commands?: Array<{
-    name: string;
-    description?: string;
-  }>;
-  output?: AcpAdapterOutputCapabilities;
-};
+/** Adapter metadata as sanitised by `adapter-metadata.ts`; kept under its runtime-layer name for client shells. */
+export type AgentRuntimeAdapterMetadata = AcpAgentAdapterMetadata;
 
 export type AgentRuntimeAdapterContract = {
   schemaVersion: 1;
@@ -326,9 +308,7 @@ export type AgentRuntimeAdapterContract = {
     }>;
     promptCapabilities?: AcpPromptCapabilities;
     mcpCapabilities?: AcpMcpCapabilities;
-    sessionCapabilities?: AcpSessionCapabilities & {
-      loadSession?: boolean;
-    };
+    sessionCapabilities?: AcpAgentAdapterSessionCapabilities;
     summary: string;
   };
 };
@@ -453,16 +433,12 @@ export type AgentRuntimesServices = {
 export const RUNTIME_DETECTION_TIMEOUT_MS = 5000;
 export const NATIVE_HEALTH_TIMEOUT_MS = 20000;
 
-export const nativeRuntimeDefinitions: Array<{
-  id: 'codex-acp' | 'claude';
-  name: string;
-  runtime: NativeRuntimeId;
-  command: string;
-  installCmd: string;
-}> = [
-  { id: 'codex-acp', name: 'Codex', runtime: 'codex', command: 'codex', installCmd: 'npm install -g @openai/codex' },
-  { id: 'claude', name: 'Claude Code', runtime: 'claude', command: 'claude', installCmd: 'npm install -g @anthropic-ai/claude-code' },
-];
+/**
+ * Native runtime definitions are derived from the agent descriptor table; the
+ * name is kept so the agent-runtimes handler can iterate them unchanged.
+ */
+export const nativeRuntimeDefinitions = NATIVE_RUNTIME_DEFINITIONS;
+export type { NativeRuntimeDefinition } from './native-runtimes.js';
 
 export function buildAgentRuntimesPayload(input: {
   installed: unknown[];
@@ -471,29 +447,22 @@ export function buildAgentRuntimesPayload(input: {
 }): AgentRuntimesPayload {
   const installed = input.installed.map(normalizeInstalled).filter((agent): agent is DetectedRuntimeAgent => !!agent);
   const notInstalled = input.notInstalled.map(normalizeMissing).filter((agent): agent is MissingRuntimeAgent => !!agent);
-  const codexInstalled = installed.find(isCodexAgent);
-  const claudeInstalled = installed.find(isClaudeAgent);
-  const codexMissing = notInstalled.find(isCodexAgent);
-  const claudeMissing = notInstalled.find(isClaudeAgent);
 
   const runtimes = attachRuntimeDiagnostics([
     mindosRuntimeDescriptor(input.checkedAt),
-    nativeDescriptor({
-      id: 'codex',
-      name: 'Codex',
-      checkedAt: input.checkedAt,
-      ...(codexInstalled ? { source: codexInstalled } : {}),
-      ...(codexMissing ? { missing: codexMissing } : {}),
-    }),
-    nativeDescriptor({
-      id: 'claude',
-      name: 'Claude Code',
-      checkedAt: input.checkedAt,
-      ...(claudeInstalled ? { source: claudeInstalled } : {}),
-      ...(claudeMissing ? { missing: claudeMissing } : {}),
+    ...NATIVE_RUNTIME_DEFINITIONS.map((definition): AgentRuntimeDescriptor => {
+      const source = installed.find((agent) => matchesNativeRuntime(agent, definition));
+      const missing = notInstalled.find((agent) => matchesNativeRuntime(agent, definition));
+      return nativeDescriptor({
+        id: definition.runtime,
+        name: definition.name,
+        checkedAt: input.checkedAt,
+        ...(source ? { source } : {}),
+        ...(missing ? { missing } : {}),
+      });
     }),
     ...installed
-      .filter((agent) => !isCodexAgent(agent) && !isClaudeAgent(agent))
+      .filter((agent) => nativeRuntimeIdForAgent(agent) === null)
       .map((agent): AgentRuntimeDescriptor => acpRuntimeDescriptor(agent, input.checkedAt)),
   ]);
 
@@ -512,10 +481,10 @@ export function buildAcpScopedPayload(input: {
 }): AgentRuntimesPayload {
   const installed = input.installed
     .map(normalizeInstalled)
-    .filter((agent): agent is DetectedRuntimeAgent => !!agent && !isCodexAgent(agent) && !isClaudeAgent(agent));
+    .filter((agent): agent is DetectedRuntimeAgent => !!agent && nativeRuntimeIdForAgent(agent) === null);
   const notInstalled = input.notInstalled
     .map(normalizeMissing)
-    .filter((agent): agent is MissingRuntimeAgent => !!agent && !isCodexAgent(agent) && !isClaudeAgent(agent));
+    .filter((agent): agent is MissingRuntimeAgent => !!agent && nativeRuntimeIdForAgent(agent) === null);
   const runtimes = attachRuntimeDiagnostics(
     installed.map((agent): AgentRuntimeDescriptor => acpRuntimeDescriptor(agent, input.checkedAt)),
   );
@@ -537,7 +506,7 @@ export async function applyNativeRuntimeHealth(
   const normalized = installed.map((agent) => ({ raw: agent, detected: normalizeInstalled(agent) }));
   const enriched = await Promise.all(normalized.map(async ({ raw, detected }) => {
     if (!detected) return raw;
-    const runtime = isCodexAgent(detected) ? 'codex' : isClaudeAgent(detected) ? 'claude' : null;
+    const runtime = nativeRuntimeIdForAgent(detected);
     if (!runtime) return raw;
     if (detected.status) return raw;
     try {

@@ -4,14 +4,14 @@ import {
   nativeAdapterContract,
 } from './adapter-contracts.js';
 import {
-  acpCapabilities,
-  acpHarnessCapabilitiesForAdapter,
-  claudeCapabilities,
-  claudeHarnessCapabilities,
-  codexCapabilities,
-  codexHarnessCapabilities,
+  acpCapabilitiesFromHandshake,
+  acpRuntimeCapabilitiesForAdapter,
+  declaredAcpCapabilitiesFromHandshake,
+  mergeAcpDeclaredCapabilities,
   mindosCapabilities,
   mindosHarnessCapabilities,
+  type AcpDeclaredCapabilities,
+  type AcpHandshakeFacts,
 } from './capabilities.js';
 import {
   acpRuntimeCompatibilityProfile,
@@ -26,10 +26,12 @@ import {
   mindosRuntimeLifecycle,
   nativeRuntimeLifecycle,
 } from './lifecycle.js';
+import { nativeRuntimeDefinition } from './native-runtimes.js';
 import {
   summarizeRuntimeFailure,
 } from './runtime-errors.js';
 import type {
+  AgentRuntimeAdapterContract,
   AgentRuntimeDescriptor,
   AgentRuntimeStatus,
   DetectedRuntimeAgent,
@@ -46,11 +48,11 @@ export function nativeRuntimeDiagnosticHints(input: {
   installCmd?: string;
 }): string[] {
   if (input.status === 'available') return [];
-  const command = input.id === 'codex' ? 'codex' : 'claude';
+  const definition = nativeRuntimeDefinition(input.id);
   const hints: string[] = [];
 
   if (input.status === 'missing') {
-    hints.push(`MindOS checked command "${command}" on the server PATH.`);
+    hints.push(`MindOS checked command "${definition.command}" on the server PATH.`);
     hints.push(input.installCmd
       ? `Install it or add it to the PATH used to start MindOS: ${input.installCmd}`
       : `Install ${input.name} or add it to the PATH used to start MindOS.`);
@@ -61,15 +63,7 @@ export function nativeRuntimeDiagnosticHints(input: {
     hints.push(`MindOS detected ${input.name} at ${input.binaryPath}.`);
   }
 
-  if (input.status === 'signed-out') {
-    hints.push(input.id === 'codex'
-      ? 'Run "codex login status" from the same environment that starts MindOS.'
-      : 'Run Claude Code once from the same environment that starts MindOS.');
-  } else {
-    hints.push(input.id === 'codex'
-      ? 'Run "codex app-server --help" from the MindOS server environment.'
-      : 'Run "claude --version" from the MindOS server environment.');
-  }
+  hints.push(input.status === 'signed-out' ? definition.diagnostics.signedOut : definition.diagnostics.health);
 
   if (input.reason && /(environment variable|cannot see|env)/i.test(input.reason)) {
     hints.push('Restart MindOS after exporting the required environment variable so the server process inherits it.');
@@ -85,9 +79,11 @@ export function nativeDescriptor(input: {
   source?: DetectedRuntimeAgent;
   missing?: MissingRuntimeAgent;
 }): AgentRuntimeDescriptor {
+  const definition = nativeRuntimeDefinition(input.id);
   const status = input.source ? input.source.status ?? 'available' : input.missing?.status ?? 'missing';
   const runtimeBridge = input.source?.runtimeBridge;
-  const capabilities = input.id === 'codex' ? codexCapabilities : claudeCapabilities;
+  const bridgeKind = runtimeBridge?.kind ?? definition.defaultBridge;
+  const capabilities = definition.capabilities;
   const rawReason = input.source?.reason ?? input.missing?.reason;
   const reasonSummary = rawReason ? summarizeRuntimeFailure(rawReason, { runtime: input.id }) : null;
   const reason = reasonSummary?.reason;
@@ -108,7 +104,7 @@ export function nativeDescriptor(input: {
       installCmd: input.missing?.installCmd,
     }),
   ]));
-  const harnessCapabilities = input.id === 'codex' ? codexHarnessCapabilities : claudeHarnessCapabilities;
+  const harnessCapabilities = definition.harnessCapabilities;
   const lifecycle = nativeRuntimeLifecycle(input.id, capabilities);
 
   return {
@@ -117,7 +113,7 @@ export function nativeDescriptor(input: {
     category: 'native',
     name: input.name,
     kind: input.id,
-    adapter: input.id === 'codex' ? 'codex-app-server' : runtimeBridge?.kind === 'claude-cli' ? 'claude-cli' : 'claude-sdk',
+    adapter: bridgeKind,
     modelOwner: 'external',
     authOwner: 'external',
     permissionOwner: 'external',
@@ -136,14 +132,12 @@ export function nativeDescriptor(input: {
       id: input.id,
       command: input.source?.resolvedCommand?.cmd,
       commandSource: input.source?.resolvedCommand?.source,
-      bridgeKind: input.id === 'codex' ? 'codex-app-server' : runtimeBridge?.kind,
+      bridgeKind,
     }),
     ...(runtimeBridge ? { runtimeBridge } : {}),
-    description: input.id === 'codex'
-      ? 'Local Codex app-server runtime. Model, approval, and thread behavior are owned by Codex.'
-      : 'Local Claude Code runtime. Model, permission, and session behavior are owned by Claude Code.',
-    aliases: input.id === 'codex' ? ['codex-acp'] : ['claude-code', 'claude'],
-    ...(input.id === 'codex' ? { mcpAgentKey: 'codex' } : { mcpAgentKey: 'claude-code' }),
+    description: definition.description,
+    aliases: [...definition.aliases],
+    mcpAgentKey: definition.mcpAgentKey,
     ...(input.source ? {
       sourceAgentId: input.source.id,
       canonicalAgentId: input.source.id,
@@ -198,10 +192,15 @@ export function mindosRuntimeDescriptor(checkedAt: string): AgentRuntimeDescript
   };
 }
 
+/**
+ * Descriptor-time ACP capabilities come from what the adapter declared
+ * statically (descriptor / settings metadata). A cached handshake refines them
+ * through `applyAcpHandshakeToRuntime` once the agent has answered `initialize`.
+ */
 export function acpRuntimeDescriptor(agent: DetectedRuntimeAgent, checkedAt: string): AgentRuntimeDescriptor {
   const status = agent.status ?? 'available';
-  const lifecycle = acpRuntimeLifecycle(acpCapabilities);
-  const harnessCapabilities = acpHarnessCapabilitiesForAdapter(agent.adapterMetadata);
+  const { capabilities, harnessCapabilities } = acpRuntimeCapabilitiesForAdapter(agent.adapterMetadata);
+  const lifecycle = acpRuntimeLifecycle(capabilities);
   return {
     id: agent.id,
     runtimeId: agent.id,
@@ -214,11 +213,11 @@ export function acpRuntimeDescriptor(agent: DetectedRuntimeAgent, checkedAt: str
     permissionOwner: 'external',
     sessionOwner: 'external',
     status,
-    capabilities: acpCapabilities,
+    capabilities,
     harnessCapabilities,
     lifecycle,
     compatibility: acpRuntimeCompatibilityProfile({
-      capabilities: acpCapabilities,
+      capabilities,
       harnessCapabilities,
       lifecycle,
       status,
@@ -233,6 +232,84 @@ export function acpRuntimeDescriptor(agent: DetectedRuntimeAgent, checkedAt: str
       checkedAt,
       sources: agent.status && agent.status !== 'available' ? ['acp-detect', 'native-health'] : ['acp-detect'],
       ...(agent.reason ? { reason: agent.reason } : {}),
+    },
+  };
+}
+
+function declaredAcpCapabilitiesFromProtocolContract(
+  protocol: AgentRuntimeAdapterContract['protocol'],
+): AcpDeclaredCapabilities | undefined {
+  const declared: AcpDeclaredCapabilities = {};
+  if (protocol.sessionCapabilities) {
+    declared.sessionCapabilities = protocol.sessionCapabilities;
+    if (protocol.sessionCapabilities.loadSession !== undefined) declared.loadSession = protocol.sessionCapabilities.loadSession;
+  }
+  if (protocol.mcpCapabilities) declared.mcpCapabilities = protocol.mcpCapabilities;
+  if (protocol.promptCapabilities) declared.promptCapabilities = protocol.promptCapabilities;
+  return Object.keys(declared).length > 0 ? declared : undefined;
+}
+
+/**
+ * Refine an ACP runtime descriptor with a cached `initialize` handshake: the
+ * agent's live capability declaration replaces the static one, and a failed
+ * `authenticate` stage turns an otherwise available runtime into `signed-out`
+ * (the same status native runtimes report when their login check fails).
+ * Non-ACP runtimes and missing handshakes pass through untouched, so this is
+ * safe to apply to a whole runtime list and idempotent when applied twice.
+ */
+export function applyAcpHandshakeToRuntime(
+  runtime: AgentRuntimeDescriptor,
+  handshake: AcpHandshakeFacts | undefined,
+): AgentRuntimeDescriptor {
+  if (runtime.kind !== 'acp' || !handshake) return runtime;
+  const declared = mergeAcpDeclaredCapabilities(
+    declaredAcpCapabilitiesFromProtocolContract(runtime.adapterContract.protocol),
+    declaredAcpCapabilitiesFromHandshake(handshake),
+  );
+  const derived = acpCapabilitiesFromHandshake(declared);
+  const capabilities = derived.capabilities;
+  const harnessCapabilities = {
+    ...derived.harnessCapabilities,
+    output: runtime.harnessCapabilities?.output ?? derived.harnessCapabilities.output,
+  };
+  const signedOut = handshake.status === 'failed' && handshake.stage === 'authenticate' && runtime.status === 'available';
+  const status: AgentRuntimeStatus = signedOut ? 'signed-out' : runtime.status;
+  const lifecycle = acpRuntimeLifecycle(capabilities);
+  const protocol = runtime.adapterContract.protocol;
+  const authRequired = protocol.authRequired ?? (declared?.authMethodCount !== undefined ? declared.authMethodCount > 0 : null);
+  const sources = Array.from(new Set([...(runtime.availability?.sources ?? []), 'acp-session' as const]));
+
+  return {
+    ...runtime,
+    status,
+    capabilities,
+    harnessCapabilities,
+    lifecycle,
+    compatibility: acpRuntimeCompatibilityProfile({ capabilities, harnessCapabilities, lifecycle, status }),
+    adapterContract: {
+      ...runtime.adapterContract,
+      protocol: {
+        ...protocol,
+        authRequired,
+        ...(declared?.promptCapabilities ? { promptCapabilities: declared.promptCapabilities } : {}),
+        ...(declared?.mcpCapabilities ? { mcpCapabilities: declared.mcpCapabilities } : {}),
+        ...(declared?.sessionCapabilities || declared?.loadSession !== undefined
+          ? {
+              sessionCapabilities: {
+                ...declared?.sessionCapabilities,
+                ...(declared?.loadSession !== undefined ? { loadSession: declared.loadSession } : {}),
+              },
+            }
+          : {}),
+      },
+    },
+    availability: {
+      checkedAt: runtime.availability?.checkedAt ?? new Date(0).toISOString(),
+      ...runtime.availability,
+      sources,
+      ...(signedOut
+        ? { reason: handshake.message ?? `${runtime.name} is installed but not signed in for this MindOS server environment.` }
+        : {}),
     },
   };
 }

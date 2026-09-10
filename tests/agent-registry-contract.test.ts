@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest';
 import { MCP_AGENTS as CLI_MCP_AGENTS, SKILL_AGENT_REGISTRY as CLI_SKILL_REGISTRY } from '../packages/mindos/bin/lib/mcp-agents.js';
 import { DEFAULT_MCP_AGENTS, DEFAULT_SKILL_AGENT_REGISTRY } from '../packages/mindos/src/server/mcp-agent-registry';
 import { SKILL_AGENT_REGISTRY as WEB_SKILL_REGISTRY } from '../packages/web/lib/mcp-agent-registry';
+import { MCP_AGENTS as WEB_MCP_AGENTS } from '../packages/web/lib/mcp-agents';
+import { AGENT_DESCRIPTORS } from '../packages/mindos/src/agent/runtime/agent-descriptor-table';
 
 /**
  * Repo contract: the MCP agent registry exists three times because the CLI
@@ -78,5 +80,64 @@ describe('MCP agent registry parity (CLI bin/lib vs core vs web)', () => {
     expect(cliInstall).not.toContain('http://localhost:${mcpPort}/mcp');
     expect(coreInstall).toContain('http://127.0.0.1:${fallbackPort}/mcp');
     expect(coreInstall).not.toContain('http://localhost:');
+  });
+});
+
+/**
+ * The ACP descriptor table is the single source of truth for launch/detection
+ * metadata; the MCP registries are keyed by MCP agent key and own the MCP
+ * config paths. Agents known to both must agree on at least one home-style
+ * (`~/…`) presence directory, so a moved config home cannot land in one table
+ * only. The CLI `bin/lib` copy cannot import `src/`, which is why this stays a
+ * parity contract instead of a derivation.
+ */
+const ACP_ID_TO_MCP_KEY: Record<string, string> = {
+  'claude': 'claude-code',
+  'gemini': 'gemini-cli',
+  'codebuddy-code': 'codebuddy',
+  'kimi': 'kimi-cli',
+  'qwen-code': 'qwen-code',
+  'auggie': 'augment',
+  'openclaw': 'openclaw',
+  'cursor': 'cursor',
+  'cline': 'cline',
+  'codex-acp': 'codex',
+  'lingma': 'lingma',
+};
+
+/** Windows builds Code-relative paths (`Code/User/…`); a tail match is the same directory. */
+function samePresenceDir(left: string, right: string): boolean {
+  const normalize = (value: string) => value.replace(/\\/g, '/');
+  const a = normalize(left);
+  const b = normalize(right);
+  return a === b || a.endsWith(b) || b.endsWith(a);
+}
+
+function overlaps(homeDirs: string[], registryDirs: string[] | undefined): boolean {
+  return homeDirs.some((dir) => (registryDirs ?? []).some((candidate) => samePresenceDir(dir, candidate)));
+}
+
+describe('presenceDirs parity (ACP descriptor table vs CLI/web MCP registries)', () => {
+  it('shares a home-style presence dir for every agent known to both tables', () => {
+    for (const [acpId, mcpKey] of Object.entries(ACP_ID_TO_MCP_KEY)) {
+      const descriptor = AGENT_DESCRIPTORS[acpId];
+      expect(descriptor, `ACP descriptor ${acpId}`).toBeDefined();
+      const homeDirs = (descriptor?.presenceDirs ?? []).filter((dir) => dir.startsWith('~/'));
+      expect(homeDirs.length, `${acpId} declares no ~/ presence dir`).toBeGreaterThan(0);
+
+      const cli = (CLI_MCP_AGENTS as Record<string, { presenceDirs?: string[] }>)[mcpKey];
+      expect(cli, `CLI MCP registry entry ${mcpKey}`).toBeDefined();
+      expect(
+        overlaps(homeDirs, cli?.presenceDirs),
+        `presenceDirs drift between ACP descriptor ${acpId} and CLI MCP registry ${mcpKey}`,
+      ).toBe(true);
+
+      const web = WEB_MCP_AGENTS[mcpKey];
+      expect(web, `web MCP registry entry ${mcpKey}`).toBeDefined();
+      expect(
+        overlaps(homeDirs, web?.presenceDirs),
+        `presenceDirs drift between ACP descriptor ${acpId} and web MCP registry ${mcpKey}`,
+      ).toBe(true);
+    }
   });
 });

@@ -250,9 +250,19 @@ function buildAcpPermissionProjection(
   runtime: AgentRuntimeDescriptor,
   requestedPermissionMode: MindosPermissionMode,
 ): AgentRuntimePermissionProjection {
-  const blockers = runtime.status === 'available'
-    ? ['adapter-approval-contract']
-    : ['runtime-available', 'adapter-approval-contract'];
+  // Derived from the descriptor (`acpCapabilitiesFromHandshake`): the MindOS ACP
+  // client answers `session/request_permission`, so approvals are bridged for
+  // every ACP agent unless the capability table says otherwise.
+  const hasPermissionStream = runtime.harnessCapabilities?.eventStream.includes('permissions') === true;
+  const supportsApprovals = runtime.capabilities.supportsApprovals && hasPermissionStream;
+  const blockers: string[] = [];
+  if (runtime.status !== 'available') blockers.push('runtime-available');
+  if (supportsApprovals) blockers.push('durable-approval-queue');
+  else blockers.push('adapter-approval-contract');
+  const status: AgentRuntimePermissionProjectionStatus = runtime.status !== 'available'
+    ? 'blocked'
+    : supportsApprovals ? 'interactive-only' : 'unknown';
+
   return {
     schemaVersion: 1,
     runtimeId: runtimeKey(runtime),
@@ -261,25 +271,42 @@ function buildAcpPermissionProjection(
     runtimeStatus: runtime.status,
     permissionOwner: runtime.permissionOwner,
     requestedPermissionMode,
-    status: runtime.status === 'available' ? 'unknown' : 'blocked',
+    status,
     harnessPermissionModel: runtime.harnessCapabilities?.permissions ?? 'unknown',
     interactiveApproval: {
-      supported: false,
-      route: 'unknown',
+      supported: supportsApprovals,
+      route: supportsApprovals ? 'adapter-protocol' : 'unknown',
       scope: 'adapter-specific',
-      summary: 'Generic ACP descriptors do not expose a shared approval prompt contract yet.',
+      summary: supportsApprovals
+        ? 'MindOS answers ACP session/request_permission prompts from the selected permission mode or the user while the session is active.'
+        : 'Generic ACP descriptors do not expose a shared approval prompt contract yet.',
     },
     unattendedApproval: {
-      status: 'unknown',
+      status: runtime.status === 'available' && supportsApprovals ? 'limited' : 'unknown',
       supported: false,
-      summary: 'ACP unattended approval readiness depends on adapter-specific permission semantics.',
-      blockers: ['adapter-approval-contract'],
+      summary: supportsApprovals
+        ? 'ACP approvals are interactive and in-process; unattended work needs a durable approval queue before prompts can outlive the session.'
+        : 'ACP unattended approval readiness depends on adapter-specific permission semantics.',
+      blockers: supportsApprovals ? ['durable-approval-queue'] : ['adapter-approval-contract'],
     },
     reasons: [
       runtimeAvailableReason(runtime, PERMISSION_AVAILABILITY_WORDING),
-      reason('adapter-approval-contract', 'unknown', 'external', 'ACP adapters need to declare approval behavior before MindOS can route or preauthorize actions safely.'),
+      reason(
+        'adapter-approval-contract',
+        supportsApprovals ? 'satisfied' : 'unknown',
+        'external',
+        supportsApprovals
+          ? 'The ACP protocol routes approval prompts through session/request_permission, which MindOS bridges into permission events.'
+          : 'ACP adapters need to declare approval behavior before MindOS can route or preauthorize actions safely.',
+      ),
+      ...(supportsApprovals
+        ? [
+            reason('mindos-permission-bridge', 'satisfied', 'mindos', 'MindOS resolves ACP permission requests through the ACP client bridge and surfaces them in the session projection.'),
+            reason('durable-approval-queue', 'missing', 'mindos', 'Approvals are not persisted in a durable queue for headless or resumed runs yet.'),
+          ]
+        : []),
     ],
-    blockers,
+    blockers: uniqSorted(blockers),
   };
 }
 

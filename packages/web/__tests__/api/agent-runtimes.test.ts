@@ -228,7 +228,10 @@ describe('/api/agent-runtimes', () => {
           },
           supportsResume: false,
           supportsToolEvents: true,
-          supportsApprovals: false,
+          // Derived: the MindOS ACP client answers session/request_permission,
+          // so approvals are bridged even without a handshake; resume stays
+          // false because gemini declares no loadSession.
+          supportsApprovals: true,
         }),
         lifecycle: expect.objectContaining({
           stages: expect.objectContaining({
@@ -243,7 +246,10 @@ describe('/api/agent-runtimes', () => {
               level: 'limited',
               blockers: expect.arrayContaining(['adapter-tool-declaration']),
             }),
-            'permission-governance': expect.objectContaining({ level: 'unknown' }),
+            'permission-governance': expect.objectContaining({
+              level: 'limited',
+              blockers: expect.arrayContaining(['durable-approval-queue']),
+            }),
           }),
         }),
         adapterContract: expect.objectContaining({

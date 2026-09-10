@@ -70,6 +70,26 @@ export type {
   AgentRuntimeDiagnostics,
 } from './agent/runtime/catalog.js';
 
+export type {
+  AcpAgentAdapterCommandDeclaration,
+  AcpAgentAdapterMetadata,
+  AcpAgentAdapterModelDeclaration,
+  AcpAgentAdapterSessionCapabilities,
+} from './agent/runtime/adapter-metadata.js';
+
+export type {
+  AcpAgentDescriptor,
+  AcpAgentOverride,
+} from './agent/runtime/agent-descriptor-table.js';
+
+export type { NativeRuntimeDefinition } from './agent/runtime/native-runtimes.js';
+
+export type {
+  AcpDeclaredCapabilities,
+  AcpHandshakeFacts,
+  AcpSessionLayerSupport,
+} from './agent/runtime/capabilities.js';
+
 // ── Runtime projections served by /api/agent-runtimes/* ────────────────────
 
 export type {

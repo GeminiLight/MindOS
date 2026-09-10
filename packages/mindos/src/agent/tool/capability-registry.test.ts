@@ -315,7 +315,13 @@ describe('runtime capabilities', () => {
             level: 'limited',
             blockers: expect.arrayContaining(['adapter-tool-declaration']),
           }),
-          'permission-governance': expect.objectContaining({ level: 'unknown' }),
+          // Derived: MindOS bridges session/request_permission for every ACP
+          // agent, so permission governance is limited (interactive approvals
+          // work, a durable queue is missing) rather than unknown.
+          'permission-governance': expect.objectContaining({
+            level: 'limited',
+            blockers: expect.arrayContaining(['durable-approval-queue']),
+          }),
           'artifact-governance': expect.objectContaining({
             level: 'blocked',
             blockers: expect.arrayContaining(['artifact-output-contract']),

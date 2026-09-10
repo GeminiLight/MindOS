@@ -10,7 +10,7 @@
  */
 
 import type { AcpRegistry, AcpRegistryEntry } from './types.js';
-import { AGENT_DESCRIPTORS, getDescriptorDisplayName, getDescriptorDescription, resolveAlias } from './agent-descriptors.js';
+import { AGENT_DESCRIPTORS, getDescriptorDisplayName, getDescriptorDescription, packageNameFromInstallCmd, resolveAlias } from './agent-descriptors.js';
 
 /* ── Constants ─────────────────────────────────────────────────────────── */
 
@@ -33,7 +33,7 @@ function buildBuiltinRegistry(): AcpRegistryEntry[] {
     transport: (desc.cmd === 'npx' ? 'npx' : 'stdio') as AcpRegistryEntry['transport'],
     command: desc.cmd,
     args: desc.args,
-    packageName: desc.installCmd?.match(/npm install -g (.+)/)?.[1],
+    packageName: packageNameFromInstallCmd(desc.installCmd),
   }));
 }
 

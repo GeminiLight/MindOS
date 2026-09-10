@@ -2,7 +2,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { execFile, execFileSync } from 'child_process';
-import { findUserOverride, getDetectableAgents, resolveAgentCommand } from './agent-descriptors.js';
+import { findUserOverride, getDetectableAgents, packageNameFromInstallCmd, resolveAgentCommand } from './agent-descriptors.js';
 import type { AcpAgentAdapterMetadata, AcpAgentOverride } from './agent-descriptors.js';
 import { expandHome as expandHomePath, expandWindowsEnvVars } from '../../foundation/shared/utils/path.js';
 
@@ -581,7 +581,7 @@ export async function detectLocalAcpAgents(
         ...(agent.adapterMetadata ? { adapterMetadata: agent.adapterMetadata } : {}),
       });
     } else {
-      const packageName = agent.installCmd?.match(/npm install -g (.+)/)?.[1];
+      const packageName = packageNameFromInstallCmd(agent.installCmd);
       notInstalled.push({
         id: agent.id,
         name: agent.name,

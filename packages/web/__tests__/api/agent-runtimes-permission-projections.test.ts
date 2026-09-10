@@ -74,10 +74,14 @@ describe('GET /api/agent-runtimes/permission-projections', () => {
       interactiveApproval: { route: 'runtime-permission-bridge' },
       blockers: expect.arrayContaining(['durable-approval-queue']),
     });
+    // The MindOS ACP client answers session/request_permission, so even an
+    // opaque ACP agent projects as interactively approvable through the
+    // adapter protocol; the durable queue for unattended runs is still missing.
     expect(acp).toMatchObject({
-      status: 'unknown',
-      interactiveApproval: { route: 'unknown' },
-      blockers: ['adapter-approval-contract'],
+      status: 'interactive-only',
+      harnessPermissionModel: 'runtime-bridged',
+      interactiveApproval: { route: 'adapter-protocol' },
+      blockers: ['durable-approval-queue'],
     });
   });
 

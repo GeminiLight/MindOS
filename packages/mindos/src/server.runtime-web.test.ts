@@ -477,10 +477,17 @@ describe('MindOS server contract: runtime, agent turn stream, static web', () =>
         capabilities: expect.objectContaining({
           supportsToolEvents: true,
           supportsModelList: false,
+          // Derived, not hard-coded: MindOS answers session/request_permission
+          // and always creates fresh ACP sessions; resume stays false because
+          // gemini declares no loadSession.
+          supportsApprovals: true,
+          supportsFreshSession: true,
+          supportsResume: false,
         }),
         harnessCapabilities: expect.objectContaining({
           session: 'none',
-          permissions: 'none',
+          permissions: 'runtime-bridged',
+          eventStream: expect.arrayContaining(['permissions']),
         }),
         lifecycle: expect.objectContaining({
           stages: expect.objectContaining({

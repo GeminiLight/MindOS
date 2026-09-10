@@ -107,19 +107,30 @@ describe('runtime permission projections', () => {
       runtimeStatus: 'missing',
       blockers: expect.arrayContaining(['runtime-available']),
     });
+    // The MindOS ACP client answers session/request_permission, so even an
+    // opaque ACP agent projects as interactively approvable through the
+    // adapter protocol; only the durable queue for unattended runs is missing.
     expect(acp).toMatchObject({
-      status: 'unknown',
-      harnessPermissionModel: 'none',
+      status: 'interactive-only',
+      harnessPermissionModel: 'runtime-bridged',
       interactiveApproval: {
-        supported: false,
-        route: 'unknown',
+        supported: true,
+        route: 'adapter-protocol',
         scope: 'adapter-specific',
       },
       unattendedApproval: {
-        status: 'unknown',
-        blockers: ['adapter-approval-contract'],
+        status: 'limited',
+        supported: false,
+        blockers: ['durable-approval-queue'],
       },
+      blockers: expect.arrayContaining(['durable-approval-queue']),
     });
+    expect(acp?.blockers).not.toContain('adapter-approval-contract');
+    expect(acp?.reasons).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'adapter-approval-contract', status: 'satisfied' }),
+      expect.objectContaining({ id: 'mindos-permission-bridge', status: 'satisfied' }),
+      expect.objectContaining({ id: 'durable-approval-queue', status: 'missing' }),
+    ]));
   });
 
   it('marks read mode as permission-ready for unattended Pi runs', () => {

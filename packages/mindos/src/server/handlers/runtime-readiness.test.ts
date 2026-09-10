@@ -218,15 +218,23 @@ describe('runtime readiness projections', () => {
     });
     expect(claude?.useCases.every((entry) => entry.status === 'blocked')).toBe(true);
 
+    // The ACP client bridges session/request_permission, so the approval
+    // contract is no longer a gap; the missing durable queue is.
     expect(acp).toMatchObject({
       overallStatus: 'limited',
       gaps: expect.arrayContaining([
         expect.objectContaining({ id: 'adapter-health-contract', category: 'adapter-contract' }),
         expect.objectContaining({ id: 'adapter-command-discovery', category: 'adapter-contract' }),
         expect.objectContaining({ id: 'adapter-output-contract', category: 'adapter-contract' }),
-        expect.objectContaining({ id: 'adapter-approval-contract', category: 'adapter-contract' }),
         expect.objectContaining({ id: 'adapter-artifact-contract', category: 'adapter-contract' }),
+        expect.objectContaining({ id: 'durable-approval-queue', category: 'mindos-product', severity: 'warning' }),
       ]),
+    });
+    expect(acp?.gaps.map((gap) => gap.id)).not.toContain('adapter-approval-contract');
+    expect(acp?.useCases.find((entry) => entry.id === 'permission-governance')).toMatchObject({
+      source: 'permission-projection',
+      sourceStatus: 'interactive-only',
+      status: 'usable',
     });
     expect(acp?.useCases.find((entry) => entry.id === 'adapter-contract')).toMatchObject({
       source: 'adapter-projection',
@@ -344,6 +352,72 @@ describe('runtime readiness projections', () => {
           }),
         }),
       }),
+    });
+  });
+
+  it('reports an ACP agent that failed the authenticate stage as signed out', () => {
+    const handshake: AcpHandshakeHealthResult = {
+      schemaVersion: 1,
+      agentId: 'opaque-acp',
+      status: 'failed',
+      stage: 'authenticate',
+      checkedAt: '2026-06-28T00:00:00.000Z',
+      expiresAt: '2026-06-28T00:05:00.000Z',
+      message: 'agent demanded sign-in',
+    };
+
+    const payload = buildAgentRuntimeReadinessPayload({
+      runtimes: runtimes(),
+      mcpAgents: mcpAgents(),
+      acpHandshakeHealth: [handshake],
+      permissionMode: 'ask',
+    });
+    const acp = payload.projections.find((projection) => projection.runtimeId === 'opaque-acp');
+
+    expect(acp).toMatchObject({
+      runtimeStatus: 'signed-out',
+      overallStatus: 'blocked',
+      blockers: expect.arrayContaining(['runtime-signed-out']),
+      gaps: expect.arrayContaining([
+        expect.objectContaining({
+          id: 'runtime-signed-out',
+          category: 'user-setup',
+          severity: 'blocking',
+        }),
+      ]),
+    });
+  });
+
+  it('derives session resume readiness from a cached initialize handshake', () => {
+    const handshake: AcpHandshakeHealthResult = {
+      schemaVersion: 1,
+      agentId: 'opaque-acp',
+      status: 'ready',
+      stage: 'session-new',
+      checkedAt: '2026-06-28T00:00:00.000Z',
+      expiresAt: '2026-06-28T00:05:00.000Z',
+      capabilities: { loadSession: true },
+    };
+
+    const payload = buildAgentRuntimeReadinessPayload({
+      runtimes: runtimes(),
+      mcpAgents: mcpAgents(),
+      acpHandshakeHealth: [handshake],
+      permissionMode: 'ask',
+    });
+    const acp = payload.projections.find((projection) => projection.runtimeId === 'opaque-acp');
+    const sessionContinuity = acp?.useCases.find((entry) => entry.id === 'session-continuity');
+
+    // The agent declared loadSession and the MindOS session layer implements
+    // session/load, so resume is satisfied by the external runtime; list is
+    // still undeclared, so the scenario stays limited.
+    expect(sessionContinuity).toMatchObject({
+      source: 'compatibility-profile',
+      status: 'limited',
+      blockers: expect.arrayContaining(['list-attach-archive']),
+      requirements: expect.arrayContaining([
+        expect.objectContaining({ id: 'session-load', status: 'external' }),
+      ]),
     });
   });
 });

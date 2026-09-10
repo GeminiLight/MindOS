@@ -480,7 +480,7 @@ async function detectCodexNativeRuntimeDefinition(
         id: candidate.id,
         name: candidate.name,
         installCmd: candidate.installCmd,
-        packageName: candidate.installCmd.match(/npm install -g (.+)/)?.[1],
+        packageName: candidate.packageName,
         status: 'missing',
         reason: `${candidate.name} executable was not detected.`,
       },
@@ -555,7 +555,7 @@ async function detectClaudeNativeRuntimeDefinition(
       id: candidate.id,
       name: candidate.name,
       installCmd: candidate.installCmd,
-      packageName: candidate.installCmd.match(/npm install -g (.+)/)?.[1],
+      packageName: candidate.packageName,
       status: 'missing',
       reason: timedOut
         ? `${commandResolution.failureReason} MindOS does not bundle the Claude Agent SDK native runtime.`
