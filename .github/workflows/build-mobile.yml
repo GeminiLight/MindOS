@@ -51,6 +51,11 @@ jobs:
       - name: Install mobile dependencies
         run: pnpm install --frozen-lockfile
 
+      # Mobile imports types from @geminilight/mindos/client-types, which
+      # resolves to packages/mindos/dist/client-types.d.ts (spec-client-types-and-sse-parsers).
+      - name: Build product core (client types)
+        run: pnpm --filter @geminilight/mindos run build
+
       - name: Typecheck mobile app
         run: pnpm --filter @mindos/mobile run typecheck
 
