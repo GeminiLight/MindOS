@@ -131,7 +131,7 @@ describe('product npm publish contract', () => {
     expect(pkg.scripts?.prepack).not.toContain('packages/mindos/node_modules');
     expect(pkg.scripts?.prepack).not.toContain('packages/protocols/mcp-server/node_modules');
     expect(pkg.scripts?.prepack).not.toContain('packages/web/node_modules');
-    expect(pkg.scripts?.build).toBe('tsc && node ../../scripts/copy-mindos-agent-assets.mjs && pnpm run build:protocols');
+    expect(pkg.scripts?.build).toBe('tsc && node ../../scripts/copy-mindos-agent-assets.mjs && node ../../scripts/build-cli-bundles.mjs && pnpm run build:protocols');
     expect(pkg.scripts?.['build:protocols']).toBe('node ../../scripts/build-product-protocols.mjs');
     expect(pkg.scripts?.['type-check']).toBe('tsc --noEmit');
     // The published CLI owns the resident automation executor, so native

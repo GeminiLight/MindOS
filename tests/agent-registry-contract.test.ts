@@ -2,68 +2,32 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { MCP_AGENTS as CLI_MCP_AGENTS, SKILL_AGENT_REGISTRY as CLI_SKILL_REGISTRY } from '../packages/mindos/bin/lib/mcp-agents.js';
-import { DEFAULT_MCP_AGENTS, DEFAULT_SKILL_AGENT_REGISTRY } from '../packages/mindos/src/server/mcp-agent-registry';
+import {
+  DEFAULT_MCP_AGENTS,
+  DEFAULT_SKILL_AGENT_REGISTRY,
+  listDownstreamAgentDefs,
+} from '../packages/mindos/src/agent/config/registry';
 import { SKILL_AGENT_REGISTRY as WEB_SKILL_REGISTRY } from '../packages/web/lib/mcp-agent-registry';
 import { MCP_AGENTS as WEB_MCP_AGENTS } from '../packages/web/lib/mcp-agents';
 import { AGENT_DESCRIPTORS } from '../packages/mindos/src/agent/runtime/agent-descriptor-table';
 
 /**
- * Repo contract: the MCP agent registry exists three times because the CLI
- * (`bin/lib`, node builtins only for the Bun single-binary build) cannot
- * import `src/`. This test pins the copies to each other so a new agent, a
- * moved config path or a changed format cannot land in one copy only.
+ * Repo contract: the MCP agent registry has ONE source — core
+ * `src/agent/config/registry.ts`. The CLI copy is generated: importing
+ * `bin/lib/mcp-agents.js` loads `bin/lib/generated/agent-config.mjs` (esbuild
+ * bundle of `src/agent/config/index.ts`, rebuilt on demand by
+ * `bin/lib/agent-config.js`), so these tests assert DERIVATION from the core
+ * table instead of pinning hand-copied literals (spec-agent-config-adapter).
  */
 
 const root = resolve(__dirname, '..');
 
-type AgentShape = {
-  name: string;
-  project: string | null;
-  global: string;
-  projectReadAlso?: string[];
-  globalReadAlso?: string[];
-  key: string;
-  format?: string;
-  globalNestedKey?: string;
-  entryStyle?: string;
-  skillDir?: string;
-  preferredTransport: string;
-};
-
-/** Windows registry copies build paths with different separators; compare them as forward-slash paths. */
-function normalizePath(value: string | null | undefined): string | null | undefined {
-  return typeof value === 'string' ? value.replace(/\\/g, '/') : value;
-}
-
-function comparableAgent(agent: AgentShape): Record<string, unknown> {
-  return {
-    name: agent.name,
-    project: normalizePath(agent.project),
-    global: normalizePath(agent.global),
-    projectReadAlso: agent.projectReadAlso?.map((entry) => normalizePath(entry)),
-    globalReadAlso: agent.globalReadAlso?.map((entry) => normalizePath(entry)),
-    key: agent.key,
-    format: agent.format,
-    globalNestedKey: agent.globalNestedKey,
-    entryStyle: agent.entryStyle,
-    skillDir: normalizePath(agent.skillDir),
-    preferredTransport: agent.preferredTransport,
-  };
-}
-
-describe('MCP agent registry parity (CLI bin/lib vs core vs web)', () => {
-  it('registers the same downstream agents in the CLI and the core registry', () => {
-    // The `mindos` self entry only exists where the UI renders MindOS as a row.
-    const coreKeys = Object.keys(DEFAULT_MCP_AGENTS).filter((key) => key !== 'mindos').sort();
-    expect(Object.keys(CLI_MCP_AGENTS).sort()).toEqual(coreKeys);
-  });
-
-  it('agrees on config paths, section keys, formats, entry styles and skill dirs for every agent', () => {
-    for (const key of Object.keys(CLI_MCP_AGENTS)) {
-      const cli = CLI_MCP_AGENTS[key as keyof typeof CLI_MCP_AGENTS] as AgentShape;
-      const core = DEFAULT_MCP_AGENTS[key] as AgentShape;
-      expect(comparableAgent(cli), `registry drift for agent "${key}"`).toEqual(comparableAgent(core));
-    }
+describe('MCP agent registry derivation (CLI bundle vs core)', () => {
+  it('registers exactly the core downstream agents (core registry minus the mindos self row)', () => {
+    // Deep equality over EVERY field (paths, keys, formats, presence probes):
+    // a stale generated bundle or a core edit that skipped regeneration fails here.
+    expect(CLI_MCP_AGENTS).toEqual(listDownstreamAgentDefs(DEFAULT_MCP_AGENTS));
+    expect(Object.keys(CLI_MCP_AGENTS)).not.toContain('mindos');
   });
 
   it('keeps the skill-install registry identical across CLI, core and web', () => {
@@ -72,24 +36,34 @@ describe('MCP agent registry parity (CLI bin/lib vs core vs web)', () => {
     expect(Object.keys(DEFAULT_SKILL_AGENT_REGISTRY).sort()).toEqual(Object.keys(CLI_MCP_AGENTS).sort());
   });
 
-  it('defaults the http transport URL to 127.0.0.1 in both the CLI and the core installer', () => {
-    const cliInstall = readFileSync(resolve(root, 'packages/mindos/bin/lib/mcp-install.js'), 'utf-8');
-    const coreInstall = readFileSync(resolve(root, 'packages/mindos/src/server/handlers/mcp-install.ts'), 'utf-8');
+  it('keeps the web registry equal to the core table', () => {
+    expect(WEB_MCP_AGENTS).toEqual(DEFAULT_MCP_AGENTS);
+  });
+
+  it('defaults the http transport URL to 127.0.0.1 in the single shared entry builder', () => {
     // localhost may resolve to ::1 first on some Windows stacks while the MCP server binds IPv4.
-    expect(cliInstall).toContain('http://127.0.0.1:${mcpPort}/mcp');
-    expect(cliInstall).not.toContain('http://localhost:${mcpPort}/mcp');
-    expect(coreInstall).toContain('http://127.0.0.1:${fallbackPort}/mcp');
+    const entryBuilder = readFileSync(resolve(root, 'packages/mindos/src/agent/config/entry.ts'), 'utf-8');
+    expect(entryBuilder).toContain('http://127.0.0.1:${port}/mcp');
+    expect(entryBuilder).not.toContain('http://localhost:');
+
+    // The CLI install flow delegates to that builder instead of spelling a URL.
+    const cliInstall = readFileSync(resolve(root, 'packages/mindos/bin/lib/mcp-install.js'), 'utf-8');
+    expect(cliInstall).toContain('defaultMindosMcpUrl');
+    expect(cliInstall).toContain('buildMindosMcpServerEntry');
+    expect(cliInstall).not.toContain('http://localhost:');
+
+    const coreInstall = readFileSync(resolve(root, 'packages/mindos/src/server/handlers/mcp-install.ts'), 'utf-8');
+    expect(coreInstall).toContain('buildMindosMcpServerEntry');
     expect(coreInstall).not.toContain('http://localhost:');
   });
 });
 
 /**
  * The ACP descriptor table is the single source of truth for launch/detection
- * metadata; the MCP registries are keyed by MCP agent key and own the MCP
- * config paths. Agents known to both must agree on at least one home-style
- * (`~/…`) presence directory, so a moved config home cannot land in one table
- * only. The CLI `bin/lib` copy cannot import `src/`, which is why this stays a
- * parity contract instead of a derivation.
+ * metadata; the MCP registry owns the MCP config paths. Agents known to both
+ * must agree on at least one home-style (`~/…`) presence directory, so a moved
+ * config home cannot land in one table only. Compared against the CORE
+ * registry — the CLI and web copies derive from it (asserted above).
  */
 const ACP_ID_TO_MCP_KEY: Record<string, string> = {
   'claude': 'claude-code',
@@ -117,7 +91,7 @@ function overlaps(homeDirs: string[], registryDirs: string[] | undefined): boole
   return homeDirs.some((dir) => (registryDirs ?? []).some((candidate) => samePresenceDir(dir, candidate)));
 }
 
-describe('presenceDirs parity (ACP descriptor table vs CLI/web MCP registries)', () => {
+describe('presenceDirs parity (ACP descriptor table vs core MCP registry)', () => {
   it('shares a home-style presence dir for every agent known to both tables', () => {
     for (const [acpId, mcpKey] of Object.entries(ACP_ID_TO_MCP_KEY)) {
       const descriptor = AGENT_DESCRIPTORS[acpId];
@@ -125,11 +99,11 @@ describe('presenceDirs parity (ACP descriptor table vs CLI/web MCP registries)',
       const homeDirs = (descriptor?.presenceDirs ?? []).filter((dir) => dir.startsWith('~/'));
       expect(homeDirs.length, `${acpId} declares no ~/ presence dir`).toBeGreaterThan(0);
 
-      const cli = (CLI_MCP_AGENTS as Record<string, { presenceDirs?: string[] }>)[mcpKey];
-      expect(cli, `CLI MCP registry entry ${mcpKey}`).toBeDefined();
+      const core = (DEFAULT_MCP_AGENTS as Record<string, { presenceDirs?: string[] }>)[mcpKey];
+      expect(core, `core MCP registry entry ${mcpKey}`).toBeDefined();
       expect(
-        overlaps(homeDirs, cli?.presenceDirs),
-        `presenceDirs drift between ACP descriptor ${acpId} and CLI MCP registry ${mcpKey}`,
+        overlaps(homeDirs, core?.presenceDirs),
+        `presenceDirs drift between ACP descriptor ${acpId} and core MCP registry ${mcpKey}`,
       ).toBe(true);
 
       const web = WEB_MCP_AGENTS[mcpKey];

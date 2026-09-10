@@ -239,8 +239,8 @@ spec 见 `wiki/specs/spec-core-consolidation.md`。文件枚举、树缓存、�
 | 树缓存 | `server/tree-cache.ts` | `getMindRootTreeCache(root)` 按 root 注册表；stats + 单调 version；递归 `fs.watch` 事件 500ms 批处理后逐路径 `refreshPath()`（目录事件 / null / 溢出 / `.mindosignore` 变化才全量 stat walk）；`subscribe()` 供 SSE `tree.changed`；`startWatcher/stopWatcher` |
 | 搜索索引 | `server/search/{tokenizer,scoring,index}.ts` | `MindosSearchIndex`：`Intl.Segmenter` 中文分词 + unigram（bigram 回退）、BM25、段落 snippet；`refresh()` 以 tree version 为快路径、按 mtime/size 增量重读；`listFiles` / `textExtensions` / `extractors` / `shouldIndex` 可注入；`search-parity.test.ts` 用合并前 Web 实现生成的 fixture 锁定结果 |
 | ignore 规则 | `server/search-ignore.ts` + `foundation/shared/utils/glob.ts` | glob 走 `picomatch`（`dot: true`，无 `/` 的 glob 按 basename 匹配）；`createMindosIgnoreRuleMatcher` 纯函数，`createCachedMindosSearchIgnoreMatcher` 按 `.mindosignore` mtime 缓存 |
-| JSONC | `foundation/shared/utils/jsonc.ts`（CLI 镜像 `bin/lib/jsonc.js`） | `jsonc-parser`：读用 `parseJsonc` / `parseJsoncDocument`，写用 `setJsoncValue` / `removeJsoncValue`（`modify + applyEdits`，注释与格式保留，`.bak` 备份已删除） |
-| `expandHome` | `foundation/shared/utils/path.ts`（CLI 镜像 `bin/lib/path-expand.js`） | `~`、`~/`、`~\`；ACP 的 `expandHome` 在其上叠加 `%VAR%` 展开 |
+| JSONC | `foundation/shared/utils/jsonc.ts`（CLI 经生成 bundle 取值：`bin/lib/jsonc.js`） | `jsonc-parser`：读用 `parseJsonc` / `parseJsoncDocument`，写用 `setJsoncValue` / `removeJsoncValue`（`modify + applyEdits`，注释与格式保留，`.bak` 备份已删除） |
+| `expandHome` | `foundation/shared/utils/path.ts`（CLI 经生成 bundle 取值：`bin/lib/path-expand.js`） | `~`、`~/`、`~\`；ACP 的 `expandHome` 在其上叠加 `%VAR%` 展开 |
 
 standalone 服务在 `server/services.ts` 用 `new MindosSearchIndex(root, { listFiles: () => treeCache.collectFileStats() })` 接线；Web 的 `lib/fs.ts` 只从 `getWebTreeCache(root)`（`lib/core/mind-root-cache.ts`，沿用 Web 的 30s / 5min TTL 与 `now: () => Date.now()`）派生 `FileNode` 树、Space 预览（按 INSTRUCTION/README mtime 缓存）、scaffold 过滤的文件列表和 shape / content 两个版本计数器，不再有自己的 `fs.watch` 与 `readdirSync`；`lib/core/search.ts` 只为 Web 配置索引（`.md/.csv` + PDF 抽取、根级系统文件与默认 scaffold 排除）并保留 embedding 联动、PDF 时间预算和 telemetry。核心 `src/` 不再 import `chokidar`（`knowledge/storage/local-watch.ts` 用 `fs.watch` 递归实现同一事件词表），但依赖仍声明在 `packages/mindos/package.json`，因为 `bin/lib/sync.js` 动态导入它且平台包闭包只从该 package 解析依赖。
 
@@ -355,7 +355,7 @@ Web 的 `packages/web/app/api/file/route.ts` 只保留 Next.js adapter：读取 
 
 **核心源码：** `packages/mindos/src/protocols/acp` 负责类型、注册表、安装探测、subprocess 生命周期和 session 管理，并通过 `@geminilight/mindos/protocols/acp` 暴露给 Web adapters。Agent descriptor 表（`AGENT_DESCRIPTORS` / `AGENT_ALIASES`）的唯一真值在 `packages/mindos/src/agent/runtime/agent-descriptor-table.ts`，protocols 侧 re-export，导出面不变。
 
-**Descriptor 单一来源：** agent 的启动 / 检测事实（binary、detectCommands、presenceDirs、installCmd、curated name / description、`packageName` 派生）只在描述符表写一次：native runtime（codex / claude）由 `agent/runtime/native-runtimes.ts` 从表派生成两条 `NativeRuntimeDefinition` 记录，`isCodexAgent` / `isClaudeAgent`、`nativeDescriptor` 的 aliases / mcpAgentKey / bridge、`buildAgentRuntimesPayload` 都读定义，不再手写 id 三目；adapter metadata sanitizer 只剩 `agent/runtime/adapter-metadata.ts` 一份，settings / extension manifest / detect 三个入口共用（白名单含 `mcpCapabilities.acp` 与 `sessionCapabilities.delete`）。新增 agent = 改一条表记录，`agent-descriptor-table.test.ts` 遍历所有 consumer 证明这一点。分层规则：`agent/runtime` 只允许经 `agent/runtime/acp-types.ts`（wire-type 唯一出口，`protocols/acp/types.ts` 零依赖）import ACP 类型，`layering.test.ts` 强制执行且例外自删除。ACP 表与 MCP 注册表（`bin/lib/mcp-agents.js`、`web/lib/mcp-agents.ts`，按 MCP key 组织、含非 ACP agent）的 presenceDirs 由 `tests/agent-registry-contract.test.ts` parity 契约锁定，不做生成。详见 `wiki/specs/spec-runtime-descriptor-single-source.md`。
+**Descriptor 单一来源：** agent 的启动 / 检测事实（binary、detectCommands、presenceDirs、installCmd、curated name / description、`packageName` 派生）只在描述符表写一次：native runtime（codex / claude）由 `agent/runtime/native-runtimes.ts` 从表派生成两条 `NativeRuntimeDefinition` 记录，`isCodexAgent` / `isClaudeAgent`、`nativeDescriptor` 的 aliases / mcpAgentKey / bridge、`buildAgentRuntimesPayload` 都读定义，不再手写 id 三目；adapter metadata sanitizer 只剩 `agent/runtime/adapter-metadata.ts` 一份，settings / extension manifest / detect 三个入口共用（白名单含 `mcpCapabilities.acp` 与 `sessionCapabilities.delete`）。新增 agent = 改一条表记录，`agent-descriptor-table.test.ts` 遍历所有 consumer 证明这一点。分层规则：`agent/runtime` 只允许经 `agent/runtime/acp-types.ts`（wire-type 唯一出口，`protocols/acp/types.ts` 零依赖）import ACP 类型，`layering.test.ts` 强制执行且例外自删除。ACP 表与 MCP 注册表的 presenceDirs parity 由 `tests/agent-registry-contract.test.ts` 锁定；MCP 注册表自身已单源于 `src/agent/config/registry.ts`（CLI 经生成 bundle 派生、Web 直接 re-export，见「Agent 支持体系」），不再是手抄镜像。详见 `wiki/specs/spec-runtime-descriptor-single-source.md`。
 
 **ACP capability 推导：** ACP runtime 的 capabilities / harness / compatibility / permission projection / readiness 由 `acpCapabilitiesFromHandshake(declared, observed)` 推导：declared 来自 agent 的 `initialize` 握手缓存（handshake-health，动态）与 adapterMetadata（静态，冲突时 handshake 优先），observed 是 `ACP_SESSION_LAYER_SUPPORT` 常量（MindOS session 层实际实现，`session-layer-support.test.ts` 对照 `protocols/acp` 导出反向核对）。`supportsResume` = 声明 `loadSession` × session 层实现 load；`supportsApprovals` 恒来自 MindOS ACP client 应答 `session/request_permission`，permission projection 相应为 `interactive-only` + `runtime-bridged`，blocker 从 `adapter-approval-contract` 变为 `durable-approval-queue`；`supportsMcpConfig` = 声明 MCP transport × session 层 MCP 继承。`applyAcpHandshakeToRuntime`（`descriptors.ts`）在 readiness / adapter projection 构建任何 projection 前套用握手缓存；`authenticate` 阶段失败且 runtime 可用时 status 变 `signed-out`，readiness 补 `runtime-signed-out` gap（user-setup / blocking），与 native runtime 的 signed-out 语义统一。
 
@@ -373,7 +373,7 @@ Web 的 `packages/web/app/api/file/route.ts` 只保留 Next.js adapter：读取 
 
 ### 8. Agent 支持体系
 
-**MCP Agent：27 个**（`packages/web/lib/mcp-agents.ts` 为 Web/API 单一真实来源，`packages/mindos/bin/lib/mcp-agents.js` 为 CLI 同步入口）；**ACP 注册表：30+ 个**（独立计数）。
+**MCP Agent：27 个**（单一真值 `packages/mindos/src/agent/config/registry.ts` 的 `DEFAULT_MCP_AGENTS`；Web `packages/web/lib/mcp-agents.ts` 直接 re-export，CLI `packages/mindos/bin/lib/mcp-agents.js` 从 esbuild 生成 bundle `bin/lib/generated/agent-config.mjs` 派生，去 `mindos` 自列）；**ACP 注册表：30+ 个**（独立计数）。
 
 | # | Agent | 全局配置路径 | 格式 | 配置 Key | CLI |
 |---|-------|-------------|------|---------|-----|
@@ -412,17 +412,18 @@ Web 的 `packages/web/app/api/file/route.ts` 只保留 Next.js adapter：读取 
 - **CoPaw**：key 为 `mcp`，嵌套路径 `mcp.clients`
 - **Hermes**：YAML 格式，key 为 `mcp_servers`
 
-**默认使用 stdio 传输；支持 HTTP 的路径按各 Agent 的配置格式写入。** Web / Product Server / CLI 三处注册表需保持同步。
+**默认使用 stdio 传输；支持 HTTP 的路径按各 Agent 的配置格式写入。** 注册表只有一份（core `src/agent/config/registry.ts`），Web / Product Server / CLI 全部从它派生，不再需要三处同步。
+
+**Agent 配置适配层（`packages/mindos/src/agent/config/`）：** 「某个 Agent 的 MCP 配置在哪、怎么读写、是否在本机、Skill 目录在哪」只有一份实现：`registry.ts`（`DEFAULT_MCP_AGENTS` / `DEFAULT_SKILL_AGENT_REGISTRY` / `customAgentToConfigDef`）、`formats.ts` + `toml.ts` / `yaml.ts` / `text.ts`（JSONC 原地编辑与行扫描 walker）、`paths.ts`、`adapter.ts`（`AgentConfigAdapter`：detectPresence / listServers / readServer / writeServer / removeServer / skillWorkspace，custom agent 走同一接口）、`presence.ts`（15s TTL presence 缓存）、`config-read.ts`（`(path, mtimeMs, size)` 记忆的配置解析）、`skill-workspace.ts` / `skill-link.ts`（`linkSkillToAgent`，copy fallback 带 `.mindos-managed`）、`install-transaction.ts`（`installAgentConnection`：写条目 → 链 Skill → 改设置，失败逆序回滚；`POST /api/mcp/install` 与 `mindos mcp install` 共用）。缓存只在未注入 fs 探针时启用（宿主/测试注入即绕过）。`server/handlers/mcp-config-*.ts` 与 `server/mcp-agent-registry.ts` 是 re-export 壳。CLI 不 import `src/`：`scripts/build-cli-bundles.mjs` 用 esbuild 把 `agent/config/index.ts` 打成 `bin/lib/generated/agent-config.mjs`（`jsonc-parser` 内联、只剩 `node:*` import，满足 Bun 单二进制契约），`bin/lib/agent-config.js` 负责按需重建（monorepo checkout）或信任随包文件（打包运行时）；`bin/lib/{toml,yaml,jsonc,path-expand,mcp-agents}.js` 是 ≤30 行的取值壳，`{agent-readiness,skill-install,mcp-install}.js` 只留 CLI 编排。`handlers/skills-index.ts` 以目录 mtime 签名记忆 skill 扫描，`/api/skills`、`/api/skills/matrix`、`/api/skills/runtime-matches` 共用。契约：`tests/agent-registry-contract.test.ts`（CLI 注册表 = core 派生）、`tests/unit/cli-agent-config-bundle.test.ts`（bundle 存在/新鲜、无 bare import、bin/lib 无手抄注册表与解析器）、`tests/bun-single-binary-contract.test.ts`（生成物只含 `node:*`）。详见 `wiki/specs/spec-agent-config-adapter.md`。
 
 新增 Agent 支持时需改动的文件：
 
 | 文件 | 改什么 | 说明 |
 |------|--------|------|
-| `packages/web/lib/mcp-agents.ts` | `MCP_AGENTS` 对象新增 `AgentDef` | **主定义**，MCP 配置路径、传输方式、存在检测。UI 和 API 自动读取 |
-| `packages/web/app/api/mcp/install-skill/route.ts` | `UNIVERSAL_AGENTS` / `AGENT_NAME_MAP` / `SKILL_UNSUPPORTED` | Skill 安装时判断是否需要 `-a` flag |
-| `packages/mindos/bin/lib/mcp-agents.js` | 同步 CLI 侧注册入口 | CLI `mindos agent` / `mindos mcp install` 需要读到同一 Agent 列表 |
+| `packages/mindos/src/agent/config/registry.ts` | `DEFAULT_MCP_AGENTS` 新增 `AgentConfigDef`（需要 skill 安装再补 `DEFAULT_SKILL_AGENT_REGISTRY`） | **唯一主定义**，MCP 配置路径、传输方式、存在检测。Web re-export、CLI 生成 bundle 自动读取 |
+| CLI 生成物 | 无需手改：`pnpm build` 或 CLI 首次运行时 `bin/lib/agent-config.js` 自动重建 `bin/lib/generated/agent-config.mjs` | `tests/agent-registry-contract.test.ts` 会在 bundle 过期时失败 |
 
-自动生效（不需要改）：`/api/mcp/agents`（遍历 `MCP_AGENTS`）、`SetupWizard.tsx`、`McpTab.tsx`（动态渲染）。
+自动生效（不需要改）：`/api/mcp/agents`、`web/lib/mcp-agents.ts`（re-export core）、`bin/lib/mcp-agents.js`（生成派生）、`SetupWizard.tsx`、`McpTab.tsx`（动态渲染）。
 
 参考：`wiki/refs/npx-skills-mechanism.md`（Skills CLI 机制与 Agent 支持矩阵）。
 

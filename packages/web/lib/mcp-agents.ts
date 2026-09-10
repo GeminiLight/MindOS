@@ -1,15 +1,17 @@
 import fs from 'fs';
 import path from 'path';
-import os from 'os';
 import { execFileSync } from 'child_process';
 import {
+  DEFAULT_MCP_AGENTS,
   detectAgentConfiguredMcpServersFromConfigs,
   detectAgentInstalledFromConfigs,
-  detectConfigFormat,
-  getNestedPath,
-  listMcpServerNamesFromText,
-  readOwnRecord,
+  detectAgentPresence as coreDetectAgentPresence,
+  listInstalledSkillNames,
+  resolveAgentConfigProbes,
+  resolveAgentHiddenRoot,
   resolveSkillLinkAgents,
+  resolveSkillWorkspaceProfile as coreResolveSkillWorkspaceProfile,
+  type AgentConfigProbes,
   type MindosMcpAgentRegistryDef,
   type MindosSkillAgentRegistration,
   type MindosSkillLinkAgent,
@@ -29,365 +31,16 @@ export {
 import { expandHome, parseJsonc } from '@geminilight/mindos/foundation';
 export { expandHome, parseJsonc };
 
-function normalizeConfigRoot(p: string): string {
-  return p.replace(/\\/g, '/').replace(/\/+$/, '');
-}
+/**
+ * Single source of truth: the MCP agent registry is core's `DEFAULT_MCP_AGENTS`
+ * (spec-agent-config-adapter). The Web host no longer keeps a hand copy — the
+ * platform-specific paths are computed by core at module load, and the parity
+ * contracts (`__tests__/core/agent-registry-parity.test.ts`,
+ * `tests/agent-registry-contract.test.ts`) assert this record IS the core one.
+ */
+export const MCP_AGENTS: Record<string, AgentDef> = DEFAULT_MCP_AGENTS;
 
-function windowsAppDataRoot(): string {
-  return normalizeConfigRoot(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'));
-}
-
-function windowsLocalAppDataRoot(): string {
-  return normalizeConfigRoot(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'));
-}
-
-function platformAppDataPath(options: { darwin: string; linux: string; win32: string }): string {
-  if (process.platform === 'darwin') return options.darwin;
-  if (process.platform === 'win32') return `${windowsAppDataRoot()}/${options.win32}`;
-  return options.linux;
-}
-
-function platformLocalAppDataPath(options: { darwin: string; linux: string; win32: string }): string {
-  if (process.platform === 'darwin') return options.darwin;
-  if (process.platform === 'win32') return `${windowsLocalAppDataRoot()}/${options.win32}`;
-  return options.linux;
-}
-
-const codeUserRoot = platformAppDataPath({
-  darwin: '~/Library/Application Support/Code/User',
-  linux: '~/.config/Code/User',
-  win32: 'Code/User',
-});
-
-const codeRoot = platformAppDataPath({
-  darwin: '~/Library/Application Support/Code',
-  linux: '~/.config/Code',
-  win32: 'Code',
-});
-
-const traeCnRoot = platformAppDataPath({
-  darwin: '~/Library/Application Support/Trae CN',
-  linux: '~/.config/Trae CN',
-  win32: 'Trae CN',
-});
-
-const warpStableStateRoot = platformLocalAppDataPath({
-  darwin: '~/Library/Group Containers/2BBY89MBSN.dev.warp/Library/Application Support/dev.warp.Warp-Stable',
-  linux: '~/.local/state/warp-terminal',
-  win32: 'warp/Warp/data',
-});
-
-const warpPreviewStateRoot = platformLocalAppDataPath({
-  darwin: '~/Library/Group Containers/2BBY89MBSN.dev.warp/Library/Application Support/dev.warp.Warp-Preview',
-  linux: '~/.local/state/warp-terminal-preview',
-  win32: 'warp/WarpPreview/data',
-});
-
-const warpConfigRoot = platformLocalAppDataPath({
-  darwin: '~/.warp',
-  linux: '~/.config/warp-terminal',
-  win32: 'warp/Warp/config',
-});
-
-const warpDataRoot = platformAppDataPath({
-  darwin: '~/.warp',
-  linux: '~/.local/share/warp-terminal',
-  win32: 'warp/Warp/data',
-});
-
-export interface AgentDef {
-  name: string;
-  project: string | null;
-  global: string;
-  /** Additional config files to inspect for existing installs without writing to them. */
-  projectReadAlso?: string[];
-  globalReadAlso?: string[];
-  key: string;
-  preferredTransport: 'stdio' | 'http';
-  /** Config file format: 'json' (default), 'toml', or 'yaml'. */
-  format?: 'json' | 'toml' | 'yaml';
-  /** For agents whose global config nests under a parent key (e.g. VS Code: mcp.servers). */
-  globalNestedKey?: string;
-  /** Agent-specific MCP entry shape. Defaults to the common Claude/Cursor style. */
-  entryStyle?: 'standard' | 'kilo';
-  /** Agent-specific skills workspace, when it differs from the config/presence root. */
-  skillDir?: string;
-  /** CLI binary name for presence detection (e.g. 'claude'). Optional. */
-  presenceCli?: string;
-  /** Data directories for presence detection. Any one existing → present. */
-  presenceDirs?: string[];
-}
-
-export const MCP_AGENTS: Record<string, AgentDef> = {
-  'mindos': {
-    name: 'MindOS',
-    project: null,
-    global: '~/.mindos/mcp.json',
-    key: 'mcpServers',
-    preferredTransport: 'stdio',
-    presenceDirs: ['~/.mindos/'],
-  },
-  'claude-code': {
-    name: 'Claude Code',
-    project: '.mcp.json',
-    global: '~/.claude.json',
-    key: 'mcpServers',
-    preferredTransport: 'stdio',
-    presenceCli: 'claude',
-    presenceDirs: ['~/.claude/'],
-  },
-  'cursor': {
-    name: 'Cursor',
-    project: '.cursor/mcp.json',
-    global: '~/.cursor/mcp.json',
-    key: 'mcpServers',
-    preferredTransport: 'stdio',
-    presenceDirs: ['~/.cursor/extensions/'],
-  },
-  'windsurf': {
-    name: 'Windsurf',
-    project: null,
-    global: '~/.codeium/windsurf/mcp_config.json',
-    key: 'mcpServers',
-    preferredTransport: 'stdio',
-    presenceDirs: ['~/.codeium/windsurf/'],
-  },
-  'cline': {
-    name: 'Cline',
-    project: null,
-    global: `${codeUserRoot}/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json`,
-    key: 'mcpServers',
-    preferredTransport: 'stdio',
-    presenceDirs: [
-      `${codeUserRoot}/globalStorage/saoudrizwan.claude-dev/`,
-    ],
-  },
-  'trae': {
-    name: 'Trae',
-    project: '.trae/mcp.json',
-    global: '~/.trae/mcp.json',
-    key: 'mcpServers',
-    preferredTransport: 'stdio',
-    presenceDirs: ['~/.trae/'],
-  },
-  'gemini-cli': {
-    name: 'Gemini CLI',
-    project: '.gemini/settings.json',
-    global: '~/.gemini/settings.json',
-    key: 'mcpServers',
-    preferredTransport: 'stdio',
-    presenceCli: 'gemini',
-    presenceDirs: ['~/.gemini/'],
-  },
-  'openclaw': {
-    name: 'OpenClaw',
-    project: null,
-    global: '~/.openclaw/mcp.json',
-    key: 'mcpServers',
-    preferredTransport: 'stdio',
-    presenceCli: 'openclaw',
-    presenceDirs: ['~/.openclaw/'],
-  },
-  'codebuddy': {
-    name: 'CodeBuddy',
-    project: null,
-    global: '~/.codebuddy/mcp.json',
-    key: 'mcpServers',
-    preferredTransport: 'stdio',
-    presenceCli: 'codebuddy',
-    presenceDirs: ['~/.codebuddy/'],
-  },
-  'kimi-cli': {
-    name: 'Kimi Code',
-    project: '.kimi/mcp.json',
-    global: '~/.kimi/mcp.json',
-    key: 'mcpServers',
-    preferredTransport: 'stdio',
-    presenceCli: 'kimi',
-    presenceDirs: ['~/.kimi/'],
-  },
-  'opencode': {
-    name: 'OpenCode',
-    project: null,
-    global: '~/.config/opencode/config.json',
-    key: 'mcpServers',
-    preferredTransport: 'stdio',
-    presenceCli: 'opencode',
-    presenceDirs: ['~/.config/opencode/'],
-  },
-  'kilo-code': {
-    name: 'Kilo Code',
-    project: '.kilo/kilo.jsonc',
-    global: '~/.config/kilo/kilo.jsonc',
-    projectReadAlso: [
-      '.kilo/kilo.json',
-      'kilo.jsonc',
-      'kilo.json',
-      '.kilocode/kilo.jsonc',
-      '.kilocode/kilo.json',
-      '.opencode/opencode.jsonc',
-      '.opencode/opencode.json',
-    ],
-    globalReadAlso: [
-      '~/.config/kilo/kilo.json',
-      '~/.config/kilo/opencode.jsonc',
-      '~/.config/kilo/opencode.json',
-      '~/.config/kilo/config.json',
-    ],
-    key: 'mcp',
-    preferredTransport: 'stdio',
-    entryStyle: 'kilo',
-    presenceCli: 'kilo',
-    presenceDirs: ['~/.config/kilo/', '~/.kilo/', '~/.kilocode/'],
-  },
-  'warp': {
-    name: 'Warp',
-    project: '.warp/.mcp.json',
-    global: '~/.warp/.mcp.json',
-    key: 'mcpServers',
-    preferredTransport: 'stdio',
-    presenceDirs: [
-      '~/.warp/',
-      `${warpStableStateRoot}/`,
-      `${warpPreviewStateRoot}/`,
-      `${warpConfigRoot}/`,
-      `${warpDataRoot}/`,
-    ],
-  },
-  'pi': {
-    name: 'Pi',
-    project: '.pi/settings.json',
-    global: '~/.pi/agent/mcp.json',
-    key: 'mcpServers',
-    preferredTransport: 'stdio',
-    presenceCli: 'pi',
-    presenceDirs: ['~/.pi/'],
-  },
-  'augment': {
-    name: 'Augment',
-    project: '.augment/settings.json',
-    global: '~/.augment/settings.json',
-    key: 'mcpServers',
-    preferredTransport: 'stdio',
-    presenceCli: 'auggie',
-    presenceDirs: ['~/.augment/'],
-  },
-  'qwen-code': {
-    name: 'Qwen Code',
-    project: '.qwen/settings.json',
-    global: '~/.qwen/settings.json',
-    key: 'mcpServers',
-    preferredTransport: 'stdio',
-    presenceCli: 'qwen',
-    presenceDirs: ['~/.qwen/'],
-  },
-  'qoder': {
-    name: 'Qoder',
-    project: null,
-    global: '~/.qoder.json',
-    key: 'mcpServers',
-    preferredTransport: 'stdio',
-    presenceCli: 'qoder',
-    presenceDirs: ['~/.qoder/', '~/.qoder.json'],
-  },
-  'trae-cn': {
-    name: 'Trae CN',
-    project: '.trae/mcp.json',
-    global: `${traeCnRoot}/User/mcp.json`,
-    key: 'mcpServers',
-    preferredTransport: 'stdio',
-    presenceCli: 'trae-cli',
-    presenceDirs: [
-      `${traeCnRoot}/`,
-    ],
-  },
-  'roo': {
-    name: 'Roo Code',
-    project: '.roo/mcp.json',
-    global: `${codeUserRoot}/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json`,
-    key: 'mcpServers',
-    preferredTransport: 'stdio',
-    presenceDirs: [
-      `${codeUserRoot}/globalStorage/rooveterinaryinc.roo-cline/`,
-    ],
-  },
-  'github-copilot': {
-    name: 'GitHub Copilot',
-    project: '.vscode/mcp.json',
-    global: `${codeUserRoot}/mcp.json`,
-    key: 'servers',
-    preferredTransport: 'stdio',
-    presenceDirs: [
-      `${codeRoot}/`,
-    ],
-    presenceCli: 'code',
-  },
-  'codex': {
-    name: 'Codex',
-    project: null,
-    global: '~/.codex/config.toml',
-    key: 'mcp_servers',
-    format: 'toml',
-    preferredTransport: 'stdio',
-    presenceCli: 'codex',
-    presenceDirs: ['~/.codex/'],
-  },
-  'antigravity': {
-    name: 'Antigravity',
-    project: '.antigravity/mcp_config.json',
-    global: '~/.gemini/antigravity/mcp_config.json',
-    key: 'mcpServers',
-    preferredTransport: 'stdio',
-    presenceCli: 'agy',
-    presenceDirs: ['~/.gemini/antigravity/'],
-  },
-  'qclaw': {
-    name: 'QClaw',
-    project: null,
-    global: '~/.qclaw/mcp.json',
-    key: 'mcpServers',
-    preferredTransport: 'stdio',
-    presenceCli: 'qclaw',
-    presenceDirs: ['~/.qclaw/'],
-  },
-  'workbuddy': {
-    name: 'WorkBuddy',
-    project: null,
-    global: '~/.workbuddy/mcp.json',
-    key: 'mcpServers',
-    preferredTransport: 'stdio',
-    presenceCli: 'workbuddy',
-    presenceDirs: ['~/.workbuddy/'],
-  },
-  'lingma': {
-    name: 'Lingma',
-    project: null,
-    global: '~/.lingma/mcp.json',
-    key: 'mcpServers',
-    preferredTransport: 'stdio',
-    presenceDirs: ['~/.lingma/'],
-  },
-  'copaw': {
-    name: 'CoPaw',
-    project: null,
-    global: '~/.copaw/config.json',
-    key: 'mcp',
-    globalNestedKey: 'mcp.clients',
-    preferredTransport: 'stdio',
-    presenceCli: 'copaw',
-    presenceDirs: ['~/.copaw/'],
-  },
-  'hermes': {
-    name: 'Hermes',
-    project: null,
-    global: '~/.hermes/config.yaml',
-    key: 'mcp_servers',
-    format: 'yaml',
-    preferredTransport: 'stdio',
-    presenceCli: 'hermes',
-    presenceDirs: ['~/.hermes/'],
-  },
-};
+export type AgentDef = MindosMcpAgentRegistryDef;
 
 export interface SkillWorkspaceProfile {
   mode: SkillInstallModeType;
@@ -413,20 +66,56 @@ export interface AgentInstalledSkills {
   sourcePath: string;
 }
 
-function resolveHiddenRootPath(agent: AgentDef): string {
-  const dirs = agent.presenceDirs ?? [];
-  for (const entry of dirs) {
-    const abs = expandHome(entry);
-    if (!fs.existsSync(abs)) continue;
-    try {
-      const stat = fs.statSync(abs);
-      if (stat.isDirectory()) return abs;
-      if (stat.isFile()) return path.dirname(abs);
-    } catch {
-      continue;
-    }
+/**
+ * Filesystem / process probes for the core adapter layer, routed through THIS
+ * module's `fs` and `child_process` imports so `vi.spyOn(fs, …)` and the
+ * `child_process` mock in Web tests keep intercepting core's reads. Injecting
+ * probes also disables core's process-wide presence / config-read caches (they
+ * only make sense against the real filesystem), so the Web keeps its own 15s
+ * presence cache below.
+ */
+function fsProbes(): AgentConfigProbes {
+  return {
+    pathExists: (p: string) => fs.existsSync(p),
+    readTextFile: (p: string) => fs.readFileSync(p, 'utf-8'),
+    readDir: (p: string) => fs.readdirSync(p, { withFileTypes: true }),
+    stat: (p: string) => fs.statSync(p),
+    commandExists: (command: string) => {
+      try {
+        execFileSync(process.platform === 'win32' ? 'where' : 'which', [command], { stdio: 'pipe' });
+        return true;
+      } catch {
+        return false;
+      }
+    },
+  };
+}
+
+/**
+ * Detection services for the core config readers, routed through THIS module's
+ * fs so behavior stays injectable in Web tests. Relative project-scoped configs
+ * resolve against the mind root (the same base the install handlers write to),
+ * never against the Web server's cwd.
+ */
+function detectionServices(options?: { projectRoot?: string }) {
+  return {
+    projectRoot: options?.projectRoot ?? safeMindRoot(),
+    pathExists: (p: string) => fs.existsSync(p),
+    readTextFile: (p: string) => fs.readFileSync(p, 'utf-8'),
+  };
+}
+
+function safeMindRoot(): string | undefined {
+  try {
+    return effectiveMindRoot() || undefined;
+  } catch {
+    return undefined;
   }
-  return path.dirname(expandHome(agent.global));
+}
+
+/** The agent's hidden root (`~/.claude`, `~/.codex`, …) via the shared core resolver. */
+function resolveHiddenRootPath(agent: AgentDef): string {
+  return resolveAgentHiddenRoot(agent, resolveAgentConfigProbes(fsProbes()));
 }
 
 function readDirectoryEntries(dir: string): fs.Dirent[] {
@@ -445,179 +134,43 @@ function detectSignalsFromName(name: string): { conversation: boolean; usage: bo
   };
 }
 
-function sameNormalizedPath(a: string, b: string): boolean {
-  return path.normalize(a) === path.normalize(b);
-}
-
-function configPathCandidates(agent: AgentDef, scopeType: 'global' | 'project'): string[] {
-  const primary = scopeType === 'global' ? agent.global : agent.project;
-  const readAlso = scopeType === 'global' ? agent.globalReadAlso : agent.projectReadAlso;
-  return [primary, ...(readAlso ?? [])].filter((entry): entry is string => !!entry);
-}
-
-function configFileLooksMindosManagedOnly(filePath: string, agent: AgentDef): boolean {
-  const managedGlobalPaths = configPathCandidates(agent, 'global').map((candidate) => expandHome(candidate));
-  if (!managedGlobalPaths.some((globalPath) => sameNormalizedPath(filePath, globalPath))) return false;
-
-  let content = '';
-  try {
-    content = fs.readFileSync(filePath, 'utf-8');
-  } catch {
-    return false;
-  }
-
-  const trimmed = content.trim();
-  if (!trimmed) return true;
-
-  try {
-    const location = {
-      format: detectConfigFormat(agent.format),
-      sectionKey: agent.key,
-      nestedPath: agent.globalNestedKey,
-    };
-    const names = listMcpServerNamesFromText(content, location);
-    if (!names.every(name => name === 'mindos')) return false;
-    if (location.format !== 'json') return true;
-
-    const parsed = parseJsonc(content) as Record<string, unknown>;
-    const section = agent.globalNestedKey
-      ? getNestedPath(parsed, agent.globalNestedKey)
-      : readOwnRecord(parsed, agent.key);
-    if (!section) return Object.keys(parsed).length === 0;
-
-    if (!agent.globalNestedKey) {
-      const topKeys = Object.keys(parsed);
-      return topKeys.length === 0 || (topKeys.length === 1 && topKeys[0] === agent.key);
-    }
-
-    let cursor: Record<string, unknown> | null = parsed;
-    const parts = agent.globalNestedKey.split('.').filter(Boolean);
-    for (const part of parts) {
-      if (!cursor || Object.keys(cursor).some(key => key !== part)) return false;
-      cursor = cursor[part] && typeof cursor[part] === 'object'
-        ? cursor[part] as Record<string, unknown>
-        : null;
-    }
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function presencePathHasAgentSignal(candidatePath: string, agent: AgentDef): boolean {
-  if (!fs.existsSync(candidatePath)) return false;
-
-  let stat: fs.Stats;
-  try {
-    stat = fs.statSync(candidatePath);
-  } catch {
-    return true;
-  }
-
-  if (stat.isFile()) return !configFileLooksMindosManagedOnly(candidatePath, agent);
-  if (!stat.isDirectory()) return true;
-
-  let entries: fs.Dirent[] = [];
-  try {
-    entries = fs.readdirSync(candidatePath, { withFileTypes: true });
-  } catch {
-    return true;
-  }
-
-  if (entries.length === 0) return false;
-
-  const ignoredEntryNames = new Set(['.DS_Store', 'skills']);
-  for (const entry of entries) {
-    if (ignoredEntryNames.has(entry.name)) continue;
-    const entryPath = path.join(candidatePath, entry.name);
-    if (entry.isFile() && configFileLooksMindosManagedOnly(entryPath, agent)) continue;
-    return true;
-  }
-
-  return false;
-}
-
 export function resolveSkillWorkspaceProfile(agentKey: string): SkillWorkspaceProfile {
   const registration = SKILL_AGENT_REGISTRY[agentKey] ?? { mode: 'unsupported' as const };
-  if (registration.mode === 'universal') {
-    return { mode: registration.mode, workspacePath: expandHome('~/.agents/skills') };
-  }
-  const agent = MCP_AGENTS[agentKey];
-  const workspacePath = agent?.skillDir
-    ? expandHome(agent.skillDir)
-    : path.join(agent ? resolveHiddenRootPath(agent) : expandHome('~/.agents'), 'skills');
-  return {
-    mode: registration.mode,
-    skillAgentName: registration.skillAgentName,
-    workspacePath,
-  };
-}
-
-/**
- * Detection services for the core config readers, routed through THIS
- * module's fs so behavior stays injectable in Web tests. Relative
- * project-scoped configs resolve against the mind root (the same base the
- * install handlers write to), never against the Web server's cwd.
- */
-function detectionServices(options?: { projectRoot?: string }) {
-  return {
-    projectRoot: options?.projectRoot ?? safeMindRoot(),
-    pathExists: (p: string) => fs.existsSync(p),
-    readTextFile: (p: string) => fs.readFileSync(p, 'utf-8'),
-  };
-}
-
-function safeMindRoot(): string | undefined {
-  try {
-    return effectiveMindRoot() || undefined;
-  } catch {
-    return undefined;
-  }
+  const profile = coreResolveSkillWorkspaceProfile(
+    agentKey,
+    MCP_AGENTS[agentKey] ?? ({} as AgentDef),
+    registration as MindosSkillAgentRegistration,
+    resolveAgentConfigProbes(fsProbes()),
+  );
+  return profile as SkillWorkspaceProfile;
 }
 
 export function detectAgentConfiguredMcpServers(agentKey: string, options?: { projectRoot?: string }): AgentConfiguredMcpServers {
   const agent = MCP_AGENTS[agentKey];
   if (!agent) return { servers: [], sources: [] };
-  return detectAgentConfiguredMcpServersFromConfigs(agent as MindosMcpAgentRegistryDef, detectionServices(options));
+  return detectAgentConfiguredMcpServersFromConfigs(agent, detectionServices(options));
 }
 
 export function detectAgentInstalledSkills(agentKey: string): AgentInstalledSkills {
   const profile = resolveSkillWorkspaceProfile(agentKey);
   const sourcePath = profile.workspacePath;
-  if (!fs.existsSync(sourcePath)) return { skills: [], sourcePath };
-  let entries: fs.Dirent[] = [];
-  try {
-    entries = fs.readdirSync(sourcePath, { withFileTypes: true });
-  } catch {
-    return { skills: [], sourcePath };
-  }
-  const skills = entries
-    .filter((entry) => (entry.isDirectory() || entry.isSymbolicLink()) && !entry.name.startsWith('.'))
-    .map((entry) => entry.name)
-    .sort((a, b) => a.localeCompare(b));
+  const skills = listInstalledSkillNames(sourcePath, resolveAgentConfigProbes(fsProbes()));
   return { skills, sourcePath };
 }
 
 export function detectAgentRuntimeSignals(agentKey: string): AgentRuntimeSignals {
   const agent = MCP_AGENTS[agentKey];
   if (!agent) {
-    return {
-      hiddenRootPath: '',
-      hiddenRootPresent: false,
-      conversationSignal: false,
-      usageSignal: false,
-    };
+    return { hiddenRootPath: '', hiddenRootPresent: false, conversationSignal: false, usageSignal: false };
   }
   const hiddenRootPath = resolveHiddenRootPath(agent);
   if (!fs.existsSync(hiddenRootPath)) {
-    return {
-      hiddenRootPath,
-      hiddenRootPresent: false,
-      conversationSignal: false,
-      usageSignal: false,
-    };
+    return { hiddenRootPath, hiddenRootPresent: false, conversationSignal: false, usageSignal: false };
   }
 
+  // Depth-3 / 300-entry walk of the agent home for conversation + usage
+  // signals. Web-only (the standalone product server's default runtime signals
+  // do not walk); it backs the agent-detail Activity / Runtime sections.
   const maxDepth = 3;
   const maxEntries = 300;
   let scanned = 0;
@@ -672,15 +225,15 @@ export function detectInstalled(
 ): { installed: boolean; scope?: string; transport?: string; configPath?: string; url?: string } {
   const agent = MCP_AGENTS[agentKey];
   if (!agent) return { installed: false };
-  return detectAgentInstalledFromConfigs(agent as MindosMcpAgentRegistryDef, detectionServices(options));
+  return detectAgentInstalledFromConfigs(agent, detectionServices(options));
 }
-
 
 /* ── Agent Presence Detection ──────────────────────────────────────────── */
 
-// `GET /api/mcp/agents` used to spawn one synchronous `which` per registry
-// entry (~20 processes) on every request; presence rarely changes, so a short
-// memo bounds the cost while still noticing a fresh install within seconds.
+// `GET /api/mcp/agents` probes ~27 agents per request (a `which` spawn each);
+// presence rarely changes, so the Web host keeps a short memo. Core's own cache
+// is off here because we inject fs probes (see fsProbes), so this is the only
+// presence cache in the Web path.
 const PRESENCE_CACHE_TTL_MS = 15_000;
 const presenceCache = new Map<string, { at: number; value: boolean }>();
 
@@ -698,18 +251,9 @@ export function detectAgentPresence(agentKey: string): boolean {
 }
 
 function detectAgentPresenceUncached(agentKey: string): boolean {
-  const agent = MCP_AGENTS[agentKey];
-  if (!agent) return false;
-  // 1. CLI check
-  if (agent.presenceCli) {
-    try {
-      execFileSync(process.platform === 'win32' ? 'where' : 'which', [agent.presenceCli], { stdio: 'pipe' });
-      return true;
-    } catch { /* not found */ }
-  }
-  // 2. Dir check
-  if (agent.presenceDirs?.some(d => presencePathHasAgentSignal(expandHome(d), agent))) return true;
-  return false;
+  const def = MCP_AGENTS[agentKey];
+  if (!def) return false;
+  return coreDetectAgentPresence(agentKey, def, resolveAgentConfigProbes(fsProbes()));
 }
 
 /* ── Skill Link Agents (skill × agent matrix) ──────────────────────────── */

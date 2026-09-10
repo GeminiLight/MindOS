@@ -215,6 +215,7 @@
   },
   "files": [
     "bin/mindos-shim.cjs",
+    "bin/lib/generated/",
     "dist/",
     "src/cli.js",
     "src/cli.d.ts",
@@ -229,7 +230,7 @@
     "type-check": "tsc --noEmit",
     "test": "vitest run --dir src",
     "test:watch": "vitest",
-    "build": "tsc && node ../../scripts/copy-mindos-agent-assets.mjs && pnpm run build:protocols",
+    "build": "tsc && node ../../scripts/copy-mindos-agent-assets.mjs && node ../../scripts/build-cli-bundles.mjs && pnpm run build:protocols",
     "build:protocols": "node ../../scripts/build-product-protocols.mjs",
     "build:platform-packages": "node ../../scripts/build-platform-packages.mjs"
   },

@@ -104,3 +104,6 @@ TMUX_DOC.md
 collect-session-ids.py
 packages/web/__fixtures__/real-plugins/
 wiki/migration/
+
+# generated CLI bundle (scripts/build-cli-bundles.mjs)
+packages/mindos/bin/lib/generated/

@@ -1,85 +1,47 @@
-import { existsSync, readFileSync, writeFileSync, mkdirSync, renameSync, unlinkSync } from 'node:fs';
-import { randomBytes } from 'node:crypto';
-import { resolve } from 'node:path';
-import { CONFIG_PATH } from './constants.js';
+/**
+ * `mindos mcp install` — interactive connect flow.
+ *
+ * Orchestration only: entry building, config writes and the per-agent skill
+ * copy run through `installAgentConnection` from the generated agent-config
+ * bundle — the same install transaction `POST /api/mcp/install` uses, so one
+ * agent is either fully connected (MCP entry + MindOS skill) or rolled back.
+ * Previously this file wrote every MCP config first and batch-copied skills
+ * afterwards (two-phase, no rollback).
+ */
+import { readFileSync } from 'node:fs';
+
+import { loadAgentConfigBundle } from './agent-config.js';
 import { bold, dim, cyan, green, red, yellow } from './colors.js';
-import { expandHome } from './path-expand.js';
-import { parseJsonc, parseJsoncDocument, setJsoncValue } from './jsonc.js';
-import { MCP_AGENTS, detectAgentPresence } from './mcp-agents.js';
-import { mergeTomlEntry } from './toml.js';
-import { mergeYamlEntry } from './yaml.js';
+import { CONFIG_PATH } from './constants.js';
 import { EXIT } from './command.js';
+import { MCP_AGENTS, SKILL_AGENT_REGISTRY, detectAgentPresence } from './mcp-agents.js';
 import { getActiveSkillName } from './agent-readiness.js';
-import { installMindosSkillsForAgents } from './skill-install.js';
+import { findSkillSourceRoot, installMindosSkillsForAgents } from './skill-install.js';
 
-/**
- * Read-only walk of a dot-separated path. Returns null if any segment is missing.
- */
-function readNestedPath(obj, dotPath) {
-  const parts = dotPath.split('.').filter(Boolean);
-  let current = obj;
-  for (const part of parts) {
-    if (!current || typeof current !== 'object') return null;
-    current = current[part];
-  }
-  if (!current || typeof current !== 'object') return null;
-  return current;
-}
+const {
+  buildMindosMcpServerEntry,
+  createAgentConfigAdapter,
+  defaultMindosMcpUrl,
+  installAgentConnection,
+  setJsoncValue,
+  writeFileAtomically,
+} = await loadAgentConfigBundle();
 
-/**
- * Write via same-directory temp file + rename so a crash mid-write can never
- * leave a third-party agent config truncated. Mirrors
- * src/server/handlers/mcp-config-formats.ts#writeFileAtomically: the temp name
- * carries pid, time and a random tail so concurrent writers never collide.
- */
-export function writeFileAtomically(absPath, content) {
-  const tmpPath = `${absPath}.tmp-${process.pid}.${Date.now().toString(36)}.${randomBytes(3).toString('hex')}`;
-  try {
-    writeFileSync(tmpPath, content, 'utf-8');
-    renameSync(tmpPath, absPath);
-  } catch (error) {
-    try { unlinkSync(tmpPath); } catch { /* temp file was never created */ }
-    throw error;
-  }
-}
+export { writeFileAtomically, MCP_AGENTS };
 
 /**
  * Insert `entry` under `path` (array of keys) editing the existing JSON/JSONC
  * text in place so user comments and formatting survive, then write
- * atomically. Mirrors src/server/handlers/mcp-install.ts#writeJsonServerEntry.
+ * atomically. Kept as an export: `tests/unit/cli-mcp-install-atomic.test.ts`
+ * pins this contract.
  */
 export function writeJsonServerEntry(absPath, existingText, path, entry) {
   writeFileAtomically(absPath, setJsoncValue(existingText, path, entry));
 }
 
-function configPathCandidates(agent, scope) {
-  const primary = scope === 'global' ? agent.global : agent.project;
-  const readAlso = scope === 'global' ? agent.globalReadAlso : agent.projectReadAlso;
-  return [primary, ...(readAlso ?? [])].filter(Boolean);
-}
-
-export { MCP_AGENTS };
-
-function buildMcpEntry(agent, transport, url, token) {
-  if (agent.entryStyle === 'kilo') {
-    if (transport === 'stdio') {
-      return {
-        type: 'local',
-        command: ['mindos', 'mcp'],
-        environment: { MCP_TRANSPORT: 'stdio' },
-        enabled: true,
-      };
-    }
-    return token
-      ? { type: 'remote', url, headers: { Authorization: `Bearer ${token}` }, enabled: true }
-      : { type: 'remote', url, enabled: true };
-  }
-
-  return transport === 'stdio'
-    ? { type: 'stdio', command: 'mindos', args: ['mcp'], env: { MCP_TRANSPORT: 'stdio' } }
-    : token
-      ? { url, headers: { Authorization: `Bearer ${token}` } }
-      : { url };
+/** Adapters resolve relative project configs against the CLI's cwd (historical `mindos mcp install` behaviour). */
+function adapterFor(agentKey) {
+  return createAgentConfigAdapter(agentKey, MCP_AGENTS[agentKey], SKILL_AGENT_REGISTRY[agentKey], { projectRoot: process.cwd() });
 }
 
 // ─── Interactive select (arrow keys) ──────────────────────────────────────────
@@ -256,37 +218,12 @@ export async function mcpInstall() {
       const agentOptions = keys.map(k => {
         const agent = MCP_AGENTS[k];
         const present = detectAgentPresence(k);
-        // Check if already configured
+        // Already configured? The adapter reads every readable config
+        // (global + project candidates, all formats) like the server does.
         let installed = false;
-        for (const cfgPath of [
-          ...configPathCandidates(agent, 'global'),
-          ...configPathCandidates(agent, 'project'),
-        ]) {
-          const abs = expandHome(cfgPath);
-          if (!existsSync(abs)) continue;
-          try {
-            const content = readFileSync(abs, 'utf-8');
-            if (agent.format === 'toml') {
-              // TOML: look for [section.mindos] header
-              installed = content.includes(`[${agent.key}.mindos]`);
-            } else if (agent.format === 'yaml') {
-              // YAML: look for "  mindos:" under the section key
-              const yamlPattern = new RegExp(`^\\s{2}mindos\\s*:`, 'm');
-              installed = yamlPattern.test(content);
-            } else {
-              const config = parseJsonc(content);
-              // For agents with globalNestedKey (e.g. CoPaw: mcp.clients),
-              // check the nested path for mindos entry
-              if (agent.globalNestedKey) {
-                const nested = readNestedPath(config, agent.globalNestedKey);
-                if (nested?.mindos) installed = true;
-              } else {
-                if (config[agent.key]?.mindos) installed = true;
-              }
-            }
-            if (installed) break;
-          } catch {}
-        }
+        try {
+          installed = !!adapterFor(k).readServer('mindos');
+        } catch { /* unreadable config = not configured */ }
         const hint = installed ? 'configured' : present ? 'detected' : 'not found';
         return { label: agent.name, hint, value: k, preselect: installed || present };
       });
@@ -335,6 +272,7 @@ export async function mcpInstall() {
   // ── 3. url + token (only for http) ─────────────────────────────────────────
   let url = urlArg;
   let token = tokenArg;
+  let mcpPort = 8781;
 
   if (transport === 'http') {
     // Re-open readline for text input
@@ -343,11 +281,11 @@ export async function mcpInstall() {
     const ask2 = (q) => new Promise(r => rl2.question(q, r));
 
     if (!url) {
-      let mcpPort = 8781;
       try { mcpPort = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')).mcpPort || 8781; } catch {}
       // 127.0.0.1 (not localhost): the MCP server binds IPv4 and some Windows
-      // stacks resolve localhost to ::1 first; keep in sync with src/server/handlers/mcp-install.ts
-      const defaultUrl = `http://127.0.0.1:${mcpPort}/mcp`;
+      // stacks resolve localhost to ::1 first — defaultMindosMcpUrl is the
+      // single source shared with the product server.
+      const defaultUrl = defaultMindosMcpUrl(mcpPort);
       url = hasYesFlag ? defaultUrl : (await ask2(`${bold('MCP URL')} ${dim(`[${defaultUrl}]:`)} `)).trim() || defaultUrl;
     }
 
@@ -366,13 +304,16 @@ export async function mcpInstall() {
     rl2.close();
   }
 
-  // ── 4. install for each selected agent ─────────────────────────────────────
+  // ── 4. install for each selected agent (MCP entry + skill, one transaction) ─
+  const activeSkill = getActiveSkillName();
+  const sourceRoot = findSkillSourceRoot(activeSkill);
   const configuredAgentKeys = [];
+  const skillResults = [];
   const mcpFailures = [];
 
   for (const agentKey of agentKeys) {
     const agent = MCP_AGENTS[agentKey];
-    const entry = buildMcpEntry(agent, transport, url, token);
+    const adapter = adapterFor(agentKey);
 
     // scope — default to global
     let isGlobal = hasGlobalFlag;
@@ -392,79 +333,68 @@ export async function mcpInstall() {
       }
     }
 
-    const configPath = isGlobal ? agent.global : agent.project;
-    if (!configPath) {
-      const error = `${agent.name} does not support ${isGlobal ? 'global' : 'project'} scope`;
+    const scope = isGlobal ? 'global' : 'project';
+    if (!adapter.hasScope(scope)) {
+      const error = `${agent.name} does not support ${scope} scope`;
       console.error(red(`  ${error} — skipping.`));
       mcpFailures.push({ agentKey, name: agent.name, error });
       continue;
     }
 
-    // read + merge — resolve to absolute path for cross-platform safety
-    const absPath = resolve(expandHome(configPath));
-    const dir = resolve(absPath, '..');
-    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-
-    let existed = false;
-
-    if (agent.format === 'toml') {
-      // TOML format (e.g. Codex): line-based merge preserving existing content
-      const existing = existsSync(absPath) ? readFileSync(absPath, 'utf-8') : '';
-      existed = existing.includes(`[${agent.key}.mindos]`);
-      const merged = mergeTomlEntry(existing, agent.key, 'mindos', entry);
-      writeFileAtomically(absPath, merged);
-    } else if (agent.format === 'yaml') {
-      // YAML format (e.g. Hermes): line-based merge preserving existing content
-      const existing = existsSync(absPath) ? readFileSync(absPath, 'utf-8') : '';
-      const yamlPattern = new RegExp(`^\\s{2}mindos\\s*:`, 'm');
-      existed = yamlPattern.test(existing);
-      const merged = mergeYamlEntry(existing, agent.key, 'mindos', entry);
-      writeFileAtomically(absPath, merged);
-    } else {
-      // JSON / JSONC format (default): edit the existing text in place so user
-      // comments and formatting survive (jsonc-parser modify + applyEdits).
-      let existingText = '';
-      let config = {};
-      if (existsSync(absPath)) {
-        existingText = readFileSync(absPath, 'utf-8');
-        const parsed = parseJsoncDocument(existingText);
-        if (parsed.value === undefined) {
-          try { config = parseJsonc(existingText); } catch {
-            const error = `Failed to parse existing config: ${absPath} (${parsed.errors.join('; ')})`;
-            console.error(red(`  ${error} — skipping.`));
-            mcpFailures.push({ agentKey, name: agent.name, error });
-            continue;
-          }
-        } else if (!parsed.value || typeof parsed.value !== 'object' || Array.isArray(parsed.value)) {
-          const error = `Failed to parse existing config: ${absPath} (expected a JSON object at the document root)`;
-          console.error(red(`  ${error} — skipping.`));
-          mcpFailures.push({ agentKey, name: agent.name, error });
-          continue;
-        } else {
-          config = parsed.value;
-          if (parsed.errors.length > 0) {
-            console.log(yellow(`  ! ${absPath} has JSONC syntax issues (${parsed.errors.join('; ')}); edited in place without repairing them`));
-          }
+    const entry = buildMindosMcpServerEntry(agent, transport, { url, token, fallbackPort: mcpPort });
+    const outcome = installAgentConnection({
+      adapter,
+      scope,
+      entry,
+      ...(sourceRoot
+        ? {
+          skill: {
+            name: activeSkill,
+            sourceRoots: [{ path: sourceRoot, source: 'builtin', origin: 'project-builtin', editable: false }],
+            deps: { strategy: 'copy' },
+          },
         }
-      }
+        : {}),
+    });
 
-      // For global scope with nested key (e.g. CoPaw: mcp.clients),
-      // write to the nested path instead of the flat key
-      const useNestedKey = isGlobal && agent.globalNestedKey;
-      const entryPath = useNestedKey
-        ? [...agent.globalNestedKey.split('.').filter(Boolean), 'mindos']
-        : [agent.key, 'mindos'];
-      const container = useNestedKey ? readNestedPath(config, agent.globalNestedKey) : config[agent.key];
-      existed = !!(container && typeof container === 'object' && container.mindos);
-      writeJsonServerEntry(absPath, existingText, entryPath, entry);
+    if (!outcome.ok || !outcome.config) {
+      const error = outcome.message ?? 'Install failed';
+      console.error(red(`  ${agent.name}: ${error}${outcome.rolledBack ? ' (rolled back)' : ''} — skipping.`));
+      mcpFailures.push({ agentKey, name: agent.name, error });
+      continue;
     }
 
-    console.log(`${green('✔')} ${existed ? 'Updated' : 'Installed'} MindOS MCP for ${bold(agent.name)} ${dim(`→ ${absPath}`)}`);
+    for (const warning of outcome.warnings) console.log(yellow(`  ! ${warning}`));
+    console.log(`${green('✔')} ${outcome.config.existed ? 'Updated' : 'Installed'} MindOS MCP for ${bold(agent.name)} ${dim(`→ ${outcome.config.absPath}`)}`);
     configuredAgentKeys.push(agentKey);
+    if (outcome.skill.status !== 'skipped') {
+      skillResults.push({
+        agentKey,
+        name: agent.name,
+        status: outcome.skill.status,
+        workspacePath: outcome.skill.workspacePath,
+        skillPath: outcome.skill.skillPath,
+        ...(outcome.skill.status === 'failed' ? { error: outcome.skill.message } : {}),
+      });
+    }
   }
 
-  const activeSkill = getActiveSkillName();
-  const skillSummary = installMindosSkillsForAgents(configuredAgentKeys, { skillName: activeSkill });
+  let skillSummary;
+  if (configuredAgentKeys.length === 0) {
+    skillSummary = { ok: true, skillName: activeSkill, sourceRoot, results: [] };
+  } else if (sourceRoot) {
+    // Skills were installed inside each agent's transaction above.
+    skillSummary = {
+      ok: skillResults.every((result) => ['exists', 'copied', 'repaired'].includes(result.status)),
+      skillName: activeSkill,
+      sourceRoot,
+      results: skillResults,
+    };
+  } else {
+    // No packaged skill found: report the miss exactly like the standalone path.
+    skillSummary = installMindosSkillsForAgents(configuredAgentKeys, { skillName: activeSkill });
+  }
+
   const copiedCount = skillSummary.results.filter((result) => result.status === 'copied').length;
   const repairedCount = skillSummary.results.filter((result) => result.status === 'repaired').length;
   const existingCount = skillSummary.results.filter((result) => result.status === 'exists').length;

@@ -23,29 +23,39 @@ describe('Bun single-binary runtime contract', () => {
     expect(spec).toContain('OpenCode');
   });
 
-  it('keeps the CLI source free of static bare npm imports (the compiled binary cannot resolve them)', () => {
+  it('keeps the CLI source free of static bare npm imports (the compiled binary cannot resolve them)', async () => {
     // A Bun standalone executable extracts bin/, dist/ and node_modules/ to
     // ~/.mindos/runtime-cache but cannot resolve bare specifiers from those
     // files: `import x from 'pkg'`, `require('pkg')` and createRequire all fail
     // with "Cannot find package". Only exact file paths load. CLI modules must
     // therefore import node builtins and relative files statically, and load
     // any npm dependency through an explicit file-path fallback (see
-    // packages/mindos/bin/lib/jsonc.js).
+    // packages/mindos/bin/lib/jsonc.js). The generated agent-config bundle is
+    // scanned too: esbuild must have inlined jsonc-parser, leaving only node:*.
+    const { ensureAgentConfigBundle } = await import('../packages/mindos/bin/lib/agent-config.js');
+    ensureAgentConfigBundle();
     const builtins = new Set(builtinModules.flatMap((name) => [name, `node:${name}`]));
     const offenders: string[] = [];
-    const files = ['packages/mindos/bin', 'packages/mindos/bin/lib'].flatMap((dir) =>
-      readdirSync(resolve(root, dir))
+    const files = ['packages/mindos/bin', 'packages/mindos/bin/lib', 'packages/mindos/bin/lib/generated'].flatMap((dir) => {
+      const abs = resolve(root, dir);
+      if (!existsSync(abs)) return [];
+      return readdirSync(abs)
         .filter((name) => /\.(c?js|mjs)$/.test(name))
-        .map((name) => `${dir}/${name}`),
-    );
+        .map((name) => `${dir}/${name}`);
+    });
+    expect(files).toContain('packages/mindos/bin/lib/generated/agent-config.mjs');
     for (const file of files) {
       const source = read(file);
+      const isMinifiedBundle = file.includes('bin/lib/generated/');
       const specifiers = [
         ...source.matchAll(/^\s*import\s[^;]*?\sfrom\s+['"]([^'"]+)['"]/gm),
         ...source.matchAll(/^\s*import\s+['"]([^'"]+)['"]/gm),
+        // Minified esbuild output drops the whitespace: `}from"node:fs"`.
+        ...(isMinifiedBundle ? source.matchAll(/\bfrom\s*['"]([^'"]+)['"]|\bimport\s*['"]([^'"]+)['"]/g) : []),
         ...source.matchAll(/\brequire\(\s*['"]([^'"]+)['"]\s*\)/g),
       ].map((match) => match[1]);
       for (const specifier of specifiers) {
+        if (!specifier) continue;
         if (specifier.startsWith('.') || specifier.startsWith('/') || builtins.has(specifier)) continue;
         offenders.push(`${file}: ${specifier}`);
       }

@@ -53,7 +53,7 @@ describe('MindOS runtime product kernel contract', () => {
     };
 
     expect(manifest.name).toBe('@geminilight/mindos');
-    expect(manifest.scripts?.build).toBe('tsc && node ../../scripts/copy-mindos-agent-assets.mjs && pnpm run build:protocols');
+    expect(manifest.scripts?.build).toBe('tsc && node ../../scripts/copy-mindos-agent-assets.mjs && node ../../scripts/build-cli-bundles.mjs && pnpm run build:protocols');
     expect(manifest.scripts?.['build:protocols']).toBe('node ../../scripts/build-product-protocols.mjs');
     expect(Object.keys(manifest.dependencies ?? {}).sort()).toEqual([
       '@anthropic-ai/claude-agent-sdk',

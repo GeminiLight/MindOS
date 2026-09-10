@@ -1,44 +1,34 @@
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
-import { dirname, isAbsolute, resolve } from 'node:path';
+import { isAbsolute } from 'node:path';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
 import type { MindosServerEventEmitter } from '../events/bus.js';
-import { expandHome } from '../../foundation/shared/utils/path.js';
 import {
+  AgentConfigProjectRootError,
+  AgentConfigScopeError,
+  agentConfigPathNeedsProjectRoot,
   assertSafeMcpServerName,
-  detectConfigFormat,
-  readMcpServerEntryFromText,
-  removeMcpServerEntryFromFile,
-  writeMcpServerEntryToFile,
-  type McpServerEntryLocation,
-} from './mcp-config-formats.js';
+  buildMindosMcpServerEntry,
+  createAgentConfigAdapters,
+  DEFAULT_MINDOS_MCP_PORT,
+  installAgentConnection,
+  resolveAgentConfigPath,
+  type AgentConfigAdapter,
+  type AgentConfigAdapterRegistry,
+  type AgentConfigLocationDef,
+  type AgentConfigPathServices,
+  type AgentConfigScope,
+  type SkillAgentRegistration,
+  type SkillWorkspaceProfile,
+} from '../../agent/config/index.js';
 
-export type MindosMcpAgentDef = {
-  name: string;
-  project: string | null;
-  global: string;
-  projectReadAlso?: string[];
-  globalReadAlso?: string[];
-  key: string;
-  preferredTransport: 'stdio' | 'http';
-  format?: 'json' | 'toml' | 'yaml';
-  globalNestedKey?: string;
-  entryStyle?: 'standard' | 'kilo';
-};
+export { AgentConfigProjectRootError, agentConfigPathNeedsProjectRoot, resolveAgentConfigPath, type AgentConfigPathServices };
 
-export type MindosSkillAgentRegistration = {
-  mode: 'universal' | 'additional' | 'unsupported';
-  skillAgentName?: string;
-};
-
-export type MindosSkillWorkspaceProfile = {
-  mode: 'universal' | 'additional' | 'unsupported';
-  skillAgentName?: string;
-  workspacePath: string;
-};
+export type MindosMcpAgentDef = AgentConfigLocationDef;
+export type MindosSkillAgentRegistration = SkillAgentRegistration;
+export type MindosSkillWorkspaceProfile = SkillWorkspaceProfile;
 
 export type MindosMcpInstallItem = {
   key: string;
-  scope: 'project' | 'global';
+  scope: AgentConfigScope;
   transport?: 'stdio' | 'http' | 'auto';
 };
 
@@ -54,7 +44,7 @@ export type MindosMcpInstallRequest = {
 export type MindosMcpUninstallRequest = {
   agents?: Array<{
     key: string;
-    scope: 'project' | 'global';
+    scope: AgentConfigScope;
     serverName?: string;
   }>;
   projectRoot?: string;
@@ -62,14 +52,14 @@ export type MindosMcpUninstallRequest = {
 
 export type MindosMcpServerCopyTarget = {
   key: string;
-  scope?: 'project' | 'global';
+  scope?: AgentConfigScope;
   overwrite?: boolean;
 };
 
 export type MindosMcpServerCopyRequest = {
   serverName?: string;
   sourceAgentKey?: string;
-  sourceScope?: 'project' | 'global';
+  sourceScope?: AgentConfigScope;
   targets?: MindosMcpServerCopyTarget[];
   projectRoot?: string;
 };
@@ -120,48 +110,9 @@ function withWarnings(result: MindosMcpInstallResult, warnings: string[]): Mindo
   return result;
 }
 
-function configPathCandidates(agent: MindosMcpAgentDef, scope: 'global' | 'project'): string[] {
-  const primary = scope === 'global' ? agent.global : agent.project;
-  const readAlso = scope === 'global' ? agent.globalReadAlso : agent.projectReadAlso;
-  return [primary, ...(readAlso ?? [])].filter((entry): entry is string => !!entry);
-}
-
-/** A relative project-scoped config path was asked for without any project root to anchor it. */
-export class AgentConfigProjectRootError extends Error {
-  readonly status = 400;
-
-  constructor(configPath: string) {
-    super(`Project-scoped agent config "${configPath}" needs a project root; pass projectRoot or install into global scope.`);
-    this.name = 'AgentConfigProjectRootError';
-  }
-}
-
-export type AgentConfigPathServices = {
-  homeDir?: string;
-  projectRoot?: string;
-};
-
-/**
- * Absolute location of one agent config path. Global paths only expand `~`.
- * Relative project paths (`.mcp.json`, `.cursor/mcp.json`) resolve against
- * the explicit project root and never against `process.cwd()`: the Web
- * server's cwd is its runtime directory, not anything the user calls a project.
- */
-export function resolveAgentConfigPath(
-  configPath: string,
-  scope: 'project' | 'global',
-  services: AgentConfigPathServices,
-): string {
-  const expanded = expandHome(configPath, services.homeDir);
-  if (scope !== 'project' || isAbsolute(expanded)) return expanded;
-  const root = services.projectRoot?.trim();
-  if (!root || !isAbsolute(root)) throw new AgentConfigProjectRootError(configPath);
-  return resolve(root, expanded);
-}
-
-/** True when `configPath` at `scope` cannot be resolved without a project root. */
-export function agentConfigPathNeedsProjectRoot(configPath: string, scope: 'project' | 'global', homeDir?: string): boolean {
-  return scope === 'project' && !isAbsolute(expandHome(configPath, homeDir));
+/** Adapters over the request's agent registry, resolving paths against the request's home and project root. */
+function adaptersFor(agents: Record<string, MindosMcpAgentDef>, pathServices: AgentConfigPathServices): AgentConfigAdapterRegistry {
+  return createAgentConfigAdapters({ agents, probes: { homeDir: pathServices.homeDir, projectRoot: pathServices.projectRoot } });
 }
 
 /**
@@ -181,117 +132,33 @@ function resolveRequestProjectRoot(
 
 /** 400 body when any requested item needs a project root that nobody supplied; null otherwise. */
 function missingProjectRootError(
-  items: Array<{ key: string; scope: 'project' | 'global' }>,
-  agents: Record<string, MindosMcpAgentDef>,
-  services: AgentConfigPathServices,
+  items: Array<{ key: string; scope: AgentConfigScope }>,
+  registry: AgentConfigAdapterRegistry,
 ): string | null {
-  if (services.projectRoot && isAbsolute(services.projectRoot)) return null;
   for (const item of items) {
-    const agent = agents[item.key];
-    if (!agent || item.scope !== 'project') continue;
-    const needsRoot = configPathCandidates(agent, 'project')
-      .some((configPath) => agentConfigPathNeedsProjectRoot(configPath, 'project', services.homeDir));
-    if (needsRoot) return `${agent.name} project scope needs a project root; pass projectRoot or install into global scope.`;
+    const adapter = registry.get(item.key);
+    if (!adapter || item.scope !== 'project') continue;
+    if (adapter.needsProjectRoot('project')) {
+      return `${adapter.def.name} project scope needs a project root; pass projectRoot or install into global scope.`;
+    }
   }
   return null;
 }
 
-/**
- * Where `agent` keeps its servers map for `scope`. Only the global config of
- * CoPaw-style agents nests the map under a dotted path (`mcp.clients`).
- */
-function entryLocation(agent: MindosMcpAgentDef, scope: 'project' | 'global'): McpServerEntryLocation {
+function unknownAgent(key: string): MindosMcpInstallResult {
+  return { agent: key, status: 'error', message: `Unknown agent: ${key}` };
+}
+
+function notDetected(adapter: AgentConfigAdapter): MindosMcpInstallResult {
   return {
-    format: detectConfigFormat(agent.format),
-    sectionKey: agent.key,
-    nestedPath: scope === 'global' ? agent.globalNestedKey : undefined,
+    agent: adapter.key,
+    status: 'error',
+    message: `${adapter.def.name} was not detected on this machine. Install the agent first, then refresh.`,
   };
 }
 
-function buildEntry(
-  transport: 'stdio' | 'http',
-  agent: MindosMcpAgentDef,
-  services: MindosMcpInstallServices,
-  url?: string,
-  token?: string,
-): Record<string, unknown> {
-  if (agent.entryStyle === 'kilo') {
-    if (transport === 'stdio') {
-      return {
-        type: 'local',
-        command: ['mindos', 'mcp'],
-        environment: { MCP_TRANSPORT: 'stdio' },
-        enabled: true,
-      };
-    }
-    const fallbackPort = Number(services.env?.MINDOS_MCP_PORT) || services.readSettings?.().mcpPort || 8781;
-    const entry: Record<string, unknown> = {
-      type: 'remote',
-      // 127.0.0.1 (not localhost): the MCP server binds an IPv4 socket and some
-      // Windows HTTP stacks resolve localhost to ::1 first without fallback
-      url: url || `http://127.0.0.1:${fallbackPort}/mcp`,
-      enabled: true,
-    };
-    if (token) entry.headers = { Authorization: `Bearer ${token}` };
-    return entry;
-  }
-
-  if (transport === 'stdio') {
-    return { type: 'stdio', command: 'mindos', args: ['mcp'], env: { MCP_TRANSPORT: 'stdio' } };
-  }
-  const fallbackPort = Number(services.env?.MINDOS_MCP_PORT) || services.readSettings?.().mcpPort || 8781;
-  // 127.0.0.1 (not localhost) — see remote-entry comment above
-  const entry: Record<string, unknown> = { url: url || `http://127.0.0.1:${fallbackPort}/mcp` };
-  if (token) entry.headers = { Authorization: `Bearer ${token}` };
-  return entry;
-}
-
-function findMcpServerEntry(
-  agent: MindosMcpAgentDef,
-  serverName: string,
-  services: AgentConfigPathServices,
-  sourceScope?: 'project' | 'global',
-): { entry: Record<string, unknown>; path: string; scope: 'project' | 'global' } | null {
-  const scopes = sourceScope ? [sourceScope] : (['global', 'project'] as const);
-  for (const scope of scopes) {
-    for (const configPath of configPathCandidates(agent, scope)) {
-      // A lookup without a project root simply cannot see relative project configs.
-      if (agentConfigPathNeedsProjectRoot(configPath, scope, services.homeDir) && !services.projectRoot) continue;
-      const absPath = resolveAgentConfigPath(configPath, scope, services);
-      if (!existsSync(absPath)) continue;
-      const entry = readMcpServerEntryFromText(readFileSync(absPath, 'utf-8'), entryLocation(agent, scope), serverName);
-      if (entry) return { entry, path: configPath, scope };
-    }
-  }
-  return null;
-}
-
-function writeMcpServerEntry(
-  agentKey: string,
-  agent: MindosMcpAgentDef,
-  scope: 'project' | 'global',
-  serverName: string,
-  entry: Record<string, unknown>,
-  overwrite: boolean,
-  services: AgentConfigPathServices,
-): MindosMcpInstallResult {
-  assertSafeMcpServerName(serverName);
-  const configPath = scope === 'global' ? agent.global : agent.project;
-  if (!configPath) {
-    return { agent: agentKey, status: 'error', message: `${agent.name} does not support ${scope} scope` };
-  }
-
-  const absPath = resolveAgentConfigPath(configPath, scope, services);
-  mkdirSync(dirname(absPath), { recursive: true });
-  const existing = existsSync(absPath) ? readFileSync(absPath, 'utf-8') : '';
-  const location = entryLocation(agent, scope);
-  const existingEntry = existing.trim() ? readMcpServerEntryFromText(existing, location, serverName) : null;
-  if (existingEntry && !overwrite) {
-    return { agent: agentKey, status: 'ok', path: configPath, message: 'Already configured' };
-  }
-
-  const warnings = writeMcpServerEntryToFile(absPath, existing, location, serverName, entry);
-  return withWarnings({ agent: agentKey, status: 'ok', path: configPath }, warnings);
+function mcpPortFrom(services: MindosMcpInstallServices): number {
+  return Number(services.env?.MINDOS_MCP_PORT) || services.readSettings?.().mcpPort || DEFAULT_MINDOS_MCP_PORT;
 }
 
 async function verifyHttpConnection(
@@ -328,8 +195,8 @@ export async function handleMcpInstallPost(
   try {
     const root = resolveRequestProjectRoot(body, services);
     if ('error' in root) return json({ error: root.error }, { status: 400 });
-    const pathServices: AgentConfigPathServices = { homeDir: services.homeDir, projectRoot: root.projectRoot };
-    const missingRoot = missingProjectRootError(body.agents ?? [], services.agents, pathServices);
+    const registry = adaptersFor(services.agents, { homeDir: services.homeDir, projectRoot: root.projectRoot });
+    const missingRoot = missingProjectRootError(body.agents ?? [], registry);
     if (missingRoot) return json({ error: missingRoot }, { status: 400 });
 
     const results: MindosMcpInstallResult[] = [];
@@ -337,9 +204,9 @@ export async function handleMcpInstallPost(
 
     for (const item of body.agents ?? []) {
       const { key, scope } = item;
-      const agent = services.agents[key];
-      if (!agent) {
-        results.push({ agent: key, status: 'error', message: `Unknown agent: ${key}` });
+      const adapter = registry.get(key);
+      if (!adapter) {
+        results.push(unknownAgent(key));
         continue;
       }
 
@@ -347,45 +214,37 @@ export async function handleMcpInstallPost(
         ? item.transport
         : globalTransport !== 'auto'
           ? globalTransport
-          : agent.preferredTransport;
-      const configPath = scope === 'global' ? agent.global : agent.project;
-      if (!configPath) {
-        results.push({ agent: key, status: 'error', message: `${agent.name} does not support ${scope} scope` });
+          : adapter.def.preferredTransport;
+      if (!adapter.hasScope(scope)) {
+        results.push({ agent: key, status: 'error', message: new AgentConfigScopeError(adapter.def.name, scope).message });
         continue;
       }
-
       if (services.requireAgentPresence && !services.detectAgentPresence?.(key)) {
-        results.push({
-          agent: key,
-          status: 'error',
-          message: `${agent.name} was not detected on this machine. Install the agent first, then refresh.`,
-        });
+        results.push(notDetected(adapter));
         continue;
       }
 
-      const absPath = resolveAgentConfigPath(configPath, scope, pathServices);
-      const entry = buildEntry(effectiveTransport, agent, services, body.url, body.token);
-
-      try {
-        mkdirSync(dirname(absPath), { recursive: true });
-        const existing = existsSync(absPath) ? readFileSync(absPath, 'utf-8') : '';
-        const warnings = writeMcpServerEntryToFile(absPath, existing, entryLocation(agent, scope), 'mindos', entry);
-
-        const result: MindosMcpInstallResult = withWarnings(
-          { agent: key, status: 'ok', path: configPath, transport: effectiveTransport },
-          warnings,
-        );
-
-        if (effectiveTransport === 'http') {
-          const verification = await verifyHttpConnection(String(entry.url), body.token, services.fetcher);
-          result.verified = verification.verified;
-          if (verification.verifyError) result.verifyError = verification.verifyError;
-        }
-
-        results.push(result);
-      } catch (error) {
-        results.push({ agent: key, status: 'error', message: String(error) });
+      const entry = buildMindosMcpServerEntry(adapter.def, effectiveTransport, {
+        url: body.url,
+        token: body.token,
+        fallbackPort: mcpPortFrom(services),
+      });
+      const outcome = installAgentConnection({ adapter, scope, entry });
+      if (!outcome.ok || !outcome.config) {
+        results.push({ agent: key, status: 'error', message: outcome.message ?? 'Install failed' });
+        continue;
       }
+
+      const result = withWarnings(
+        { agent: key, status: 'ok', path: outcome.config.configPath, transport: effectiveTransport },
+        outcome.warnings,
+      );
+      if (effectiveTransport === 'http') {
+        const verification = await verifyHttpConnection(String(entry.url), body.token, services.fetcher);
+        result.verified = verification.verified;
+        if (verification.verifyError) result.verifyError = verification.verifyError;
+      }
+      results.push(result);
     }
 
     notifyMcpChanged(services, results);
@@ -409,11 +268,10 @@ export async function handleMcpServerCopyPost(
 
     const root = resolveRequestProjectRoot(body, services);
     if ('error' in root) return json({ error: root.error }, { status: 400 });
-    const pathServices: AgentConfigPathServices = { homeDir: services.homeDir, projectRoot: root.projectRoot };
+    const registry = adaptersFor(services.agents, { homeDir: services.homeDir, projectRoot: root.projectRoot });
     const missingRoot = missingProjectRootError(
       targets.map((target) => ({ key: target.key, scope: target.scope ?? 'global' })),
-      services.agents,
-      pathServices,
+      registry,
     );
     if (missingRoot) return json({ error: missingRoot }, { status: 400 });
 
@@ -431,40 +289,38 @@ export async function handleMcpServerCopyPost(
 
     const sourceKey = body.sourceAgentKey?.trim();
     if (!sourceKey) return json({ error: 'sourceAgentKey required for non-MindOS MCP servers' }, { status: 400 });
-    const sourceAgent = services.agents[sourceKey];
-    if (!sourceAgent) return json({ error: `Unknown source agent: ${sourceKey}` }, { status: 404 });
+    const sourceAdapter = registry.get(sourceKey);
+    if (!sourceAdapter) return json({ error: `Unknown source agent: ${sourceKey}` }, { status: 404 });
 
-    const source = findMcpServerEntry(sourceAgent, serverName, pathServices, body.sourceScope);
+    const source = sourceAdapter.readServer(serverName, { scope: body.sourceScope, strict: true });
     if (!source) {
-      return json({ error: `MCP server "${serverName}" was not found in ${sourceAgent.name}` }, { status: 404 });
+      return json({ error: `MCP server "${serverName}" was not found in ${sourceAdapter.def.name}` }, { status: 404 });
     }
 
     const results: MindosMcpInstallResult[] = [];
     for (const target of targets) {
-      const targetAgent = services.agents[target.key];
-      if (!targetAgent) {
-        results.push({ agent: target.key, status: 'error', message: `Unknown agent: ${target.key}` });
+      const targetAdapter = registry.get(target.key);
+      if (!targetAdapter) {
+        results.push(unknownAgent(target.key));
         continue;
       }
       if (services.requireAgentPresence && !services.detectAgentPresence?.(target.key)) {
-        results.push({
-          agent: target.key,
-          status: 'error',
-          message: `${targetAgent.name} was not detected on this machine. Install the agent first, then refresh.`,
-        });
+        results.push(notDetected(targetAdapter));
         continue;
       }
 
+      const scope = target.scope ?? 'global';
       try {
-        results.push(writeMcpServerEntry(
-          target.key,
-          targetAgent,
-          target.scope ?? 'global',
-          serverName,
-          source.entry,
-          target.overwrite === true,
-          pathServices,
-        ));
+        if (!targetAdapter.hasScope(scope)) {
+          results.push({ agent: target.key, status: 'error', message: new AgentConfigScopeError(targetAdapter.def.name, scope).message });
+          continue;
+        }
+        const write = targetAdapter.writeServer(serverName, source.entry, scope, { overwrite: target.overwrite === true });
+        if (!write.written) {
+          results.push({ agent: target.key, status: 'ok', path: write.configPath, message: 'Already configured' });
+          continue;
+        }
+        results.push(withWarnings({ agent: target.key, status: 'ok', path: write.configPath }, write.warnings));
       } catch (error) {
         results.push({ agent: target.key, status: 'error', message: String(error) });
       }
@@ -484,8 +340,8 @@ export function handleMcpUninstallPost(
   try {
     const root = resolveRequestProjectRoot(body, services);
     if ('error' in root) return json({ error: root.error }, { status: 400 });
-    const pathServices: AgentConfigPathServices = { homeDir: services.homeDir, projectRoot: root.projectRoot };
-    const missingRoot = missingProjectRootError(body.agents ?? [], services.agents, pathServices);
+    const registry = adaptersFor(services.agents, { homeDir: services.homeDir, projectRoot: root.projectRoot });
+    const missingRoot = missingProjectRootError(body.agents ?? [], registry);
     if (missingRoot) return json({ error: missingRoot }, { status: 400 });
 
     const results: MindosMcpInstallResult[] = [];
@@ -494,47 +350,26 @@ export function handleMcpUninstallPost(
       const { key, scope } = item;
       const serverName = item.serverName?.trim() || 'mindos';
       assertSafeMcpServerName(serverName);
-      const agent = services.agents[key];
-      if (!agent) {
-        results.push({ agent: key, status: 'error', message: `Unknown agent: ${key}` });
+      const adapter = registry.get(key);
+      if (!adapter) {
+        results.push(unknownAgent(key));
         continue;
       }
 
-      const configPaths = configPathCandidates(agent, scope);
-      if (configPaths.length === 0) {
-        results.push({ agent: key, status: 'error', message: `${agent.name} does not support ${scope} scope` });
-        continue;
-      }
-
-      const existingPaths = configPaths.filter((configPath) => existsSync(resolveAgentConfigPath(configPath, scope, pathServices)));
-      if (existingPaths.length === 0) {
-        results.push({ agent: key, status: 'ok', message: 'Config file does not exist' });
-        continue;
-      }
-
-      const location = entryLocation(agent, scope);
-      const updatedPaths: string[] = [];
-      const errors: string[] = [];
-      const warnings: string[] = [];
       try {
-        for (const configPath of existingPaths) {
-          const absPath = resolveAgentConfigPath(configPath, scope, pathServices);
-          try {
-            const existing = readFileSync(absPath, 'utf-8');
-            warnings.push(...removeMcpServerEntryFromFile(absPath, existing, location, serverName));
-            updatedPaths.push(configPath);
-          } catch (error) {
-            errors.push(`${configPath}: ${String(error)}`);
-          }
-        }
-
-        if (errors.length > 0) {
-          results.push({ agent: key, status: 'error', message: errors.join('; ') });
+        const removal = adapter.removeServer(serverName, scope);
+        if (!removal.existedAnywhere) {
+          results.push({ agent: key, status: 'ok', message: 'Config file does not exist' });
+        } else if (removal.errors.length > 0) {
+          results.push({ agent: key, status: 'error', message: removal.errors.join('; ') });
         } else {
-          results.push(withWarnings({ agent: key, status: 'ok', path: updatedPaths[0] ?? configPaths[0] }, warnings));
+          results.push(withWarnings(
+            { agent: key, status: 'ok', path: removal.updatedPaths[0] ?? adapter.configPaths(scope)[0] },
+            removal.warnings,
+          ));
         }
       } catch (error) {
-        results.push({ agent: key, status: 'error', message: String(error) });
+        results.push({ agent: key, status: 'error', message: error instanceof AgentConfigScopeError ? error.message : String(error) });
       }
     }
 

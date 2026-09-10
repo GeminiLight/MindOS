@@ -8,7 +8,13 @@
 
 import fs from 'fs';
 import path from 'path';
-import { listMcpServerNamesFromText } from '@geminilight/mindos/server';
+import {
+  customAgentToConfigDef,
+  listInstalledSkillNames,
+  listMcpServerNamesFromText,
+  resolveAgentConfigProbes,
+  type CustomAgentConfigDef,
+} from '@geminilight/mindos/server';
 import { expandHome, MCP_AGENTS } from './mcp-agents';
 import type { AgentDef } from './mcp-agents';
 import { readSettings, writeSettings } from './settings';
@@ -230,23 +236,14 @@ export function detectBaseDir(baseDir: string): DetectResult {
 
 /**
  * Convert a CustomAgentDef into the standard AgentDef that all downstream
- * code (detectInstalled, generateSnippet, etc.) expects.
+ * code (detectInstalled, generateSnippet, etc.) expects. Delegates to the core
+ * `customAgentToConfigDef` so custom agents and built-ins share one mapping.
  *
  * Note: AgentDef.key is the *config key* (e.g. "mcpServers"), not the agent identifier.
  * The agent identifier is the key in the MCP_AGENTS record, which comes from CustomAgentDef.key.
  */
 export function toAgentDef(custom: CustomAgentDef): AgentDef {
-  return {
-    name: custom.name,
-    project: custom.project ?? null,
-    global: custom.global,
-    key: custom.configKey,
-    preferredTransport: custom.preferredTransport,
-    format: custom.format,
-    globalNestedKey: custom.globalNestedKey,
-    presenceCli: custom.presenceCli,
-    presenceDirs: custom.presenceDirs,
-  };
+  return customAgentToConfigDef(custom as CustomAgentConfigDef);
 }
 
 /* ─── Persistence ─── */
@@ -296,23 +293,19 @@ export function getAllAgents(): Record<string, AgentDef> {
 /* ─── Skill Scanning ─── */
 
 /**
- * Scan skills installed in a custom agent's skill directory.
- * Returns the same shape as detectAgentInstalledSkills.
+ * Scan skills installed in a custom agent's skill directory. Delegates to the
+ * core `listInstalledSkillNames` (visible dirs/symlinks, sorted) so the rule is
+ * shared with built-in agents; fs probes route through THIS module so Web test
+ * spies keep intercepting. Returns the same shape as detectAgentInstalledSkills.
  */
 export function scanCustomAgentSkills(custom: CustomAgentDef): { skills: string[]; sourcePath: string } {
   const skillDir = custom.skillDir || appendPathSegment(custom.baseDir, 'skills/');
   const expanded = expandHome(skillDir);
-  if (!fs.existsSync(expanded)) return { skills: [], sourcePath: expanded };
-  try {
-    const entries = fs.readdirSync(expanded, { withFileTypes: true });
-    const skills = entries
-      .filter(e => (e.isDirectory() || e.isSymbolicLink()) && !e.name.startsWith('.'))
-      .map(e => e.name)
-      .sort((a, b) => a.localeCompare(b));
-    return { skills, sourcePath: expanded };
-  } catch {
-    return { skills: [], sourcePath: expanded };
-  }
+  const skills = listInstalledSkillNames(expanded, resolveAgentConfigProbes({
+    pathExists: (p: string) => fs.existsSync(p),
+    readDir: (p: string) => fs.readdirSync(p, { withFileTypes: true }),
+  }));
+  return { skills, sourcePath: expanded };
 }
 
 /* ─── Enhanced Skill & MCP Detection ─── */

@@ -19,16 +19,12 @@ import {
   parseSkillMarkdownMetadata,
   type MindosSkillRuntimeRequirements,
 } from './skill-metadata.js';
+import { getSkillsIndex } from './skills-index.js';
+import type { SkillRoot, SkillRootOrigin, SkillRootSource } from '../../agent/config/types.js';
 
-export type MindosSkillSource = 'builtin' | 'user';
-export type MindosSkillOrigin = 'app-builtin' | 'mindos-user' | 'mindos-global' | 'agents-global' | 'custom' | 'project-builtin';
-
-export type MindosSkillRoot = {
-  path: string;
-  source: MindosSkillSource;
-  origin: MindosSkillOrigin;
-  editable: boolean;
-};
+export type MindosSkillSource = SkillRootSource;
+export type MindosSkillOrigin = SkillRootOrigin;
+export type MindosSkillRoot = SkillRoot;
 
 export type MindosSkillInfo = {
   name: string;
@@ -101,11 +97,21 @@ export function handleSkillsGet(services: SkillsHandlerServices): MindosServerRe
   });
 }
 
-/** Scan all skill roots and de-duplicate by name (first root wins). */
+/**
+ * Scan all skill roots and de-duplicate by name (first root wins). The walk
+ * itself is memoised per root list (`skills-index.ts`) and only repeats when
+ * a root, a skill directory or a `SKILL.md` changed on disk; the disabled
+ * set is applied on top so toggles take effect immediately.
+ */
 export function collectSkillInfos(skillRoots: MindosSkillRoot[], disabled: Set<string>): MindosSkillInfo[] {
+  const scanned = getSkillsIndex(skillRoots, (path) => readdirSync(path, { withFileTypes: true }), scanSkillRoots);
+  return scanned.map((skill) => ({ ...skill, enabled: !disabled.has(skill.name) }));
+}
+
+function scanSkillRoots(skillRoots: MindosSkillRoot[]): MindosSkillInfo[] {
   const byName = new Map<string, MindosSkillInfo>();
   for (const root of skillRoots) {
-    for (const skill of readSkillsFromRoot(root, disabled)) {
+    for (const skill of readSkillsFromRoot(root)) {
       if (!byName.has(skill.name)) byName.set(skill.name, skill);
     }
   }
@@ -299,11 +305,11 @@ function resolveUserSkillsDirForWrite(mindRoot: string):
   }
 }
 
-function readSkillsFromRoot(root: MindosSkillRoot, disabled: Set<string>): MindosSkillInfo[] {
+function readSkillsFromRoot(root: MindosSkillRoot): MindosSkillInfo[] {
   if (!existsSync(root.path)) return [];
   if (root.origin === 'mindos-user' && lstatSync(root.path).isSymbolicLink()) return [];
   const skills: MindosSkillInfo[] = [];
-  const directSkill = readDirectSkillFromRoot(root, disabled);
+  const directSkill = readDirectSkillFromRoot(root);
   if (directSkill) skills.push(directSkill);
 
   for (const entry of readdirSync(root.path, { withFileTypes: true })) {
@@ -318,7 +324,7 @@ function readSkillsFromRoot(root: MindosSkillRoot, disabled: Set<string>): Mindo
       description: parsed.description || name,
       path: skillFile,
       source: root.source,
-      enabled: !disabled.has(name),
+      enabled: true,
       editable: root.editable,
       origin: root.origin,
       runtimeRequirements: parsed.runtimeRequirements,
@@ -328,7 +334,7 @@ function readSkillsFromRoot(root: MindosSkillRoot, disabled: Set<string>): Mindo
   return skills;
 }
 
-function readDirectSkillFromRoot(root: MindosSkillRoot, disabled: Set<string>): MindosSkillInfo | null {
+function readDirectSkillFromRoot(root: MindosSkillRoot): MindosSkillInfo | null {
   const skillFile = join(root.path, 'SKILL.md');
   if (!existsSync(skillFile) || !statSync(skillFile).isFile()) return null;
   const content = readFileSync(skillFile, 'utf-8');
@@ -339,7 +345,7 @@ function readDirectSkillFromRoot(root: MindosSkillRoot, disabled: Set<string>): 
     description: parsed.description || name,
     path: skillFile,
     source: root.source,
-    enabled: !disabled.has(name),
+    enabled: true,
     editable: root.editable,
     origin: root.origin,
     runtimeRequirements: parsed.runtimeRequirements,

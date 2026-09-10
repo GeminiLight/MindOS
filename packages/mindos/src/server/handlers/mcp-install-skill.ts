@@ -1,9 +1,17 @@
 import { execFileSync } from 'child_process';
-import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'fs';
-import type { Dirent, Stats } from 'fs';
-import { homedir } from 'os';
-import { dirname, isAbsolute, join, normalize, resolve } from 'path';
+import { existsSync, statSync } from 'fs';
+import type { Stats } from 'fs';
+import { dirname, join, resolve } from 'path';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
+import {
+  createAgentConfigAdapter,
+  expandHome,
+  linkSkillToAgent,
+  UNIVERSAL_SKILLS_DIR,
+  type SkillInstallMode,
+  type SkillLinkAgent,
+  type SkillRoot,
+} from '../../agent/config/index.js';
 import type { MindosSkillAgentRegistration } from './mcp-install.js';
 import type { MindosMcpAgentRegistryDef } from './mcp-agents.js';
 
@@ -20,10 +28,7 @@ export type MindosMcpInstallSkillServices = {
   homeDir?: string;
   env?: NodeJS.ProcessEnv;
   pathExists?(path: string): boolean;
-  readDir?(path: string, options: { withFileTypes: true }): Dirent[];
   stat?(path: string): Stats;
-  makeDir?(path: string, options: { recursive: true }): void;
-  copyFile?(source: string, target: string): void;
   runCommand?(command: string, args: string[], options: {
     encoding: 'utf-8';
     timeout: number;
@@ -47,7 +52,7 @@ export type MindosNpxInvocation = {
 export type MindosMcpInstallSkillLocalResult = {
   agent: string;
   name: string;
-  mode: 'universal' | 'additional' | 'unsupported';
+  mode: SkillInstallMode;
   status: 'exists' | 'copied' | 'repaired' | 'missing-source' | 'unknown-agent' | 'failed';
   workspacePath?: string;
   skillPath?: string;
@@ -230,7 +235,7 @@ type LocalSkillInstallAttempt = {
 type LocalSkillInstallTarget = {
   agent: string;
   name: string;
-  mode: 'universal' | 'additional' | 'unsupported';
+  mode: SkillInstallMode;
   workspacePath: string;
 };
 
@@ -296,7 +301,7 @@ function resolveLocalInstallTargets(
       agent: 'universal',
       name: 'Universal Agents',
       mode: 'universal',
-      workspacePath: expandUserPath('~/.agents/skills', services.homeDir),
+      workspacePath: expandHome(UNIVERSAL_SKILLS_DIR, services.homeDir),
     }];
   }
 
@@ -311,7 +316,15 @@ function resolveLocalInstallTargets(
       };
     }
 
-    const profile = resolveSkillWorkspaceProfile(agentKey, agent, services);
+    // Same workspace rule as `GET /api/mcp/agents` and the CLI (`agent/config/skill-workspace.ts`).
+    const registration = Object.prototype.hasOwnProperty.call(services.skillAgentRegistry ?? {}, agentKey)
+      ? services.skillAgentRegistry?.[agentKey]
+      : undefined;
+    const profile = createAgentConfigAdapter(agentKey, agent, registration ?? { mode: 'unsupported' }, {
+      homeDir: services.homeDir,
+      pathExists: services.pathExists,
+      stat: services.stat,
+    }).skillWorkspace();
     return {
       agent: agentKey,
       name: agent.name,
@@ -321,63 +334,13 @@ function resolveLocalInstallTargets(
   });
 }
 
-function resolveSkillWorkspaceProfile(
-  agentKey: string,
-  agent: MindosMcpAgentRegistryDef,
-  services: MindosMcpInstallSkillServices,
-): {
-  mode: 'universal' | 'additional' | 'unsupported';
-  skillAgentName?: string;
-  workspacePath: string;
-} {
-  const registration = services.skillAgentRegistry?.[agentKey] ?? { mode: 'unsupported' as const };
-  if (registration.mode === 'universal') {
-    return {
-      mode: registration.mode,
-      workspacePath: expandUserPath('~/.agents/skills', services.homeDir),
-    };
-  }
-
-  return {
-    mode: registration.mode,
-    skillAgentName: registration.skillAgentName,
-    workspacePath: agent.skillDir
-      ? expandUserPath(agent.skillDir, services.homeDir)
-      : join(resolveAgentRoot(agent, services), 'skills'),
-  };
-}
-
-function resolveAgentRoot(
-  agent: MindosMcpAgentRegistryDef,
-  services: MindosMcpInstallSkillServices,
-): string {
-  const homeDir = services.homeDir ?? homedir();
-  const pathExists = services.pathExists ?? existsSync;
-  const stat = services.stat ?? statSync;
-  const globalConfigPath = agent.global ? expandUserPath(agent.global, homeDir) : null;
-  const globalConfigDir = globalConfigPath ? dirname(globalConfigPath) : null;
-  const presenceDirs = (agent.presenceDirs ?? []).map((entry) => expandUserPath(entry, homeDir));
-  const matchingGlobalDir = presenceDirs.find((candidate) => {
-    if (!globalConfigDir) return false;
-    const normalizedCandidate = normalizeDir(candidate);
-    const normalizedGlobal = normalizeDir(globalConfigDir);
-    return normalizedGlobal === normalizedCandidate || normalizedGlobal.startsWith(`${normalizedCandidate}/`);
-  });
-  if (matchingGlobalDir) return matchingGlobalDir;
-
-  for (const candidate of presenceDirs) {
-    if (!pathExists(candidate)) continue;
-    try {
-      const info = stat(candidate);
-      return info.isFile() ? dirname(candidate) : candidate;
-    } catch {
-      return candidate;
-    }
-  }
-
-  return presenceDirs[0] ?? globalConfigDir ?? expandUserPath('~/.agents', homeDir);
-}
-
+/**
+ * Materialise the packaged skill in the target workspace through the shared
+ * link primitive with the copy strategy: installs target npm / binary
+ * runtimes whose directory moves on update, so a symlink would dangle, but
+ * the copy still carries the `.mindos-managed` marker so the Skills matrix
+ * reports it as MindOS-managed and uninstall may remove it.
+ */
 function copyLocalSkill(
   skill: string,
   sourceRoot: string,
@@ -390,27 +353,13 @@ function copyLocalSkill(
   const sourceSkillFile = join(sourceDir, 'SKILL.md');
   const targetDir = join(target.workspacePath, skill);
   const targetSkillFile = join(targetDir, 'SKILL.md');
+  const base = { agent: target.agent, name: target.name, mode: target.mode, workspacePath: target.workspacePath, skillPath: targetSkillFile };
 
   if (!pathExists(sourceSkillFile)) {
-    return {
-      agent: target.agent,
-      name: target.name,
-      mode: target.mode,
-      status: 'missing-source',
-      workspacePath: target.workspacePath,
-      skillPath: targetSkillFile,
-      message: `Packaged skill ${skill} was not found.`,
-    };
+    return { ...base, status: 'missing-source', message: `Packaged skill ${skill} was not found.` };
   }
   if (pathExists(targetSkillFile)) {
-    return {
-      agent: target.agent,
-      name: target.name,
-      mode: target.mode,
-      status: 'exists',
-      workspacePath: target.workspacePath,
-      skillPath: targetSkillFile,
-    };
+    return { ...base, status: 'exists' };
   }
 
   let repaired = false;
@@ -422,48 +371,18 @@ function copyLocalSkill(
     }
   }
 
-  try {
-    copyDirSync(sourceDir, targetDir, services);
-    return {
-      agent: target.agent,
-      name: target.name,
-      mode: target.mode,
-      status: repaired ? 'repaired' : 'copied',
-      workspacePath: target.workspacePath,
-      skillPath: targetSkillFile,
-    };
-  } catch (error) {
-    return {
-      agent: target.agent,
-      name: target.name,
-      mode: target.mode,
-      status: 'failed',
-      workspacePath: target.workspacePath,
-      skillPath: targetSkillFile,
-      message: error instanceof Error ? error.message : String(error),
-    };
+  const linkAgent: SkillLinkAgent = {
+    key: target.agent,
+    name: target.name,
+    mode: target.mode === 'universal' ? 'universal' : 'additional',
+    skillDir: target.workspacePath,
+  };
+  const sourceRoots: SkillRoot[] = [{ path: sourceRoot, source: 'builtin', origin: 'project-builtin', editable: false }];
+  const outcome = linkSkillToAgent(skill, linkAgent, sourceRoots, { strategy: 'copy' });
+  if (!outcome.ok) {
+    return { ...base, status: 'failed', message: outcome.message };
   }
-}
-
-function copyDirSync(
-  sourceDir: string,
-  targetDir: string,
-  services: MindosMcpInstallSkillServices,
-): void {
-  const readDir = services.readDir ?? readdirSync;
-  const makeDir = services.makeDir ?? mkdirSync;
-  const copyFile = services.copyFile ?? copyFileSync;
-
-  makeDir(targetDir, { recursive: true });
-  for (const entry of readDir(sourceDir, { withFileTypes: true })) {
-    const sourcePath = join(sourceDir, entry.name);
-    const targetPath = join(targetDir, entry.name);
-    if (entry.isDirectory()) {
-      copyDirSync(sourcePath, targetPath, services);
-    } else {
-      copyFile(sourcePath, targetPath);
-    }
-  }
+  return { ...base, status: repaired ? 'repaired' : 'copied' };
 }
 
 export function resolveNpxInvocation(
@@ -513,17 +432,6 @@ function findLocalSkillSourceRoot(skill: string, services: MindosMcpInstallSkill
 
 function normalizeInstallSkillRequest(body: unknown): MindosMcpInstallSkillRequest {
   return body && typeof body === 'object' ? body as MindosMcpInstallSkillRequest : {};
-}
-
-function expandUserPath(value: string, homeDir = homedir(), cwd = process.cwd()): string {
-  if (value === '~') return homeDir;
-  if (value.startsWith('~/') || value.startsWith('~\\')) return resolve(homeDir, value.slice(2));
-  if (isAbsolute(value)) return value;
-  return resolve(cwd, value);
-}
-
-function normalizeDir(value: string): string {
-  return normalize(value).replace(/[\\/]+$/g, '');
 }
 
 function defaultRunCommand(

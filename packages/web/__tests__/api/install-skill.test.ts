@@ -148,9 +148,13 @@ describe('AGENT_NAME_MAP completeness', () => {
       const res = await POST(makeReq({ skill: 'mindos', agents: [key] }));
       const body = await res.json();
       const reg = SKILL_AGENT_REGISTRY[key];
+      // The `mindos` self row is not in SKILL_AGENT_REGISTRY; core resolves its
+      // own workspace as universal (see resolveSkillWorkspaceProfile), so it
+      // reports `universal` rather than the registry-absent `unsupported`.
+      const expectedMode = key === 'mindos' ? 'universal' : (reg?.mode ?? 'unsupported');
       expect(body.results?.[0], `Agent '${key}' should return a local install result`).toMatchObject({
         agent: key,
-        mode: reg?.mode ?? 'unsupported',
+        mode: expectedMode,
       });
     }
   });
