@@ -4,12 +4,16 @@
  * All JSON-RPC protocol handling is delegated to @agentclientprotocol/sdk.
  */
 
-import { execFileSync, spawn, type ChildProcess } from 'child_process';
+import { spawn, type ChildProcess } from 'child_process';
 import { randomUUID } from 'node:crypto';
 import { Readable, Writable } from 'node:stream';
 import path from 'path';
 import os from 'os';
 import fs from 'fs';
+import {
+  killSupervisedProcessTree,
+  spawnSupervisedProcess,
+} from '../../agent/runtime/process-supervisor.js';
 import {
   ClientSideConnection,
   ndJsonStream,
@@ -150,17 +154,18 @@ export function spawnAcpAgent(
     ...(options?.env ?? {}),
   };
 
-  const isWin = process.platform === 'win32';
-
-  const proc = spawn(cmd, args, {
-    stdio: ['pipe', 'pipe', 'pipe'],
+  // Spawn through the shared supervisor: a detached process group (Windows
+  // needs shell:true for that, Unix does not), tree-kill on SIGTERM → SIGKILL,
+  // registration in the one shutdown hook, and the same lifecycle the Codex
+  // app-server uses. The ACP `processes` table below is the ACP-facing view.
+  const supervised = spawnSupervisedProcess({
+    label: `acp:${entry.id}`,
+    command: cmd,
+    args,
     env: mergedEnv,
-    // Windows: detached requires shell:true to create new process group
-    // Unix: detached with shell:false creates new process group
-    shell: isWin,
-    detached: true,
     ...(options?.cwd ? { cwd: options.cwd } : {}),
   });
+  const proc = supervised.child;
 
   const id = `acp-${entry.id}-${randomUUID()}`;
   const acpProc: AcpProcess = { id, agentId: entry.id, proc, alive: true };
@@ -215,24 +220,13 @@ export function killAgent(acpProc: AcpProcess): void {
   // Step 1: Kill all terminals first to prevent orphaned processes
   timers.push(...killTerminalsOf(acpProc.id));
 
-  // Step 2: Kill the parent ACP agent process
-  const isWin = process.platform === 'win32';
-
-  if (isWin) {
-    // Windows: Use taskkill /T to kill process tree
-    try {
-      execFileSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' });
-    } catch {
-      // Process already dead or taskkill unavailable
-    }
-  } else {
-    // Unix: Use negative PID to kill process group
-    try { process.kill(-pid, 'SIGTERM'); } catch { /* already dead */ }
+  // Step 2: Tree-kill the agent process via the supervisor (SIGTERM, then
+  // SIGKILL after a grace period on Unix; taskkill /T /F is already a forced
+  // tree-kill on Windows).
+  killSupervisedProcessTree(acpProc.proc, 'SIGTERM');
+  if (process.platform !== 'win32') {
     const timer = setTimeout(() => {
-      try {
-        process.kill(-pid, 0);
-        process.kill(-pid, 'SIGKILL');
-      } catch { /* already dead */ }
+      killSupervisedProcessTree(acpProc.proc, 'SIGKILL');
     }, 3000);
     timers.push(timer);
   }
@@ -277,40 +271,14 @@ function killTerminalsOf(processId: string): NodeJS.Timeout[] {
   if (!terms) return timers;
   for (const entry of terms.values()) {
     if (entry.child.exitCode !== null) continue;
-    killProcessTree(entry.child, 'SIGTERM');
+    killSupervisedProcessTree(entry.child, 'SIGTERM');
     const timer = setTimeout(() => {
-      if (entry.child.exitCode === null) killProcessTree(entry.child, 'SIGKILL');
+      if (entry.child.exitCode === null) killSupervisedProcessTree(entry.child, 'SIGKILL');
     }, 1000);
     timers.push(timer);
   }
   terminalMaps.delete(processId);
   return timers;
-}
-
-/**
- * Terminals are spawned detached (their own process group on Unix), so the
- * negative pid reaches every descendant the command forked; Windows uses
- * taskkill /T. Falls back to the direct child when the group is gone.
- */
-function killProcessTree(child: ChildProcess, signal: NodeJS.Signals): void {
-  const pid = child.pid;
-  if (!pid) {
-    try { child.kill(signal); } catch { /* already dead */ }
-    return;
-  }
-  if (process.platform === 'win32') {
-    try {
-      execFileSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' });
-    } catch {
-      try { child.kill(signal); } catch { /* already dead */ }
-    }
-    return;
-  }
-  try {
-    process.kill(-pid, signal);
-  } catch {
-    try { child.kill(signal); } catch { /* already dead */ }
-  }
 }
 
 export function getProcess(id: string): AcpProcess | undefined {

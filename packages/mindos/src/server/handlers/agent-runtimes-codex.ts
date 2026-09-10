@@ -1,7 +1,4 @@
-import { createHash } from 'node:crypto';
 import {
-  createCodexAppServerClient,
-  createCodexAppServerStdioTransport,
   type CodexAppServerClient,
   type CodexModelListResult,
   type CodexThreadForkInput,
@@ -10,7 +7,7 @@ import {
   type CodexThreadReadResult,
   type CodexThreadForkResult,
 } from '../../agent/runtime/codex-app-server.js';
-import { deleteProcessGlobal, getProcessGlobal } from '../../agent/global-state.js';
+import { acquireCodexAppServerForThreads } from '../../agent/runtime/codex-app-server-pool.js';
 import { compactRuntimeFailureMessage } from '../../agent/runtime/runtime-errors.js';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
 import {
@@ -19,6 +16,15 @@ import {
   type AgentRuntimesServices,
   type NativeRuntimeHealthResult,
 } from './agent-runtimes.js';
+
+// The thread / model routes share the supervisor-backed Codex app-server pool
+// (`agent/runtime/codex-app-server-pool.ts`); these names are re-exported so
+// `server/index.ts` and existing consumers keep importing them from here.
+export {
+  CODEX_APP_SERVER_CLIENT_IDLE_TTL_MS,
+  closePooledCodexAppServerClients,
+  resetCodexAppServerClientPoolForTest,
+} from '../../agent/runtime/codex-app-server-pool.js';
 
 export type CodexThreadManagerServices = {
   /** Host-owned client: one per request, the host controls its lifecycle. */
@@ -170,20 +176,20 @@ async function withCodexClient<T>(
   }
 
   const runtime = await ensureCodexThreadRuntimeAvailable(services);
-  const entry = await acquirePooledCodexClient({
+  const lease = await acquireCodexAppServerForThreads({
     command: runtime.binaryPath,
-    env: runtime.env,
-    factory: services.createPooledCodexClient ?? createDefaultPooledCodexClient,
+    ...(runtime.env ? { env: runtime.env } : {}),
+    ...(services.createPooledCodexClient ? { createClient: services.createPooledCodexClient } : {}),
   });
   let failed = false;
   try {
-    return await run(entry.client);
+    return await run(lease.resource);
   } catch (error) {
     // A rejected request may mean the app-server died; a fresh process on the next request is cheaper than a stuck one.
     failed = true;
     throw error;
   } finally {
-    releasePooledCodexClient(entry, { failed });
+    lease.release({ failed });
   }
 }
 
@@ -223,129 +229,6 @@ async function ensureCodexThreadRuntimeAvailable(
     throw new CodexThreadRuntimeUnavailableError(`Codex is ${agent.status === 'signed-out' ? 'signed out' : 'unavailable'}.${agent.reason ? ` ${agent.reason}` : ''}`);
   }
   return { binaryPath: agent.binaryPath, ...(entry.value.env ? { env: entry.value.env } : {}) };
-}
-
-// ── App-server client pool ────────────────────────────────────────────────────
-// Thread and model routes used to spawn a fresh `codex app-server` per HTTP
-// request. One initialized client per (command, env hash) now serves them and
-// closes after an idle period; the turn lane in agent/runtime/run.ts keeps its
-// own per-turn process and is not routed through here.
-
-export const CODEX_APP_SERVER_CLIENT_IDLE_TTL_MS = 60_000;
-
-type PooledCodexClient = {
-  key: string;
-  client: CodexAppServerClient;
-  ready: Promise<void>;
-  inUse: number;
-  idleTimer: ReturnType<typeof setTimeout> | null;
-  closed: boolean;
-};
-
-type CodexClientPoolState = {
-  clients: Map<string, PooledCodexClient>;
-  exitHookInstalled: boolean;
-};
-
-const CODEX_CLIENT_POOL_KEY = Symbol.for('mindos.codexAppServerClientPool');
-
-function poolState(): CodexClientPoolState {
-  return getProcessGlobal<CodexClientPoolState>(CODEX_CLIENT_POOL_KEY, () => ({ clients: new Map(), exitHookInstalled: false }));
-}
-
-function pooledClientKey(command: string, env: NodeJS.ProcessEnv | undefined): string {
-  const digest = createHash('sha256');
-  const entries = Object.entries(env ?? {}).filter(([, value]) => value !== undefined).sort(([a], [b]) => a.localeCompare(b));
-  digest.update(JSON.stringify(entries));
-  return `${command}|${digest.digest('hex').slice(0, 16)}`;
-}
-
-function createDefaultPooledCodexClient(input: { command: string; env?: NodeJS.ProcessEnv }): CodexAppServerClient {
-  return createCodexAppServerClient(createCodexAppServerStdioTransport({
-    command: input.command,
-    ...(input.env ? { env: input.env } : {}),
-  }));
-}
-
-async function acquirePooledCodexClient(input: {
-  command: string;
-  env?: NodeJS.ProcessEnv;
-  factory: (input: { command: string; env?: NodeJS.ProcessEnv }) => CodexAppServerClient;
-}): Promise<PooledCodexClient> {
-  const state = poolState();
-  if (!state.exitHookInstalled) {
-    state.exitHookInstalled = true;
-    process.once('exit', closePooledCodexAppServerClients);
-  }
-  const key = pooledClientKey(input.command, input.env);
-  let entry = state.clients.get(key);
-  if (!entry || entry.closed) {
-    const client = input.factory({ command: input.command, env: input.env });
-    const created: PooledCodexClient = { key, client, ready: Promise.resolve(), inUse: 0, idleTimer: null, closed: false };
-    created.ready = Promise.resolve()
-      .then(() => client.initialize())
-      .catch((error) => {
-        dropPooledCodexClient(created);
-        throw error;
-      });
-    state.clients.set(key, created);
-    entry = created;
-  }
-  clearIdleTimer(entry);
-  entry.inUse += 1;
-  try {
-    await entry.ready;
-  } catch (error) {
-    entry.inUse -= 1;
-    throw error;
-  }
-  return entry;
-}
-
-function releasePooledCodexClient(entry: PooledCodexClient, options: { failed: boolean }): void {
-  entry.inUse = Math.max(0, entry.inUse - 1);
-  if (options.failed) {
-    dropPooledCodexClient(entry);
-    return;
-  }
-  if (entry.inUse === 0 && !entry.closed) {
-    entry.idleTimer = setTimeout(() => {
-      entry.idleTimer = null;
-      if (entry.inUse === 0) dropPooledCodexClient(entry);
-    }, CODEX_APP_SERVER_CLIENT_IDLE_TTL_MS);
-    // An idle app-server must not keep the host process alive.
-    (entry.idleTimer as { unref?: () => void }).unref?.();
-  }
-}
-
-function clearIdleTimer(entry: PooledCodexClient): void {
-  if (entry.idleTimer) {
-    clearTimeout(entry.idleTimer);
-    entry.idleTimer = null;
-  }
-}
-
-function dropPooledCodexClient(entry: PooledCodexClient): void {
-  if (entry.closed) return;
-  entry.closed = true;
-  clearIdleTimer(entry);
-  const state = poolState();
-  if (state.clients.get(entry.key) === entry) state.clients.delete(entry.key);
-  try {
-    void Promise.resolve(entry.client.close?.()).catch(() => {});
-  } catch {
-    // Closing is best-effort; the entry is already out of the pool.
-  }
-}
-
-/** Closes every pooled app-server (server shutdown, tests). */
-export function closePooledCodexAppServerClients(): void {
-  for (const entry of [...poolState().clients.values()]) dropPooledCodexClient(entry);
-}
-
-export function resetCodexAppServerClientPoolForTest(): void {
-  closePooledCodexAppServerClients();
-  deleteProcessGlobal(CODEX_CLIENT_POOL_KEY);
 }
 
 function parseThreadListParams(searchParams: URLSearchParams): CodexThreadListInput | { error: string } {

@@ -21,6 +21,7 @@ export type MindosServerEventType =
   | 'runtime.changed'
   | 'settings.changed'
   | 'control-plane.changed'
+  | 'acp.session.changed'
   | 'heartbeat';
 
 /** Compact projection of a ledger event; the client only uses it as a trigger. */
@@ -47,6 +48,7 @@ export type MindosServerEvent =
   | { type: 'settings.changed' }
   /** A runtime control-plane mutation (schedule / approval / task / mailbox …) was committed to disk. */
   | { type: 'control-plane.changed'; mindRoot: string; action: string; updatedAt: string }
+  | { type: 'acp.session.changed'; agentId: string; sessionId: string; state: 'idle' | 'active' | 'error' | 'closed' }
   | { type: 'heartbeat' };
 
 export const MINDOS_SERVER_EVENT_TYPES: readonly MindosServerEventType[] = [
@@ -58,6 +60,7 @@ export const MINDOS_SERVER_EVENT_TYPES: readonly MindosServerEventType[] = [
   'runtime.changed',
   'settings.changed',
   'control-plane.changed',
+  'acp.session.changed',
   'heartbeat',
 ];
 

@@ -55,6 +55,8 @@ function makeChildProcess() {
     stdout: {},
     stderr: { on: vi.fn() },
     on: vi.fn(),
+    once: vi.fn(),
+    kill: vi.fn(),
   } as any;
 }
 
@@ -133,7 +135,13 @@ describe('killAgent', () => {
 
     expect(source).not.toContain('execSync(');
     expect(source).not.toContain('taskkill /PID ${pid}');
-    expect(source).toContain("execFileSync('taskkill', ['/PID', String(pid), '/T', '/F']");
+    // Tree-kill moved into the shared supervisor; assert the argv-safe form there.
+    const supervisor = fs.readFileSync(
+      path.join(__dirname, '../../agent/runtime/process-supervisor.ts'),
+      'utf-8',
+    );
+    expect(supervisor).not.toContain('execSync(');
+    expect(supervisor).toContain("execFileSync('taskkill', ['/PID', String(pid), '/T', '/F']");
   });
 
   it('keeps ACP terminal commands out of unconditional shell execution', () => {

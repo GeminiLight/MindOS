@@ -18,6 +18,8 @@ function makeChildProcess() {
     stdout: {},
     stderr: { on: vi.fn() },
     on: vi.fn(),
+    once: vi.fn(),
+    kill: vi.fn(),
   } as any;
 }
 

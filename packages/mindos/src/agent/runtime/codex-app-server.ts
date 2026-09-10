@@ -1,14 +1,7 @@
-import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
-import { appendBoundedLog, killChildWithEscalation } from './child-process.js';
-import {
-  redactSensitiveText,
-  sanitizeToolArgs,
-  sanitizeToolOutput,
-  type MindOSSSEvent,
-} from '../turn/index.js';
+import { appendBoundedLog } from './child-process.js';
 import { buildCodexAppServerEnv } from './codex-env.js';
-import { compactRuntimeFailureMessage } from './runtime-errors.js';
+import { spawnSupervisedProcess } from './process-supervisor.js';
 import {
   mindosSelectedSkillNames,
   type MindosSelectedSkill,
@@ -17,6 +10,21 @@ import {
   getMindosRuntimeAttachmentImages,
   type MindosRuntimeAttachment,
 } from './attachments.js';
+import {
+  asRecord,
+  getCodexNotificationThreadId,
+  getCodexNotificationTurnId,
+  getStringParam,
+  isCodexTerminalTurnNotification,
+  safeJson,
+} from './codex-app-server-events.js';
+
+export {
+  isCodexRetryingErrorNotification,
+  isCodexTerminalTurnNotification,
+  mapCodexAppServerNotificationToSseEvents,
+} from './codex-app-server-events.js';
+
 
 export type CodexAppServerClientInfo = {
   name: string;
@@ -66,6 +74,8 @@ export type CodexAppServerTransport = {
   send(message: CodexAppServerRequest | CodexAppServerNotification | CodexAppServerClientResponse): void | Promise<void>;
   read(signal?: AbortSignal): AsyncIterable<CodexAppServerMessage>;
   close?(): void | Promise<void>;
+  /** Liveness probe used by the pool to drop transports whose process died while idle. */
+  isAlive?(): boolean;
 };
 
 export type CodexAppServerClientOptions = {
@@ -187,6 +197,16 @@ export type CodexAppServerClient = {
     signal?: AbortSignal;
   }): AsyncIterable<CodexAppServerNotification>;
   interruptTurn?(input: { threadId: string; turnId?: string }): Promise<void>;
+  /**
+   * Swap the server-request handler between turns. A pooled client serves one
+   * turn after another, each with its own approval / question bridge; `undefined`
+   * restores the default (cancel approvals, reject everything else).
+   */
+  setServerRequestHandler?(
+    handler: ((request: CodexAppServerServerRequest) => Promise<unknown> | unknown) | undefined,
+  ): void;
+  /** False once the transport read loop ended (crash, kill) or the transport reports dead. */
+  isAlive?(): boolean;
   close?(): void | Promise<void>;
 };
 
@@ -237,7 +257,6 @@ export function renderCodexTextWithSkillMarkers(
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
-
 type PendingRequest = {
   method: string;
   resolve(value: unknown): void;
@@ -260,6 +279,15 @@ class AsyncQueue<T> implements AsyncIterable<T> {
       return;
     }
     this.values.push(value);
+  }
+
+  /**
+   * Drop every buffered value no reader has consumed yet. A pooled client
+   * calls this before `turn/start` so late notifications of an interrupted
+   * earlier turn cannot leak into the next one. Waiting readers are untouched.
+   */
+  drain(): void {
+    this.values.length = 0;
   }
 
   close(): void {
@@ -298,11 +326,15 @@ export function createCodexAppServerClient(
   const notifications = new AsyncQueue<CodexAppServerNotification>();
   let nextId = 1;
   let readStarted = false;
+  let readEnded = false;
   // Set when the transport read loop dies (app-server crash, killed process).
   // Requests still pending at that moment are rejected directly, but an
   // in-flight turn whose turn/start already resolved would otherwise just see
   // the notification queue close and end silently without done/error.
   let readError: Error | undefined;
+  // A pooled client serves one turn after another, each with its own approval
+  // / question bridge, so the handler is swappable between turns.
+  let serverRequestHandler = options.handleServerRequest;
 
   const startReadLoop = (signal?: AbortSignal) => {
     if (readStarted) return;
@@ -343,6 +375,7 @@ export function createCodexAppServerClient(
         }
         pending.clear();
       } finally {
+        readEnded = true;
         notifications.close();
       }
     })();
@@ -392,8 +425,9 @@ export function createCodexAppServerClient(
 
   const respondToServerRequest = async (message: CodexAppServerServerRequest): Promise<void> => {
     try {
-      const result = options.handleServerRequest
-        ? await options.handleServerRequest(message)
+      const handler = serverRequestHandler;
+      const result = handler
+        ? await handler(message)
         : defaultCodexServerRequestResult(message);
       await transport.send({ id: message.id, result });
     } catch (error) {
@@ -465,9 +499,14 @@ export function createCodexAppServerClient(
         ...(input.approvalPolicy ? { approvalPolicy: input.approvalPolicy } : {}),
         ...(input.sandbox ? { sandbox: input.sandbox } : {}),
       };
-      await request('turn/start', params, input.signal);
+      // Anything already queued belongs to an earlier turn on this app-server
+      // (an interrupted turn's late notifications); it cannot be ours.
+      notifications.drain();
+      const started = await request('turn/start', params, input.signal);
+      const turnId = getStringParam(asRecord(asRecord(started)?.turn) ?? undefined, 'id');
       let sawTerminal = false;
       for await (const notification of notifications) {
+        if (!belongsToTurn(notification, input.threadId, turnId)) continue;
         yield notification;
         if (isCodexTerminalTurnNotification(notification)) {
           sawTerminal = true;
@@ -487,8 +526,29 @@ export function createCodexAppServerClient(
         ...(input.turnId ? { turnId: input.turnId } : {}),
       });
     },
+    setServerRequestHandler(handler) {
+      serverRequestHandler = handler;
+    },
+    isAlive() {
+      if (readEnded) return false;
+      return transport.isAlive?.() ?? true;
+    },
     close: () => transport.close?.(),
   };
+}
+
+/**
+ * Notifications carrying a thread or turn identity that differs from the
+ * running turn are leftovers of an earlier turn on the same pooled
+ * app-server (typically the `turn/completed` of an interrupted one).
+ * Notifications without identity are delivered unchanged.
+ */
+function belongsToTurn(notification: CodexAppServerNotification, threadId: string, turnId: string | undefined): boolean {
+  const notificationThreadId = getCodexNotificationThreadId(notification);
+  if (notificationThreadId && notificationThreadId !== threadId) return false;
+  const notificationTurnId = getCodexNotificationTurnId(notification);
+  if (turnId && notificationTurnId && notificationTurnId !== turnId) return false;
+  return true;
 }
 
 export function createCodexAppServerStdioTransport(options: {
@@ -499,19 +559,22 @@ export function createCodexAppServerStdioTransport(options: {
 } = {}): CodexAppServerTransport {
   const command = options.command ?? 'codex';
   const args = options.args ?? ['app-server'];
-  const child = spawn(command, args, {
-    stdio: ['pipe', 'pipe', 'pipe'],
+  const supervised = spawnSupervisedProcess({
+    label: 'codex-app-server',
+    command,
+    args,
     ...(options.cwd ? { cwd: options.cwd } : {}),
     env: buildCodexAppServerEnv({ overrideEnv: options.env }),
   });
-  const lines = createInterface({ input: child.stdout });
+  const child = supervised.child;
+  const lines = createInterface({ input: child.stdout! });
   let stderr = '';
   let spawnError: Error | null = null;
   let closedByUs = false;
   // Without an error listener, a write racing the child's exit raises an
   // unhandled 'error' event (EPIPE) and crashes the whole process.
-  child.stdin.on('error', () => {});
-  child.stderr.on('data', (chunk) => {
+  child.stdin?.on('error', () => {});
+  child.stderr?.on('data', (chunk) => {
     stderr = appendBoundedLog(stderr, chunk);
   });
   child.once('error', (error) => {
@@ -523,7 +586,7 @@ export function createCodexAppServerStdioTransport(options: {
 
   return {
     send(message) {
-      if (closedByUs || child.exitCode !== null || child.signalCode !== null || !child.stdin.writable) {
+      if (closedByUs || child.exitCode !== null || child.signalCode !== null || !child.stdin?.writable) {
         throw new Error(stderr.trim() || 'Codex app-server is not running (stdin is closed).');
       }
       child.stdin.write(`${JSON.stringify(message)}\n`);
@@ -561,184 +624,12 @@ export function createCodexAppServerStdioTransport(options: {
     close() {
       closedByUs = true;
       lines.close();
-      killChildWithEscalation(child);
+      supervised.kill();
+    },
+    isAlive() {
+      return !closedByUs && supervised.alive;
     },
   };
-}
-
-export function mapCodexAppServerNotificationToSseEvents(notification: CodexAppServerNotification): MindOSSSEvent[] {
-  const toolEvents = mapCodexRuntimeToolNotification(notification);
-  if (toolEvents.length > 0) return toolEvents;
-
-  if (notification.method === 'error') {
-    const message = compactRuntimeFailureMessage(
-      redactSensitiveText(getCodexErrorMessage(notification.params, 'Codex app-server error')),
-      { runtime: 'codex', fallback: 'Codex app-server error' },
-    );
-    // `willRetry: true` is the app-server telling us it hit a transient
-    // condition (stream drop, upstream 5xx) and is retrying on its own; the
-    // turn is still alive, so report progress rather than a terminal error.
-    if (isCodexRetryingErrorNotification(notification)) {
-      return [{
-        type: 'status',
-        visible: true,
-        runtime: 'codex',
-        message: `Codex hit a transient error and is retrying: ${message}`,
-      }];
-    }
-    return [{ type: 'error', message }];
-  }
-
-  if (notification.method === 'item/agentMessage/delta') {
-    const delta = getStringParam(notification.params, 'delta') ?? getStringParam(notification.params, 'text');
-    return delta ? [{ type: 'text_delta', delta }] : [];
-  }
-
-  if (notification.method === 'item/thinking/delta') {
-    const delta = getStringParam(notification.params, 'delta') ?? getStringParam(notification.params, 'text');
-    return delta ? [{ type: 'thinking_delta', delta }] : [];
-  }
-
-  if (
-    notification.method === 'item/reasoning/textDelta'
-    || notification.method === 'item/reasoning/summaryTextDelta'
-    || notification.method === 'item/reasoning/summaryPartAdded'
-  ) {
-    const delta = getStringParam(notification.params, 'delta')
-      ?? getStringParam(notification.params, 'text')
-      ?? getStringParam(notification.params, 'summary');
-    return delta ? [{ type: 'thinking_delta', delta }] : [];
-  }
-
-  if (notification.method === 'turn/completed') {
-    const status = getCodexTurnStatus(notification.params);
-    if (status && status !== 'completed' && status !== 'success') {
-      return [{
-        type: 'error',
-        message: compactRuntimeFailureMessage(
-          redactSensitiveText(getCodexErrorMessage(notification.params, `Codex turn ${status}`)),
-          { runtime: 'codex', fallback: `Codex turn ${status}` },
-        ),
-      }];
-    }
-    return [{ type: 'done' }];
-  }
-
-  if (notification.method === 'turn/failed') {
-    return [{
-      type: 'error',
-      message: compactRuntimeFailureMessage(
-        redactSensitiveText(getCodexErrorMessage(notification.params, 'Codex turn failed')),
-        { runtime: 'codex', fallback: 'Codex turn failed' },
-      ),
-    }];
-  }
-
-  return [];
-}
-
-function mapCodexRuntimeToolNotification(notification: CodexAppServerNotification): MindOSSSEvent[] {
-  const method = notification.method;
-  const lower = method.toLowerCase();
-  const params = notification.params ?? {};
-
-  const officialItemEvents = mapCodexOfficialItemNotification(method, params);
-  if (officialItemEvents.length > 0) return officialItemEvents;
-
-  if (!/(tool|command|exec|approval|permission|patch)/.test(lower)) return [];
-
-  const toolCallId = getCodexToolCallId(method, params);
-  const toolName = getCodexToolName(method, params);
-  if (!toolCallId || !toolName) return [];
-
-  if (/outputdelta|output_delta/.test(lower)) {
-    const delta = getStringParam(params, 'delta')
-      ?? getStringParam(params, 'output')
-      ?? getStringParam(params, 'text');
-    return delta ? [{
-      type: 'tool_delta',
-      toolCallId,
-      toolName,
-      delta: redactSensitiveText(delta),
-      runtime: 'codex',
-    }] : [];
-  }
-
-  if (/(end|ended|complete|completed|result|output|failed|error|rejected|denied|approved|allowed)/.test(lower)) {
-    return [{
-      type: 'tool_end',
-      toolCallId,
-      toolName,
-      output: sanitizeToolOutput(getCodexToolOutput(params)),
-      isError: /(failed|error|rejected|denied)/.test(lower) || params.isError === true || params.error !== undefined,
-      runtime: 'codex',
-    }];
-  }
-
-  if (/(start|started|begin|began|added|call|request|requested|created)/.test(lower)) {
-    return [{
-      type: 'tool_start',
-      toolCallId,
-      toolName,
-      args: sanitizeToolArgs(toolName, getCodexToolInput(params)),
-      runtime: 'codex',
-    }];
-  }
-
-  return [];
-}
-
-function mapCodexOfficialItemNotification(
-  method: string,
-  params: Record<string, unknown>,
-): MindOSSSEvent[] {
-  if (method === 'item/commandExecution/outputDelta') {
-    const toolCallId = getCodexToolCallId(method, params);
-    const delta = getStringParam(params, 'delta')
-      ?? getStringParam(params, 'output')
-      ?? getStringParam(params, 'text');
-    if (!toolCallId || !delta) return [];
-    return [{
-      type: 'tool_delta',
-      toolCallId,
-      toolName: getCodexToolName(method, params),
-      delta: redactSensitiveText(delta),
-      runtime: 'codex',
-    }];
-  }
-
-  if (method !== 'item/started' && method !== 'item/completed') return [];
-
-  const item = getCodexItem(params);
-  if (!item || !isCodexRuntimeToolItem(item)) return [];
-  const toolCallId = getCodexToolCallId(method, params);
-  const toolName = getCodexToolName(method, params);
-  if (!toolCallId || !toolName) return [];
-
-  if (method === 'item/started') {
-    return [{
-      type: 'tool_start',
-      toolCallId,
-      toolName,
-      args: sanitizeToolArgs(toolName, getCodexToolInput(params)),
-      runtime: 'codex',
-    }];
-  }
-
-  const status = getStringField(item, 'status') ?? getStringParam(params, 'status');
-  return [{
-    type: 'tool_end',
-    toolCallId,
-    toolName,
-    output: sanitizeToolOutput(getCodexToolOutput(params)),
-    isError: status === 'failed'
-      || status === 'error'
-      || status === 'declined'
-      || params.isError === true
-      || params.error !== undefined
-      || item.error !== undefined,
-    runtime: 'codex',
-  }];
 }
 
 function formatCodexJsonRpcError(method: string, error: { code?: number; message?: string; data?: unknown }): string {
@@ -748,14 +639,6 @@ function formatCodexJsonRpcError(method: string, error: { code?: number; message
     error.data !== undefined ? `data=${safeJson(error.data)}` : '',
   ].filter(Boolean);
   return parts.join(' ');
-}
-
-function safeJson(value: unknown): string {
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value);
-  }
 }
 
 function isCodexResponse(message: CodexAppServerMessage): message is CodexAppServerResponse {
@@ -771,22 +654,6 @@ function isCodexNotification(message: CodexAppServerMessage): message is CodexAp
 function isCodexServerRequest(message: CodexAppServerMessage): message is CodexAppServerServerRequest {
   return typeof (message as CodexAppServerServerRequest).id === 'number'
     && typeof (message as CodexAppServerServerRequest).method === 'string';
-}
-
-function isCodexRetryingErrorNotification(notification: CodexAppServerNotification): boolean {
-  return notification.method === 'error' && notification.params?.willRetry === true;
-}
-
-function isCodexTerminalTurnNotification(notification: CodexAppServerNotification): boolean {
-  return (
-    (notification.method === 'error' && !isCodexRetryingErrorNotification(notification))
-    || notification.method === 'turn/completed'
-    || notification.method === 'turn/failed'
-  );
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' ? value as Record<string, unknown> : null;
 }
 
 function getThreadId(result: unknown, method: string): string {
@@ -886,151 +753,6 @@ function getThreadListResult(result: unknown, method: string): CodexThreadListRe
 
 function pruneUndefined(value: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined));
-}
-
-function getStringParam(params: Record<string, unknown> | undefined, key: string): string | undefined {
-  const value = params?.[key];
-  return typeof value === 'string' ? value : undefined;
-}
-
-function getCodexItem(params: Record<string, unknown>): Record<string, unknown> | null {
-  return asRecord(params.item) ?? params;
-}
-
-function getCodexItemType(item: Record<string, unknown> | null): string {
-  return getStringField(item, 'type') ?? getStringField(item, 'kind') ?? '';
-}
-
-function isCodexRuntimeToolItem(item: Record<string, unknown>): boolean {
-  const type = getCodexItemType(item).toLowerCase();
-  return type.includes('command')
-    || type.includes('filechange')
-    || type.includes('file_change')
-    || type.includes('tool')
-    || type.includes('dynamic')
-    || Boolean(getStringField(item, 'command'))
-    || Boolean(getStringField(item, 'toolName'))
-    || Boolean(getStringField(item, 'name'));
-}
-
-function getCodexToolCallId(method: string, params: Record<string, unknown>): string {
-  const direct = getStringParam(params, 'toolCallId')
-    ?? getStringParam(params, 'callId')
-    ?? getStringParam(params, 'itemId')
-    ?? getStringParam(params, 'requestId')
-    ?? getStringParam(params, 'id');
-  if (direct) return direct;
-
-  const item = asRecord(params.item);
-  const nested = getStringField(item, 'id') ?? getStringField(item, 'callId');
-  return nested ?? `codex-${method}`;
-}
-
-function getCodexToolName(method: string, params: Record<string, unknown>): string {
-  const direct = getStringParam(params, 'toolName')
-    ?? getStringParam(params, 'name')
-    ?? getStringParam(params, 'tool')
-    ?? getStringParam(params, 'commandName');
-  if (direct) return direct;
-  if (getStringParam(params, 'command')) return 'Bash';
-  if (method.toLowerCase().includes('commandexecution')) return 'Bash';
-  if (method.toLowerCase().includes('approval') || method.toLowerCase().includes('permission')) return 'approval_request';
-
-  const item = getCodexItem(params);
-  const itemType = getCodexItemType(item).toLowerCase();
-  const itemTool = asRecord(item?.tool) ?? asRecord(item?.mcpTool) ?? asRecord(item?.dynamicTool);
-  const itemServer = asRecord(item?.server) ?? asRecord(item?.mcpServer);
-  if (getStringField(item, 'command')) return 'Bash';
-  if (itemType.includes('command')) return 'Bash';
-  if (itemType.includes('filechange') || itemType.includes('file_change')) return 'file_change';
-  const nestedToolName = getStringField(itemTool, 'name')
-    ?? getStringField(itemTool, 'toolName')
-    ?? getStringField(item, 'serverToolName');
-  const serverName = getStringField(itemServer, 'name') ?? getStringField(itemServer, 'serverName');
-  if (serverName && nestedToolName) return `${serverName}.${nestedToolName}`;
-  return getStringField(item, 'name')
-    ?? getStringField(item, 'toolName')
-    ?? nestedToolName
-    ?? method.split('/').at(-1)
-    ?? method;
-}
-
-function getCodexToolInput(params: Record<string, unknown>): unknown {
-  const item = getCodexItem(params);
-  const itemTool = asRecord(item?.tool) ?? asRecord(item?.mcpTool) ?? asRecord(item?.dynamicTool);
-  return params.input
-    ?? params.arguments
-    ?? params.args
-    ?? params.command
-    ?? item?.input
-    ?? item?.arguments
-    ?? item?.args
-    ?? item?.command
-    ?? itemTool?.input
-    ?? itemTool?.arguments
-    ?? itemTool?.args
-    ?? params;
-}
-
-function getCodexToolOutput(params: Record<string, unknown>): string {
-  const direct = getStringParam(params, 'output')
-    ?? getStringParam(params, 'result')
-    ?? getStringParam(params, 'message')
-    ?? getStringParam(params, 'text');
-  if (direct) return direct;
-
-  const error = asRecord(params.error);
-  const errorMessage = getStringField(error, 'message') ?? getStringField(error, 'detail');
-  if (errorMessage) return errorMessage;
-
-  const item = getCodexItem(params);
-  const itemOutput = getStringField(item, 'output') ?? getStringField(item, 'result');
-  if (itemOutput) return itemOutput;
-
-  const itemTool = asRecord(item?.tool) ?? asRecord(item?.mcpTool) ?? asRecord(item?.dynamicTool);
-  const toolOutput = getStringField(itemTool, 'output') ?? getStringField(itemTool, 'result');
-  if (toolOutput) return toolOutput;
-
-  const itemError = asRecord(item?.error);
-  const itemErrorMessage = getStringField(itemError, 'message') ?? getStringField(itemError, 'detail');
-  if (itemErrorMessage) return itemErrorMessage;
-
-  const status = getStringField(item, 'status') ?? getStringParam(params, 'status');
-  if (status) return `Codex item ${status}`;
-
-  return safeJson(params);
-}
-
-function getCodexTurnStatus(params: Record<string, unknown> | undefined): string | undefined {
-  const direct = getStringParam(params, 'status');
-  if (direct) return direct;
-  const turn = asRecord(params?.turn);
-  const nested = turn?.status;
-  return typeof nested === 'string' ? nested : undefined;
-}
-
-function getCodexErrorMessage(params: Record<string, unknown> | undefined, fallback: string): string {
-  const direct = getStringParam(params, 'message') ?? getStringParam(params, 'errorMessage');
-  if (direct) return direct;
-
-  const error = asRecord(params?.error);
-  const errorMessage = getStringField(error, 'message') ?? getStringField(error, 'detail');
-  if (errorMessage) return errorMessage;
-
-  const turn = asRecord(params?.turn);
-  const turnError = asRecord(turn?.error);
-  const turnMessage = getStringField(turnError, 'message')
-    ?? getStringField(turnError, 'detail')
-    ?? getStringField(turn, 'message');
-  if (turnMessage) return turnMessage;
-
-  const status = getCodexTurnStatus(params);
-  return status ? `${fallback}: ${status}` : fallback;
-}
-
-function getStringField(record: Record<string, unknown> | null, key: string): string | undefined {
-  const value = record?.[key];
-  return typeof value === 'string' && value ? value : undefined;
 }
 
 function defaultCodexServerRequestResult(request: CodexAppServerServerRequest): unknown {

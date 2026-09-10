@@ -11,8 +11,9 @@ import type {
 /**
  * Safety refresh cadence, applied only while the `/api/events` stream is not
  * connected and the tab is visible. A connected tab refreshes on turn
- * boundaries (`agent-run.event`) and on `runtime.changed` instead, so an idle
- * Chat panel issues no session-projection requests at all.
+ * boundaries (`agent-run.event`), on `runtime.changed`, and on
+ * `acp.session.changed` for this runtime instead, so an idle Chat panel issues
+ * no session-projection requests at all.
  */
 export const RUNTIME_SESSION_PROJECTION_FALLBACK_POLL_MS = 30_000;
 
@@ -91,6 +92,11 @@ export function useRuntimeSessionProjection({
     const unsubscribeRuntime = subscribeServerEvents('runtime.changed', () => {
       void refresh();
     });
+    const unsubscribeAcpSession = subscribeServerEvents('acp.session.changed', (event) => {
+      // Session state transitions (registered / prompt start / end / closed)
+      // change the projection immediately, not only at turn boundaries.
+      if (event.agentId === runtimeId) void refresh();
+    });
     const unsubscribeReady = subscribeServerEvents('ready', (event) => {
       // A gap in the event log means boundaries may have been missed.
       if (event.resync) void refresh();
@@ -105,10 +111,11 @@ export function useRuntimeSessionProjection({
     return () => {
       unsubscribeRuns();
       unsubscribeRuntime();
+      unsubscribeAcpSession();
       unsubscribeReady();
       if (timer !== null) window.clearInterval(timer);
     };
-  }, [enabled, refresh, refreshMs]);
+  }, [enabled, refresh, refreshMs, runtimeId]);
 
   const selectedProjection = useMemo(() => {
     if (!runtime) return null;

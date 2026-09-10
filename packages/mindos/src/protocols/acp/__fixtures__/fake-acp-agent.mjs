@@ -7,11 +7,14 @@ import crypto from 'node:crypto';
 // Test knobs: FAKE_ACP_HANG lists RPC methods that must never answer
 // (initialize, authenticate, session/new, session/prompt, session/close);
 // FAKE_ACP_AUTH_REQUIRED=1 makes session/new fail with -32000 until the
-// client has called authenticate.
+// client has called authenticate; FAKE_ACP_LOAD_SESSION=1 declares
+// `loadSession: true` and implements `session/load` so a pooled session can be
+// resumed (used to prove "one spawn across two turns" over real stdio).
 const HANG = new Set(
   (process.env.FAKE_ACP_HANG ?? '').split(',').map((entry) => entry.trim()).filter(Boolean),
 );
 const AUTH_REQUIRED = process.env.FAKE_ACP_AUTH_REQUIRED === '1';
+const LOAD_SESSION = process.env.FAKE_ACP_LOAD_SESSION === '1';
 const hangForever = () => new Promise(() => {});
 
 class FakeAcpAgent {
@@ -26,7 +29,7 @@ class FakeAcpAgent {
     return {
       protocolVersion: acp.PROTOCOL_VERSION,
       agentCapabilities: {
-        loadSession: false,
+        loadSession: LOAD_SESSION,
         sessionCapabilities: {
           close: {},
         },
@@ -64,6 +67,33 @@ class FakeAcpAgent {
     if (HANG.has('authenticate')) return hangForever();
     this.authenticated = true;
     return {};
+  }
+
+  async loadSession(params) {
+    if (HANG.has('session/load')) return hangForever();
+    const sessionId = params.sessionId;
+    // Re-establish a session created earlier on this same (pooled) process; if
+    // the process respawned, recreate minimal state so the resume succeeds.
+    if (!this.sessions.has(sessionId)) {
+      this.sessions.set(sessionId, {
+        cwd: params.cwd,
+        mode: 'default',
+        model: 'cheap',
+        thought: 'low',
+        pendingPrompt: null,
+      });
+    }
+    const state = this.sessions.get(sessionId);
+    return {
+      modes: {
+        availableModes: [
+          { id: 'default', name: 'Default' },
+          { id: 'code', name: 'Code' },
+        ],
+        currentModeId: state.mode,
+      },
+      configOptions: this.configOptions(state),
+    };
   }
 
   async setSessionMode(params) {

@@ -1,5 +1,4 @@
 import {
-  safeParseMindosJsonObject,
   sanitizeToolArgs,
   sanitizeToolOutput,
 } from './tool-event-safety.js';
@@ -31,6 +30,35 @@ export type {
   MindosOpenAIMessage,
   MindosOpenAIToolCall,
 } from './openai-compat-fallback.js';
+// Turn-execution control (retry / timeout) and the ACP lane live in sibling
+// modules; re-exported here so the barrel stays the single import surface.
+export {
+  isMindosRetryableError,
+  isMindosTransientError,
+  mindosRetryDelay,
+  resolveMindosAgentTimeoutMs,
+  runMindosAgentTurnWithRetry,
+  runMindosWithTimeout,
+  sleepMindos,
+} from './retry.js';
+export type { MindosAgentTurnRetryOptions } from './retry.js';
+export {
+  mapMindosAcpUpdateToSseEvents,
+  MindosAcpReportedError,
+  runMindosAcpAgentTurn,
+} from './acp-lane.js';
+export type {
+  MindosAcpAgentTurnCloseOptions,
+  MindosAcpAgentTurnOptions,
+  MindosAcpAgentTurnPromptOptions,
+  MindosAcpAgentTurnResult,
+  MindosAcpAgentTurnServices,
+  MindosAcpAgentTurnSession,
+  MindosAcpAgentTurnSessionOptions,
+  MindosAcpSessionPoolKey,
+  MindosAcpSessionUpdate,
+  MindosAcpUpdateMappingOptions,
+} from './acp-lane.js';
 export type MindosSessionEventType =
   | 'session.started'
   | 'message.delta'
@@ -537,12 +565,6 @@ export function normalizeMindosAgentStepLimit(options: {
   return Math.min(999, Math.max(1, Number(raw)));
 }
 
-export function resolveMindosAgentTimeoutMs(raw: string | undefined = undefined, defaultMs = 600_000): number {
-  if (!raw) return defaultMs;
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : defaultMs;
-}
-
 export function expandMindosAgentAttachedFiles(
   raw: string[] | undefined,
   collectAllFiles: () => string[],
@@ -766,565 +788,6 @@ export type MindosAgentStepEntry = {
   input: string;
 };
 
-/**
- * Numeric HTTP status carried on the error object itself (fetch wrappers and
- * provider SDKs set `status` or `statusCode`). Preferred over message parsing.
- */
-function mindosErrorHttpStatus(err: Error): number | undefined {
-  const candidate = (err as { status?: unknown }).status ?? (err as { statusCode?: unknown }).statusCode;
-  return typeof candidate === 'number' && Number.isInteger(candidate) && candidate >= 100 && candidate < 600
-    ? candidate
-    : undefined;
-}
-
-/**
- * A 5xx number only counts as a server error when it reads as an HTTP status:
- * the message starts with it ("502 Bad Gateway"), it follows a status word
- * ("status 503", "HTTP 502", "Error 529", "status code: 504"), or it is
- * followed by a canonical reason phrase ("returned 502 bad gateway"). Bare
- * numbers such as "context length 512" or "line 503" must not trigger retries.
- */
-const MINDOS_HTTP_5XX_PATTERNS = [
-  /^\s*(?:\[?http\]?\s*)?5\d{2}\b/i,
-  /\b(?:status(?:\s*code)?|http|code|error|err)\s*[:=#-]?\s*\(?5\d{2}\b/i,
-  /\b5\d{2}\s+(?:internal server error|bad gateway|service unavailable|gateway time-?out|server error|overloaded)\b/i,
-];
-
-function mindosMessageMentionsHttp5xx(msg: string): boolean {
-  return MINDOS_HTTP_5XX_PATTERNS.some((pattern) => pattern.test(msg));
-}
-
-/**
- * Transient-failure classifier for the ask turn retry loop
- * (`runMindosAgentTurnWithRetry`). Retries here re-issue an idempotent LLM
- * request with exponential backoff (`mindosRetryDelay`), so rate limits (429)
- * are worth waiting out and are treated as transient. This deliberately
- * differs from `isMindosRetryableError`, which guards client-side turn
- * resubmission where a 429 means "too many concurrent runs" and retrying
- * would duplicate the turn.
- */
-export function isMindosTransientError(err: Error): boolean {
-  const status = mindosErrorHttpStatus(err);
-  if (status !== undefined) {
-    if (status === 429 || (status >= 500 && status < 600)) return true;
-    if (status >= 400 && status < 500) return false;
-  }
-  const msg = err.message.toLowerCase();
-  if (msg.includes('timeout') || msg.includes('timed out') || msg.includes('etimedout')) return true;
-  if (/\b429\b/.test(msg) || msg.includes('rate limit') || msg.includes('too many requests')) return true;
-  if (mindosMessageMentionsHttp5xx(msg) || msg.includes('internal server error') || msg.includes('service unavailable')) return true;
-  if (msg.includes('econnreset') || msg.includes('econnrefused') || msg.includes('socket hang up')) return true;
-  if (msg.includes('overloaded') || msg.includes('capacity')) return true;
-  return false;
-}
-
-/**
- * Statuses that must not trigger a client-side turn resubmission. 401/403 need
- * user action; 429 is the server's concurrency cap (MAX_CONCURRENT_RUNS) and
- * re-POSTing the turn would either be rejected again or duplicate the run once
- * a slot frees up. Contrast with `isMindosTransientError`, where 429 on an
- * idempotent LLM call is retried with backoff.
- */
-const MINDOS_NON_RETRYABLE_STATUS = new Set([401, 403, 429]);
-const MINDOS_NON_RETRYABLE_PATTERNS = [
-  /api.?key/i,
-  /model.*not.?found/i,
-  /authentication/i,
-  /unauthorized/i,
-  /forbidden/i,
-];
-
-export function isMindosRetryableError(err: unknown, httpStatus?: number): boolean {
-  if (err instanceof DOMException && err.name === 'AbortError') return false;
-  if (httpStatus && MINDOS_NON_RETRYABLE_STATUS.has(httpStatus)) return false;
-
-  if (err instanceof Error) {
-    const msg = err.message;
-    if (MINDOS_NON_RETRYABLE_PATTERNS.some((pattern) => pattern.test(msg))) return false;
-  }
-
-  return true;
-}
-
-export function mindosRetryDelay(attempt: number): number {
-  return Math.min(1000 * 2 ** attempt, 10_000);
-}
-
-export function sleepMindos(ms: number, signal?: AbortSignal): Promise<void> {
-  return new Promise((resolveSleep, reject) => {
-    const abortReason = () => signal?.reason ?? new DOMException('The operation was aborted.', 'AbortError');
-    if (signal?.aborted) {
-      reject(abortReason());
-      return;
-    }
-    const timer = setTimeout(resolveSleep, ms);
-    signal?.addEventListener('abort', () => {
-      clearTimeout(timer);
-      reject(abortReason());
-    }, { once: true });
-  });
-}
-
-export type MindosAgentTurnRetryOptions = {
-  maxRetries?: number;
-  signal?: AbortSignal;
-  hasContent(): boolean;
-  onVisibleContent?(): void;
-  send(event: MindOSSSEvent): void;
-  execute(attempt: number): Promise<void>;
-  onAttemptError?(error: Error, attempt: number): Promise<void> | void;
-  isTransientError?: (error: Error) => boolean;
-  retryDelay?: (attempt: number) => number;
-  sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
-  retryMessage?: (attempt: number, maxRetries: number) => string;
-};
-
-export async function runMindosAgentTurnWithRetry(options: MindosAgentTurnRetryOptions): Promise<Error | null> {
-  const maxRetries = options.maxRetries ?? 3;
-  const isTransient = options.isTransientError ?? isMindosTransientError;
-  const delayForAttempt = options.retryDelay ?? mindosRetryDelay;
-  const wait = options.sleep ?? sleepMindos;
-  const retryMessage = options.retryMessage ?? ((attempt, max) => `Request failed, retrying (${attempt}/${max})...`);
-  let lastError: Error | null = null;
-
-  for (let attempt = 1; attempt <= maxRetries; attempt += 1) {
-    try {
-      await options.execute(attempt);
-      return null;
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error));
-      await options.onAttemptError?.(lastError, attempt);
-
-      const canRetry = !options.hasContent() && attempt < maxRetries && isTransient(lastError);
-      if (!canRetry) break;
-
-      options.send({ type: 'status', message: retryMessage(attempt, maxRetries) });
-      await wait(delayForAttempt(attempt), options.signal);
-    }
-  }
-
-  return lastError;
-}
-
-export type MindosAcpSessionUpdate = {
-  type: string;
-  text?: string;
-  error?: string;
-  permission?: {
-    requestId: string;
-    sessionId: string;
-    toolCallId: string;
-    toolName: string;
-    status: 'pending' | 'resolved';
-    options: Array<{ id: string; label: string; kind: string }>;
-    selectedOptionId?: string;
-    outcome?: string;
-  };
-  toolCall?: {
-    toolCallId: string;
-    title?: string;
-    kind?: string;
-    rawInput?: string;
-    rawOutput?: string;
-    status?: string;
-  };
-  plan?: {
-    entries?: Array<{ status?: string; content?: string }>;
-  };
-};
-
-export type MindosAcpUpdateMappingOptions = {
-  suppressErrors?: boolean;
-  permissionRunId?: string;
-};
-
-export function mapMindosAcpUpdateToSseEvents(
-  update: MindosAcpSessionUpdate,
-  options: MindosAcpUpdateMappingOptions = {},
-): { events: MindOSSSEvent[]; hasVisibleContent: boolean } {
-  switch (update.type) {
-    case 'agent_message_chunk':
-    case 'text':
-      if (!update.text) return { events: [], hasVisibleContent: false };
-      return { events: [{ type: 'text_delta', delta: update.text }], hasVisibleContent: true };
-
-    case 'agent_thought_chunk':
-      if (!update.text) return { events: [], hasVisibleContent: false };
-      return { events: [{ type: 'thinking_delta', delta: update.text }], hasVisibleContent: true };
-
-    case 'tool_call':
-      if (!update.toolCall) return { events: [], hasVisibleContent: false };
-      return {
-        events: [{
-          type: 'tool_start',
-          toolCallId: update.toolCall.toolCallId,
-          toolName: update.toolCall.title ?? update.toolCall.kind ?? 'tool',
-          runtime: 'acp',
-          args: sanitizeToolArgs(
-            update.toolCall.title ?? update.toolCall.kind ?? 'tool',
-            safeParseMindosJsonObject(update.toolCall.rawInput),
-          ),
-        }],
-        hasVisibleContent: true,
-      };
-
-    case 'tool_call_update':
-      if (!update.toolCall || (update.toolCall.status !== 'completed' && update.toolCall.status !== 'failed')) {
-        return { events: [], hasVisibleContent: false };
-      }
-      return {
-        events: [{
-          type: 'tool_end',
-          toolCallId: update.toolCall.toolCallId,
-          output: sanitizeToolOutput(update.toolCall.rawOutput ?? ''),
-          isError: update.toolCall.status === 'failed',
-          runtime: 'acp',
-        }],
-        hasVisibleContent: false,
-      };
-
-    case 'permission_request':
-      if (!update.permission) return { events: [], hasVisibleContent: false };
-      return {
-        events: [{
-          type: 'runtime_permission_request',
-          runId: options.permissionRunId ?? update.permission.sessionId,
-          requestId: update.permission.requestId,
-          runtime: 'acp',
-          toolCallId: update.permission.toolCallId,
-          toolName: update.permission.toolName,
-          input: {},
-          options: update.permission.options.map((option) => ({
-            id: option.id,
-            label: option.label,
-            intent: option.kind.startsWith('reject') ? 'deny' : 'allow',
-            scope: option.kind.endsWith('_always') ? 'session' : 'once',
-          })),
-          reason: 'ACP adapter requested permission for a tool call.',
-        }],
-        hasVisibleContent: false,
-      };
-
-    case 'permission_resolved':
-      if (!update.permission) return { events: [], hasVisibleContent: false };
-      return {
-        events: [{
-          type: 'runtime_permission_resolved',
-          runId: options.permissionRunId ?? update.permission.sessionId,
-          requestId: update.permission.requestId,
-          runtime: 'acp',
-          toolCallId: update.permission.toolCallId,
-          decision: update.permission.selectedOptionId ?? update.permission.outcome ?? 'unknown',
-          cancelled: update.permission.outcome === 'cancelled',
-          decisionIntent: update.permission.outcome?.startsWith('reject') ? 'deny' : update.permission.outcome === 'cancelled' ? 'cancel' : 'allow',
-          decisionScope: update.permission.outcome?.endsWith('_always') ? 'session' : 'once',
-        }],
-        hasVisibleContent: false,
-      };
-
-    case 'plan':
-      if (!update.plan?.entries) return { events: [], hasVisibleContent: false };
-      return {
-        events: [{
-          type: 'text_delta',
-          delta: `\n\n${update.plan.entries.map((entry) => `${planEntryIcon(entry.status)} ${entry.content ?? ''}`).join('\n')}\n\n`,
-        }],
-        hasVisibleContent: true,
-      };
-
-    case 'error':
-      if (options.suppressErrors) return { events: [], hasVisibleContent: false };
-      return { events: [{ type: 'error', message: update.error ?? 'ACP agent error' }], hasVisibleContent: false };
-
-    default:
-      return { events: [], hasVisibleContent: false };
-  }
-}
-
-function planEntryIcon(status: string | undefined): string {
-  if (status === 'completed') return '\u2705';
-  if (status === 'in_progress') return '\u26a1';
-  return '\u23f3';
-}
-
-export type MindosAcpAgentTurnSession = {
-  id: string;
-  agentSessionId?: string;
-  agentCapabilities?: { loadSession?: boolean };
-};
-
-export type MindosAcpAgentTurnSessionOptions = {
-  cwd: string;
-  permissionMode?: 'readonly' | 'ask' | 'auto' | 'full';
-  /** Aborts the handshake and kills the agent process when the turn is cancelled. */
-  signal?: AbortSignal;
-};
-
-export type MindosAcpAgentTurnPromptOptions = {
-  signal?: AbortSignal;
-  /** Remaining lane budget for this prompt; the session layer cancels the agent when it elapses. */
-  timeoutMs?: number;
-};
-
-export type MindosAcpAgentTurnCloseOptions = {
-  closeAgentSession?: boolean;
-};
-
-export type MindosAcpAgentTurnServices = {
-  createSession(agentId: string, options: MindosAcpAgentTurnSessionOptions): Promise<MindosAcpAgentTurnSession>;
-  loadSession?(
-    agentId: string,
-    existingSessionId: string,
-    options: MindosAcpAgentTurnSessionOptions,
-  ): Promise<MindosAcpAgentTurnSession>;
-  promptStream(
-    sessionId: string,
-    prompt: string,
-    onUpdate: (update: MindosAcpSessionUpdate) => void,
-    options?: MindosAcpAgentTurnPromptOptions,
-  ): Promise<void>;
-  cancelPrompt?(sessionId: string): Promise<void>;
-  closeSession(sessionId: string, options?: MindosAcpAgentTurnCloseOptions): Promise<void>;
-};
-
-export type MindosAcpAgentTurnOptions = MindosAcpAgentTurnServices & {
-  agentId: string;
-  cwd: string;
-  prompt: string;
-  maxRetries?: number;
-  timeoutMs?: number;
-  signal?: AbortSignal;
-  hasContent(): boolean;
-  onVisibleContent?(): void;
-  send(event: MindOSSSEvent): void;
-  permissionRunId?: string;
-  sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
-  retryDelay?: (attempt: number) => number;
-  timeoutMessage?: (timeoutMs: number) => string;
-  errorMessage?: (error: Error) => string;
-  externalSessionId?: string;
-  onSessionReady?(
-    session: MindosAcpAgentTurnSession,
-    details: { resumed: boolean; externalSessionId?: string },
-  ): void | Promise<void>;
-};
-
-export type MindosAcpAgentTurnResult = {
-  error?: Error;
-};
-
-/**
- * An `error` update reported by the ACP agent during a prompt. The lane
- * carries it out of the attempt so the turn ends as a failure (ledger
- * `failed`, no `done`), mirroring the native lane's reported-error contract.
- */
-export class MindosAcpReportedError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'MindosAcpReportedError';
-  }
-}
-
-function abortReasonOf(signal: AbortSignal): unknown {
-  return signal.reason ?? new DOMException('The operation was aborted.', 'AbortError');
-}
-
-/** Reject as soon as `signal` aborts; `onAbort` runs once before the rejection. */
-function raceWithAbort<T>(promise: Promise<T>, signal: AbortSignal | undefined, onAbort?: () => void): Promise<T> {
-  if (!signal) return promise;
-  if (signal.aborted) {
-    onAbort?.();
-    return Promise.reject(abortReasonOf(signal));
-  }
-  let cleanup = () => {};
-  const aborted = new Promise<never>((_resolve, reject) => {
-    const handler = () => {
-      onAbort?.();
-      reject(abortReasonOf(signal));
-    };
-    signal.addEventListener('abort', handler, { once: true });
-    cleanup = () => signal.removeEventListener('abort', handler);
-  });
-  return Promise.race([promise, aborted]).finally(cleanup);
-}
-
-export async function runMindosAcpAgentTurn(options: MindosAcpAgentTurnOptions): Promise<MindosAcpAgentTurnResult> {
-  let sessionId: string | undefined;
-  let closeAgentSessionOnCleanup = true;
-
-  const closeCurrentSession = async () => {
-    if (!sessionId) return;
-    const id = sessionId;
-    const closeAgentSession = closeAgentSessionOnCleanup;
-    sessionId = undefined;
-    closeAgentSessionOnCleanup = true;
-    await options.closeSession(id, { closeAgentSession }).catch(() => {});
-  };
-
-  try {
-    const timeoutMs = options.timeoutMs ?? resolveMindosAgentTimeoutMs();
-    const timeoutMessage = options.timeoutMessage?.(timeoutMs) ?? `ACP agent execution timeout after ${timeoutMs / 1000} seconds`;
-    const lastError = await runMindosAgentTurnWithRetry({
-      maxRetries: options.maxRetries,
-      signal: options.signal,
-      hasContent: options.hasContent,
-      send: options.send,
-      sleep: options.sleep,
-      retryDelay: options.retryDelay,
-      onAttemptError: closeCurrentSession,
-      execute: async () => {
-        await closeCurrentSession();
-        // One budget per attempt covers session open and the prompt: a
-        // handshake that hangs must time out (and honour cancel) exactly like
-        // a hanging prompt does.
-        const deadline = Date.now() + timeoutMs;
-        const remainingMs = () => Math.max(1, deadline - Date.now());
-
-        const sessionOpen = await openAcpTurnSessionScoped(options, remainingMs(), timeoutMessage);
-        const session = sessionOpen.session;
-        sessionId = session.id;
-        closeAgentSessionOnCleanup = true;
-        const externalSessionId = resumableAcpSessionId(
-          session,
-          sessionOpen.resumed ? options.externalSessionId : undefined,
-        );
-        closeAgentSessionOnCleanup = !externalSessionId;
-        await options.onSessionReady?.(session, {
-          resumed: sessionOpen.resumed,
-          ...(externalSessionId ? { externalSessionId } : {}),
-        });
-        if (externalSessionId) {
-          options.send({
-            type: 'runtime_binding',
-            runtime: 'acp',
-            externalSessionId,
-            cwd: options.cwd,
-            status: 'active',
-          });
-        }
-
-        let reportedError: MindosAcpReportedError | undefined;
-        const promptTimeoutMs = remainingMs();
-        await runMindosWithTimeout(
-          raceWithAbort(
-            options.promptStream(sessionId, options.prompt, (update) => {
-              if (update.type === 'error') {
-                // Recorded, not forwarded: the retry wrapper emits exactly one
-                // SSE error for the terminal failure of the whole turn.
-                reportedError ??= new MindosAcpReportedError(update.error ?? 'ACP agent error');
-                return;
-              }
-              const mapped = mapMindosAcpUpdateToSseEvents(update, {
-                permissionRunId: options.permissionRunId,
-              });
-              if (mapped.hasVisibleContent) options.onVisibleContent?.();
-              for (const event of mapped.events) options.send(event);
-            }, { signal: options.signal, timeoutMs: promptTimeoutMs }),
-            options.signal,
-            () => { void options.cancelPrompt?.(session.id).catch(() => {}); },
-          ),
-          promptTimeoutMs,
-          timeoutMessage,
-        );
-        if (reportedError) throw reportedError;
-      },
-    });
-
-    if (lastError) {
-      options.send({ type: 'error', message: options.errorMessage?.(lastError) ?? `ACP Agent Error: ${lastError.message}` });
-      return { error: lastError };
-    }
-
-    options.send({ type: 'done' });
-    return {};
-  } finally {
-    await closeCurrentSession();
-  }
-}
-
-/**
- * Open (resume or create) the session under the attempt's remaining budget
- * and abort signal. A session that arrives after the lane already gave up is
- * closed so the agent process does not outlive the turn.
- */
-async function openAcpTurnSessionScoped(
-  options: MindosAcpAgentTurnOptions,
-  timeoutMs: number,
-  timeoutMessage: string,
-): Promise<{ session: MindosAcpAgentTurnSession; resumed: boolean }> {
-  let gaveUp = false;
-  const opening = openAcpTurnSession(options);
-  opening.then((late) => {
-    if (!gaveUp) return;
-    const keepAgentSession = !!resumableAcpSessionId(late.session, late.resumed ? options.externalSessionId : undefined);
-    void options.closeSession(late.session.id, { closeAgentSession: !keepAgentSession }).catch(() => {});
-  }, () => {});
-  try {
-    return await runMindosWithTimeout(raceWithAbort(opening, options.signal), timeoutMs, timeoutMessage);
-  } catch (error) {
-    gaveUp = true;
-    throw error;
-  }
-}
-
-async function openAcpTurnSession(
-  options: MindosAcpAgentTurnOptions,
-): Promise<{ session: MindosAcpAgentTurnSession; resumed: boolean }> {
-  const externalSessionId = options.externalSessionId?.trim();
-  const sessionOptions: MindosAcpAgentTurnSessionOptions = {
-    cwd: options.cwd,
-    ...(options.signal ? { signal: options.signal } : {}),
-  };
-  if (externalSessionId && options.loadSession) {
-    try {
-      return {
-        session: await options.loadSession(options.agentId, externalSessionId, sessionOptions),
-        resumed: true,
-      };
-    } catch (error) {
-      // A cancelled turn must not fall through to a fresh session.
-      if (options.signal?.aborted) throw error;
-      options.send({
-        type: 'status',
-        runtime: 'acp',
-        visible: true,
-        message: 'Could not resume the previous ACP session, so MindOS started a fresh ACP session.',
-      });
-    }
-  }
-
-  return {
-    session: await options.createSession(options.agentId, sessionOptions),
-    resumed: false,
-  };
-}
-
-function resumableAcpSessionId(
-  session: MindosAcpAgentTurnSession,
-  fallbackExternalSessionId?: string,
-): string | undefined {
-  const externalSessionId = session.agentSessionId?.trim() || fallbackExternalSessionId?.trim();
-  if (!externalSessionId) return undefined;
-  return session.agentCapabilities?.loadSession ? externalSessionId : undefined;
-}
-
-export async function runMindosWithTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(() => {
-      const error = new Error(message) as Error & { code?: string };
-      error.code = 'TIMEOUT';
-      reject(error);
-    }, timeoutMs);
-  });
-
-  try {
-    return await Promise.race([promise, timeout]);
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
-}
-
 export function detectMindosAgentLoop(history: MindosAgentStepEntry[], threshold = 3): boolean {
   if (history.length < threshold) return false;
 
@@ -1511,10 +974,10 @@ function createMindosAssistantHistoryMessage(input: {
   };
 }
 
+export { detectMindosAgentLoop as detectLoop };
 export {
-  detectMindosAgentLoop as detectLoop,
   isMindosRetryableError as isRetryableError,
   isMindosTransientError as isTransientError,
   mindosRetryDelay as retryDelay,
   sleepMindos as sleep,
-};
+} from './retry.js';

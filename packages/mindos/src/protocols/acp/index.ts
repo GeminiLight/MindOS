@@ -66,6 +66,14 @@ export {
   setConfigOption,
   setMode,
 } from './session.js';
+export {
+  ACP_SESSION_IDLE_TTL_MS,
+  parkAcpSession,
+  resetAcpSessionPoolForTest,
+  takePooledAcpSession,
+} from './session-pool.js';
+export { setAcpSessionChangedEmitterForTest } from './session-registry.js';
+export type { AcpSessionPoolKey } from './session-registry.js';
 export { ACP_ERRORS } from './types.js';
 export type {
   AcpAgentAdapterCommandDeclaration,

@@ -1653,3 +1653,117 @@ describe('Codex native lane user cancellation', () => {
     expect(events.some((event) => event.type === 'runtime_binding' && event.status === 'failed')).toBe(true);
   });
 });
+
+/**
+ * A pooled app-server serves several turns over one notification queue, so
+ * the client must fence notifications by turn identity and let each turn
+ * install its own server-request handler.
+ */
+describe('codex app-server client across pooled turns', () => {
+  function createScriptedTransport() {
+    const queue = new AsyncQueue<CodexAppServerMessage>();
+    const sent: unknown[] = [];
+    let turnCounter = 0;
+    const transport: CodexAppServerTransport & { sent: unknown[]; push(message: CodexAppServerMessage): void } = {
+      sent,
+      push: (message) => queue.push(message),
+      send(message) {
+        sent.push(message);
+        const record = message as { id?: number; method?: string; params?: Record<string, unknown> };
+        if (record.method === 'initialize') queue.push({ id: record.id!, result: {} });
+        if (record.method === 'thread/start') queue.push({ id: record.id!, result: { thread: { id: 'thr-1' } } });
+        if (record.method === 'turn/start') {
+          turnCounter += 1;
+          const turnId = `turn-${turnCounter}`;
+          queue.push({ id: record.id!, result: { turn: { id: turnId } } });
+          if (turnCounter === 1) {
+            // Turn 1 is interrupted by the caller; its terminal notification arrives late (see below).
+            return;
+          }
+          // A stale terminal notification for the interrupted turn lands first.
+          queue.push({ method: 'turn/completed', params: { threadId: 'thr-1', turn: { id: 'turn-1', status: 'interrupted' } } });
+          queue.push({ method: 'item/agentMessage/delta', params: { threadId: 'thr-1', turnId, delta: 'second turn' } });
+          queue.push({ method: 'item/agentMessage/delta', params: { delta: 'no identity, still ours' } });
+          queue.push({ method: 'turn/completed', params: { threadId: 'thr-1', turn: { id: turnId, status: 'completed' } } });
+        }
+        if (record.method === 'turn/interrupt') queue.push({ id: record.id!, result: {} });
+      },
+      read() {
+        return queue;
+      },
+      close() {
+        queue.close();
+      },
+    };
+    return transport;
+  }
+
+  it('ignores a late terminal notification of an interrupted earlier turn', async () => {
+    const transport = createScriptedTransport();
+    const client = createCodexAppServerClient(transport);
+    await client.initialize();
+    const { threadId } = await client.startThread({ cwd: '/tmp/mind' });
+
+    // Turn 1: read one step (the turn/start response), then interrupt without waiting for its terminal notification.
+    const first = client.startTurn({ threadId, input: [{ type: 'text', text: 'one' }] })[Symbol.asyncIterator]();
+    const firstNext = first.next();
+    transport.push({ method: 'item/agentMessage/delta', params: { threadId, turnId: 'turn-1', delta: 'first' } });
+    expect((await firstNext).value).toEqual({ method: 'item/agentMessage/delta', params: { threadId, turnId: 'turn-1', delta: 'first' } });
+    await first.return?.();
+    await client.interruptTurn?.({ threadId });
+
+    const second: CodexAppServerMessage[] = [];
+    for await (const notification of client.startTurn({ threadId, input: [{ type: 'text', text: 'two' }] })) {
+      second.push(notification);
+    }
+
+    expect(second).toEqual([
+      { method: 'item/agentMessage/delta', params: { threadId: 'thr-1', turnId: 'turn-2', delta: 'second turn' } },
+      { method: 'item/agentMessage/delta', params: { delta: 'no identity, still ours' } },
+      { method: 'turn/completed', params: { threadId: 'thr-1', turn: { id: 'turn-2', status: 'completed' } } },
+    ]);
+  });
+
+  it('routes server requests to the handler installed for the current turn', async () => {
+    const transport = createScriptedTransport();
+    const seen: string[] = [];
+    const client = createCodexAppServerClient(transport, {
+      handleServerRequest: () => { seen.push('initial'); return { decision: 'decline' }; },
+    });
+    await client.initialize();
+    const { threadId } = await client.startThread({ cwd: '/tmp/mind' });
+
+    client.setServerRequestHandler?.(() => { seen.push('turn-2'); return { decision: 'accept' }; });
+    const turn = client.startTurn({ threadId, input: [{ type: 'text', text: 'two' }] })[Symbol.asyncIterator]();
+    const turnStarted = turn.next();
+    // Turn 1's scripted turn/start response carries no notifications, so push
+    // one to make the turn live and let next() resolve before we probe the
+    // request handler (server requests are answered by the read loop, not
+    // yielded by the turn generator).
+    transport.push({ method: 'item/agentMessage/delta', params: { delta: 'turn-live' } });
+    await turnStarted;
+    transport.push({ id: 77, method: 'item/commandExecution/requestApproval', params: { itemId: 'item-1' } });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await turn.return?.();
+
+    expect(seen).toEqual(['turn-2']);
+    expect(transport.sent).toContainEqual({ id: 77, result: { decision: 'accept' } });
+
+    // Clearing the handler falls back to the default (cancel) response.
+    client.setServerRequestHandler?.(undefined);
+    transport.push({ id: 78, method: 'item/commandExecution/requestApproval', params: { itemId: 'item-2' } });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(seen).toEqual(['turn-2']);
+    expect(transport.sent).toContainEqual({ id: 78, result: { decision: 'cancel' } });
+  });
+
+  it('reports the transport liveness through isAlive', async () => {
+    const transport = createScriptedTransport();
+    let alive = true;
+    const client = createCodexAppServerClient({ ...transport, isAlive: () => alive });
+    await client.initialize();
+    expect(client.isAlive?.()).toBe(true);
+    alive = false;
+    expect(client.isAlive?.()).toBe(false);
+  });
+});

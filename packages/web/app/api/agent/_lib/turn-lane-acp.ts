@@ -21,6 +21,10 @@ import type {
   AcpClientCallbacks,
   AcpPermissionEvent,
 } from '@geminilight/mindos/protocols/acp';
+import {
+  parkAcpSession,
+  takePooledAcpSession,
+} from '@geminilight/mindos/protocols/acp';
 import { runWithAgentRunContext } from '@geminilight/mindos/agent/agent-run-context';
 import {
   completeAgentRun,
@@ -150,6 +154,23 @@ async function runAcpRuntimeTurn(
           await applyAcpRuntimeOptions(session.id, input.acpRuntimeOptions);
           return session;
         },
+        // Reuse a live session parked by a previous turn (skips the agent spawn
+        // + handshake); apply this turn's runtime options to it. If the options
+        // cannot be applied, close it and let the lane resume fresh.
+        acquireSession: async (key) => {
+          const pooled = takePooledAcpSession(key);
+          if (!pooled) return undefined;
+          try {
+            await applyAcpRuntimeOptions(pooled.id, input.acpRuntimeOptions);
+            return pooled;
+          } catch {
+            await closeSession(pooled.id, { closeAgentSession: false }).catch(() => {});
+            return undefined;
+          }
+        },
+        // Park the session after a clean finish so the next turn with the same
+        // (agentId, cwd, externalSessionId) reuses the same live agent process.
+        releaseSession: (session, key) => parkAcpSession(session.id, key),
         externalSessionId: resumableAcpBindingExternalSessionId(input.runtimeBinding),
         onSessionReady: (session, details) => {
           activeCapsuleBinding = capsuleRuntimeBinding({

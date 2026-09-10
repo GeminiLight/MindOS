@@ -50,6 +50,7 @@ vi.mock('./subprocess.js', () => ({
 import { createSession, createSessionFromEntry, loadSession, listSessions, listSessionsForAgent, prompt, promptStream, cancelPrompt, closeSession, setMode, setConfigOption, getSession, getActiveSessions, getSessionSnapshot, getActiveSessionSnapshots } from './session';
 import { findAcpAgent } from './registry.js';
 import { killAgent, spawnAndConnect } from './subprocess.js';
+import { setAcpSessionChangedEmitterForTest } from './session-registry.js';
 import { RequestError } from '@agentclientprotocol/sdk';
 import { getCachedAcpHandshakeHealth, resetAcpHandshakeHealthCacheForTest } from './handshake-health.js';
 
@@ -1301,5 +1302,56 @@ describe('ACP Session (SDK-based)', () => {
       expect(getSession(session.id)).toBeUndefined();
       expect(killAgent).toHaveBeenCalledTimes(1);
     });
+  });
+});
+
+describe('acp.session.changed events', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    capturedCallbacks = {};
+    mockInitialize = vi.fn().mockResolvedValue({ agentCapabilities: {} });
+    mockNewSession = vi.fn().mockResolvedValue({ sessionId: 'agent-ses-1' });
+    mockAuthenticate = vi.fn().mockResolvedValue({});
+    mockPrompt = vi.fn().mockResolvedValue({ stopReason: 'end_turn' });
+    mockCancel = vi.fn().mockResolvedValue(undefined);
+    mockSetSessionMode = vi.fn().mockResolvedValue({});
+    mockSetSessionConfigOption = vi.fn().mockResolvedValue({ configOptions: [] });
+    mockCloseSession = vi.fn().mockResolvedValue({});
+    mockLoadSession = vi.fn().mockResolvedValue({ sessionId: 'loaded-ses-1' });
+    mockListSessions = vi.fn().mockResolvedValue({ sessions: [] });
+    await Promise.allSettled(getActiveSessions().map(s => closeSession(s.id)));
+  });
+
+  afterEach(() => {
+    setAcpSessionChangedEmitterForTest(undefined);
+  });
+
+  it('emits idle on register, active on prompt start, idle on prompt end, and closed on close', async () => {
+    const events: Array<{ agentId: string; sessionId: string; state: string }> = [];
+    setAcpSessionChangedEmitterForTest((event) => {
+      events.push({ agentId: event.agentId, sessionId: event.sessionId, state: event.state });
+    });
+
+    const session = await createSessionFromEntry(MOCK_ENTRY);
+    await promptStream(session.id, 'hi', () => {});
+    await closeSession(session.id);
+
+    expect(events.map((event) => event.state)).toEqual(['idle', 'active', 'idle', 'closed']);
+    expect(new Set(events.map((event) => event.sessionId))).toEqual(new Set([session.id]));
+    expect(new Set(events.map((event) => event.agentId))).toEqual(new Set(['test-agent']));
+  });
+
+  it('emits error when a prompt fails and closed when a dead session is reaped', async () => {
+    const events: Array<{ sessionId: string; state: string }> = [];
+    setAcpSessionChangedEmitterForTest((event) => {
+      events.push({ sessionId: event.sessionId, state: event.state });
+    });
+
+    const session = await createSessionFromEntry(MOCK_ENTRY);
+    mockPrompt.mockRejectedValueOnce(new Error('prompt blew up'));
+    await expect(promptStream(session.id, 'hi', () => {})).rejects.toThrow('prompt blew up');
+
+    const states = events.filter((event) => event.sessionId === session.id).map((event) => event.state);
+    expect(states).toContain('error');
   });
 });

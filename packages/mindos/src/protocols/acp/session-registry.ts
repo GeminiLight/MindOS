@@ -11,6 +11,7 @@ import {
   DEFAULT_ACP_RPC_TIMEOUTS,
   type AcpRpcTimeouts,
 } from './session-rpc.js';
+import { getMindosServerEventBus } from '../../server/events/bus.js';
 
 export const sessions = new Map<string, AcpSession>();
 export const sessionConnections = new Map<string, AcpConnection>();
@@ -18,6 +19,146 @@ const sessionTimeouts = new Map<string, AcpRpcTimeouts>();
 
 export const MAX_SESSIONS_PER_AGENT = 3;
 export const MAX_TOTAL_SESSIONS = 10;
+
+/* ── Session-state events ─────────────────────────────────────────────── */
+
+export type AcpSessionChangedState = 'idle' | 'active' | 'error' | 'closed';
+
+/** Identity of a pooled ACP session (matches the lane's `MindosAcpSessionPoolKey`). */
+export type AcpSessionPoolKey = {
+  agentId: string;
+  cwd: string;
+  externalSessionId: string;
+};
+
+type AcpSessionChangedEvent = {
+  type: 'acp.session.changed';
+  agentId: string;
+  sessionId: string;
+  state: AcpSessionChangedState;
+};
+
+/**
+ * Injectable for tests; defaults to the process-wide server event bus so
+ * `useRuntimeSessionProjection` refreshes on session state changes instead of
+ * only at turn boundaries. Emission must never break the session lifecycle, so
+ * every failure is swallowed.
+ */
+let sessionChangedEmitter: ((event: AcpSessionChangedEvent) => void) | undefined;
+
+export function setAcpSessionChangedEmitterForTest(
+  emitter: ((event: AcpSessionChangedEvent) => void) | undefined,
+): void {
+  sessionChangedEmitter = emitter;
+}
+
+function emitAcpSessionChanged(sessionId: string, agentId: string, state: AcpSessionChangedState): void {
+  try {
+    const event: AcpSessionChangedEvent = { type: 'acp.session.changed', agentId, sessionId, state };
+    if (sessionChangedEmitter) sessionChangedEmitter(event);
+    else getMindosServerEventBus().emit(event);
+  } catch {
+    // Observers must not break session bookkeeping.
+  }
+}
+
+/* ── Parked (pooled idle) sessions ────────────────────────────────────── */
+
+type ParkedEntry = {
+  key: AcpSessionPoolKey;
+  parkedAt: number;
+  timer: ReturnType<typeof setTimeout>;
+};
+
+/**
+ * Idle, resumable sessions kept alive between turns so the next turn with the
+ * same key skips the agent spawn + handshake. Lives beside `sessions` so the
+ * two tables cannot drift; a parked session is still a registered session in
+ * state `idle`.
+ */
+const parkedSessions = new Map<string, ParkedEntry>();
+
+function clearParkedEntry(sessionId: string): void {
+  const entry = parkedSessions.get(sessionId);
+  if (!entry) return;
+  clearTimeout(entry.timer);
+  parkedSessions.delete(sessionId);
+}
+
+/**
+ * Drop a parked session for good: free its slot synchronously and tear the
+ * agent connection down in the background, keeping the agent-side session
+ * (parked sessions are resumable, so a later turn can `session/load` it).
+ */
+function evictParkedSession(sessionId: string): void {
+  const entry = parkedSessions.get(sessionId);
+  clearParkedEntry(sessionId);
+  const session = sessions.get(sessionId);
+  const conn = sessionConnections.get(sessionId);
+  if (!session && !conn && !entry) return;
+  const timeouts = getSessionTimeouts(sessionId);
+  unregisterSession(sessionId);
+  if (conn) {
+    void closeAgentConnection(conn, session?.agentSessionId ?? sessionId, {
+      closeAgentSession: false,
+      timeoutMs: timeouts.close,
+      capabilities: session?.agentCapabilities,
+    }).catch(() => {});
+  }
+}
+
+/** Evict the least-recently-parked session (optionally scoped to one agent). True when one was evicted. */
+function evictLeastRecentlyParked(agentId?: string): boolean {
+  let oldestId: string | undefined;
+  let oldestAt = Number.POSITIVE_INFINITY;
+  for (const [sessionId, entry] of parkedSessions) {
+    if (agentId && entry.key.agentId !== agentId) continue;
+    if (entry.parkedAt < oldestAt) {
+      oldestAt = entry.parkedAt;
+      oldestId = sessionId;
+    }
+  }
+  if (!oldestId) return false;
+  evictParkedSession(oldestId);
+  return true;
+}
+
+/** Record a session as parked and start its idle TTL (fires `evictParkedSession`). */
+export function parkSession(sessionId: string, key: AcpSessionPoolKey, idleTtlMs: number): void {
+  clearParkedEntry(sessionId);
+  const timer = setTimeout(() => evictParkedSession(sessionId), Math.max(1, idleTtlMs));
+  timer.unref?.();
+  parkedSessions.set(sessionId, { key, parkedAt: Date.now(), timer });
+}
+
+/** Remove and return the parked session id matching `key` (its TTL timer is cleared). */
+export function takeParkedSession(key: AcpSessionPoolKey): string | undefined {
+  for (const [sessionId, entry] of parkedSessions) {
+    if (
+      entry.key.agentId === key.agentId
+      && entry.key.cwd === key.cwd
+      && entry.key.externalSessionId === key.externalSessionId
+    ) {
+      clearParkedEntry(sessionId);
+      return sessionId;
+    }
+  }
+  return undefined;
+}
+
+export function isSessionParked(sessionId: string): boolean {
+  return parkedSessions.has(sessionId);
+}
+
+/** Evict a specific parked session now (a taken session that failed validation). */
+export function evictParkedAcpSession(sessionId: string): void {
+  evictParkedSession(sessionId);
+}
+
+/** Clear every parked entry + timer without closing sessions (tests, hot reload). */
+export function resetParkedSessionsForTest(): void {
+  for (const sessionId of [...parkedSessions.keys()]) clearParkedEntry(sessionId);
+}
 
 /**
  * Slots reserved by createSessionFromEntry() / loadSession() calls that are
@@ -42,12 +183,23 @@ export function reserveSessionSlot(agentId: string): () => void {
 }
 
 export function checkSessionLimits(agentId: string): void {
+  // Idle pooled (parked) sessions yield their slot before a new open is
+  // rejected: total-limit pressure evicts the least-recently-parked session of
+  // any agent; per-agent pressure evicts that agent's least-recently-parked one.
+  // Active (non-parked) sessions are never evicted, so the limits themselves
+  // are unchanged.
+  if (sessions.size + pendingSessionTotal >= MAX_TOTAL_SESSIONS) {
+    evictLeastRecentlyParked();
+  }
   if (sessions.size + pendingSessionTotal >= MAX_TOTAL_SESSIONS) {
     throw new Error(`Maximum concurrent sessions (${MAX_TOTAL_SESSIONS}) reached. Close existing sessions first.`);
   }
-  const agentCount = [...sessions.values()].filter(s => s.agentId === agentId).length
+  const agentCount = () => [...sessions.values()].filter(s => s.agentId === agentId).length
     + (pendingSessionsPerAgent.get(agentId) ?? 0);
-  if (agentCount >= MAX_SESSIONS_PER_AGENT) {
+  if (agentCount() >= MAX_SESSIONS_PER_AGENT) {
+    evictLeastRecentlyParked(agentId);
+  }
+  if (agentCount() >= MAX_SESSIONS_PER_AGENT) {
     throw new Error(`Maximum concurrent sessions for agent "${agentId}" (${MAX_SESSIONS_PER_AGENT}) reached.`);
   }
 }
@@ -62,14 +214,18 @@ export function registerSession(session: AcpSession, conn: AcpConnection, timeou
   sessionConnections.set(session.id, conn);
   sessionTimeouts.set(session.id, timeouts);
   ensureReaper();
+  emitAcpSessionChanged(session.id, session.agentId, session.state);
 }
 
 export function unregisterSession(sessionId: string): void {
+  const session = sessions.get(sessionId);
+  clearParkedEntry(sessionId);
   sessions.delete(sessionId);
   sessionConnections.delete(sessionId);
   sessionTimeouts.delete(sessionId);
   activePrompts.delete(sessionId);
   stopReaperWhenIdle();
+  if (session) emitAcpSessionChanged(sessionId, session.agentId, 'closed');
 }
 
 export function getSessionTimeouts(sessionId: string): AcpRpcTimeouts {
@@ -99,6 +255,7 @@ export function getSessionAndConn(sessionId: string): { session: AcpSession; con
 export function updateSessionState(session: AcpSession, state: AcpSessionState): void {
   session.state = state;
   session.lastActivityAt = new Date().toISOString();
+  emitAcpSessionChanged(session.id, session.agentId, state);
 }
 
 /* ── Prompt ownership ─────────────────────────────────────────────────── */

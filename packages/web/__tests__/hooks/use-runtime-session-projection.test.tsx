@@ -119,6 +119,25 @@ describe('useRuntimeSessionProjection', () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
+  it('refreshes on acp.session.changed for this runtime only', async () => {
+    const fetchMock = vi.fn(async () => projectionResponse());
+    const source = await mountConnected(fetchMock);
+
+    // Another agent's session transition must not refresh this projection.
+    await act(async () => {
+      source.emit('acp.session.changed', { type: 'acp.session.changed', agentId: 'claude', sessionId: 'ses-other', state: 'active' }, 2);
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // This runtime's session transition refreshes immediately (no turn boundary needed).
+    await act(async () => {
+      source.emit('acp.session.changed', { type: 'acp.session.changed', agentId: 'gemini', sessionId: 'ses-gemini', state: 'active' }, 3);
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('polls every 30s only while the stream is unsupported and the tab is visible', async () => {
     vi.stubGlobal('EventSource', undefined);
     delete (globalThis as { EventSource?: unknown }).EventSource;

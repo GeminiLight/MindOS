@@ -30,6 +30,7 @@ export const SERVER_EVENT_TYPES = [
   'runtime.changed',
   'settings.changed',
   'control-plane.changed',
+  'acp.session.changed',
   'heartbeat',
   'ready',
 ] as const;
@@ -59,6 +60,8 @@ export interface ServerEventMap {
   'settings.changed': { type: 'settings.changed' };
   /** A runtime control-plane mutation (schedule / approval / task / mailbox) was committed on the server. */
   'control-plane.changed': { type: 'control-plane.changed'; mindRoot: string; action: string; updatedAt: string };
+  /** An ACP session changed state; the session projection for `agentId` refreshes. */
+  'acp.session.changed': { type: 'acp.session.changed'; agentId: string; sessionId: string; state: 'idle' | 'active' | 'error' | 'closed' };
   heartbeat: { type: 'heartbeat' };
   ready: { type: 'ready'; lastEventId: number; resync: boolean; treeVersion?: number };
 }
