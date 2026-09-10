@@ -1,7 +1,5 @@
 import type {
   AgentRuntimeCompatibilityAssessment,
-  AgentRuntimeCompatibilityOwner,
-  AgentRuntimeCompatibilityRequirementStatus,
   AgentRuntimeDescriptor,
   AgentRuntimeKind,
   AgentRuntimeRemoteMode,
@@ -9,6 +7,19 @@ import type {
   AgentRuntimeUnattendedSupport,
 } from '../../agent/runtime/registry.js';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
+import {
+  filterProjectionsByRuntime,
+  reason,
+  runtimeAvailableReason,
+  runtimeKey,
+  uniqSorted,
+  type AgentRuntimeProjectionReason,
+} from './runtime-projection-shared.js';
+
+const AUTOMATION_AVAILABILITY_WORDING = {
+  available: 'is available for remote and automation diagnostics.',
+  unavailable: 'is not available, so remote and 24/7 readiness cannot be trusted.',
+};
 
 export type AgentRuntimeAutomationProjectionStatus =
   | 'ready'
@@ -23,12 +34,7 @@ export type AgentRuntimeAutomationReadinessStatus =
   | 'blocked'
   | 'unknown';
 
-export type AgentRuntimeAutomationProjectionReason = {
-  id: string;
-  status: AgentRuntimeCompatibilityRequirementStatus;
-  owner: AgentRuntimeCompatibilityOwner;
-  summary: string;
-};
+export type AgentRuntimeAutomationProjectionReason = AgentRuntimeProjectionReason;
 
 export type AgentRuntimeAutomationProjection = {
   schemaVersion: 1;
@@ -72,10 +78,7 @@ export async function handleAgentRuntimeAutomationProjectionsGet(
   try {
     const runtimes = await services.listRuntimes();
     const payload = buildAgentRuntimeAutomationProjectionsPayload({ runtimes });
-    const runtimeFilter = searchParams.get('runtime')?.trim();
-    const projections = runtimeFilter
-      ? payload.projections.filter((projection) => projection.runtimeId === runtimeFilter || projection.runtimeKind === runtimeFilter)
-      : payload.projections;
+    const projections = filterProjectionsByRuntime(payload.projections, searchParams.get('runtime'));
     return json(
       { ...payload, projections },
       { headers: { 'Cache-Control': 'no-store' } },
@@ -111,7 +114,7 @@ function buildRuntimeAutomationProjection(runtime: AgentRuntimeDescriptor): Agen
 
   return {
     schemaVersion: 1,
-    runtimeId: runtime.runtimeId ?? runtime.id,
+    runtimeId: runtimeKey(runtime),
     runtimeName: runtime.name,
     runtimeKind: runtime.kind,
     runtimeStatus: runtime.status,
@@ -137,7 +140,7 @@ function buildRuntimeAutomationProjection(runtime: AgentRuntimeDescriptor): Agen
     },
     productPrerequisites,
     reasons: [
-      runtimeAvailableReason(runtime),
+      runtimeAvailableReason(runtime, AUTOMATION_AVAILABILITY_WORDING),
       reason(
         'server-runnable',
         remoteSupported ? 'satisfied' : runtimeUnavailable ? 'unknown' : 'missing',
@@ -205,28 +208,4 @@ function resolveAutomationProjectionStatus(input: {
 
 function levelToReadiness(level: AgentRuntimeCompatibilityAssessment['level']): AgentRuntimeAutomationReadinessStatus {
   return level;
-}
-
-function runtimeAvailableReason(runtime: AgentRuntimeDescriptor): AgentRuntimeAutomationProjectionReason {
-  return reason(
-    'runtime-available',
-    runtime.status === 'available' ? 'satisfied' : 'missing',
-    runtime.status === 'available' ? 'mindos' : 'shared',
-    runtime.status === 'available'
-      ? `${runtime.name} is available for remote and automation diagnostics.`
-      : `${runtime.name} is not available, so remote and 24/7 readiness cannot be trusted.`,
-  );
-}
-
-function reason(
-  id: string,
-  status: AgentRuntimeCompatibilityRequirementStatus,
-  owner: AgentRuntimeCompatibilityOwner,
-  summary: string,
-): AgentRuntimeAutomationProjectionReason {
-  return { id, status, owner, summary };
-}
-
-function uniqSorted(values: string[]): string[] {
-  return [...new Set(values)].sort();
 }

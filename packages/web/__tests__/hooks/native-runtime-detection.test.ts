@@ -6,6 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useNativeRuntimeDetection } from '@/hooks/useNativeRuntimeDetection';
+import { resetServerEventsForTests } from '@/lib/server-events';
+import { MockEventSource } from '../fixtures/mock-event-source';
 
 const TEST_RUNTIME_LIFECYCLE = {
   schemaVersion: 1,
@@ -38,12 +40,44 @@ function deferred<T>() {
 describe('useNativeRuntimeDetection', () => {
   beforeEach(() => {
     sessionStorage.clear();
+    MockEventSource.reset();
+    resetServerEventsForTests();
     (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
   });
 
   afterEach(() => {
+    resetServerEventsForTests();
     vi.unstubAllGlobals();
   });
+
+  function cachedDescriptor(kind: 'codex' | 'claude') {
+    return JSON.stringify({
+      ts: Date.now(),
+      runtime: {
+        id: kind,
+        name: kind === 'codex' ? 'Codex' : 'Claude Code',
+        kind,
+        status: 'available',
+        capabilities: {},
+        lifecycle: TEST_RUNTIME_LIFECYCLE,
+        compatibility: TEST_RUNTIME_COMPATIBILITY,
+      },
+    });
+  }
+
+  function descriptorResponse(kind: string, status = 'available') {
+    return new Response(JSON.stringify({
+      runtime: {
+        id: kind,
+        name: kind === 'codex' ? 'Codex' : 'Claude Code',
+        kind,
+        status,
+        capabilities: {},
+        lifecycle: TEST_RUNTIME_LIFECYCLE,
+        compatibility: TEST_RUNTIME_COMPATIBILITY,
+      },
+    }), { status: 200 });
+  }
 
   it('updates each native runtime independently as its request finishes', async () => {
     const codex = deferred<Response>();
@@ -127,33 +161,9 @@ describe('useNativeRuntimeDetection', () => {
     });
   });
 
-  it('revalidates cached available native runtimes in the background', async () => {
-    sessionStorage.setItem('mindos:native-runtime-detection:v3:codex', JSON.stringify({
-      ts: Date.now(),
-      runtime: {
-        id: 'codex',
-        name: 'Codex',
-        kind: 'codex',
-        status: 'available',
-        capabilities: {},
-        lifecycle: TEST_RUNTIME_LIFECYCLE,
-        compatibility: TEST_RUNTIME_COMPATIBILITY,
-      },
-    }));
-    const fetchMock = vi.fn((url: string) => {
-      const kind = url.includes('runtime=codex') ? 'codex' : 'claude';
-      return Promise.resolve(new Response(JSON.stringify({
-        runtime: {
-          id: kind,
-          name: kind === 'codex' ? 'Codex' : 'Claude Code',
-          kind,
-          status: 'available',
-          capabilities: {},
-          lifecycle: TEST_RUNTIME_LIFECYCLE,
-          compatibility: TEST_RUNTIME_COMPATIBILITY,
-        },
-      }), { status: 200 }));
-    });
+  it('trusts a fresh sessionStorage copy on mount and only fetches the kinds without one', async () => {
+    sessionStorage.setItem('mindos:native-runtime-detection:v3:codex', cachedDescriptor('codex'));
+    const fetchMock = vi.fn((url: string) => Promise.resolve(descriptorResponse(url.includes('runtime=codex') ? 'codex' : 'claude')));
     vi.stubGlobal('fetch', fetchMock);
 
     const states: Array<ReturnType<typeof useNativeRuntimeDetection>> = [];
@@ -172,42 +182,80 @@ describe('useNativeRuntimeDetection', () => {
       await Promise.resolve();
     });
 
-    expect(fetchMock).toHaveBeenCalledWith('/api/agent-runtimes?runtime=codex', expect.objectContaining({
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith('/api/agent-runtimes?runtime=claude', expect.objectContaining({
       signal: expect.any(AbortSignal),
     }));
-    expect(states[0]?.loadingByKind.codex).toBe(true);
+    expect(states[0]?.loadingByKind).toEqual({ claude: true });
+    expect(states[0]?.runtimes).toEqual([expect.objectContaining({ id: 'codex', status: 'available' })]);
 
     await act(async () => {
       root.unmount();
     });
   });
 
-  it('marks stale cached available runtime state as unavailable when background detection fails', async () => {
-    sessionStorage.setItem('mindos:native-runtime-detection:v3:claude', JSON.stringify({
-      ts: Date.now(),
-      runtime: {
-        id: 'claude',
-        name: 'Claude Code',
-        kind: 'claude',
-        status: 'available',
-        capabilities: {},
-        lifecycle: TEST_RUNTIME_LIFECYCLE,
-        compatibility: TEST_RUNTIME_COMPATIBILITY,
-      },
-    }));
+  it('re-fetches only the runtime named by runtime.changed and both on settings.changed', async () => {
+    sessionStorage.setItem('mindos:native-runtime-detection:v3:codex', cachedDescriptor('codex'));
+    sessionStorage.setItem('mindos:native-runtime-detection:v3:claude', cachedDescriptor('claude'));
+    vi.stubGlobal('EventSource', MockEventSource);
+    const fetchMock = vi.fn((url: string) => Promise.resolve(descriptorResponse(url.includes('runtime=codex') ? 'codex' : 'claude', 'signed-out')));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const states: Array<ReturnType<typeof useNativeRuntimeDetection>> = [];
+    function Probe() {
+      states.push(useNativeRuntimeDetection());
+      return null;
+    }
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(React.createElement(Probe));
+      await Promise.resolve();
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+    const source = MockEventSource.last();
+    source.ready({ lastEventId: 1 });
+
+    await act(async () => {
+      source.emit('runtime.changed', { type: 'runtime.changed', runtimes: ['claude'] }, 2);
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith('/api/agent-runtimes?runtime=claude', expect.any(Object));
+    expect(states.at(-1)?.runtimes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'claude', status: 'signed-out' }),
+      expect.objectContaining({ id: 'codex', status: 'available' }),
+    ]));
+
+    await act(async () => {
+      source.emit('settings.changed', { type: 'settings.changed' }, 3);
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls.map(([url]) => url).sort()).toEqual([
+      '/api/agent-runtimes?runtime=claude',
+      '/api/agent-runtimes?runtime=claude',
+      '/api/agent-runtimes?runtime=codex',
+    ]);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('marks cached available runtime state as unavailable when an event-driven re-check fails', async () => {
+    sessionStorage.setItem('mindos:native-runtime-detection:v3:claude', cachedDescriptor('claude'));
+    vi.stubGlobal('EventSource', MockEventSource);
     const fetchMock = vi.fn((url: string) => {
       if (url.includes('runtime=claude')) return Promise.reject(new Error('Detection failed'));
-      return Promise.resolve(new Response(JSON.stringify({
-        runtime: {
-          id: 'codex',
-          name: 'Codex',
-          kind: 'codex',
-          status: 'missing',
-          capabilities: {},
-          lifecycle: TEST_RUNTIME_LIFECYCLE,
-          compatibility: TEST_RUNTIME_COMPATIBILITY,
-        },
-      }), { status: 200 }));
+      return Promise.resolve(descriptorResponse('codex', 'missing'));
     });
     vi.stubGlobal('fetch', fetchMock);
     const states: Array<ReturnType<typeof useNativeRuntimeDetection>> = [];
@@ -226,8 +274,18 @@ describe('useNativeRuntimeDetection', () => {
       await Promise.resolve();
       await Promise.resolve();
     });
+    // Codex has no cached copy and is fetched on mount; Claude waits for an event.
+    expect(states[0]?.loadingByKind).toEqual({ codex: true });
+    const source = MockEventSource.last();
+    source.ready({ lastEventId: 1 });
 
-    expect(states[0]?.loadingByKind.claude).toBe(true);
+    await act(async () => {
+      source.emit('runtime.changed', { type: 'runtime.changed', runtimes: ['claude'] }, 2);
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
     expect(states.at(-1)?.errorByKind.claude).toBe('Detection failed');
     expect(states.at(-1)?.runtimes).toEqual(expect.arrayContaining([
       expect.objectContaining({

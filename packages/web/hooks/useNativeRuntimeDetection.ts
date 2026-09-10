@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { subscribeServerEvents } from '@/lib/server-events';
 import type { AgentRuntimeDescriptor } from '@/lib/types';
 
 type NativeRuntimeKind = 'codex' | 'claude';
@@ -19,9 +20,21 @@ interface NativeRuntimeDetectionState {
   refresh: () => void;
 }
 
+/** One detection request: which kinds to fetch and whether to bypass the server cache. */
+interface DetectionRequest {
+  seq: number;
+  kinds: NativeRuntimeKind[];
+  force: boolean;
+}
+
 const RUNTIME_KINDS: NativeRuntimeKind[] = ['codex', 'claude'];
 const STORAGE_PREFIX = 'mindos:native-runtime-detection:v3:';
 const LEGACY_STORAGE_PREFIXES = ['mindos:native-runtime-detection:v2:', 'mindos:native-runtime-detection:v1:'];
+/**
+ * The sessionStorage copy is the fallback for a fresh mount: within this TTL
+ * the hook trusts it and waits for `runtime.changed` / `settings.changed`
+ * from the event stream instead of re-fetching on every mount.
+ */
 const STALE_TTL_MS = 30 * 60 * 1000;
 const DETECTION_TIMEOUT_MS = 30000;
 
@@ -76,10 +89,6 @@ function removeRuntimeCache(kind: NativeRuntimeKind): void {
   }
 }
 
-function shouldRevalidate(): boolean {
-  return true;
-}
-
 function upsertRuntime(runtimes: AgentRuntimeDescriptor[], runtime: AgentRuntimeDescriptor): AgentRuntimeDescriptor[] {
   const next = runtimes.filter((item) => item.kind !== runtime.kind || item.id !== runtime.id);
   next.push(runtime);
@@ -105,6 +114,10 @@ function markRuntimeDetectionError(
   });
 }
 
+function flagsFor(kinds: NativeRuntimeKind[], value: boolean): RuntimeLoadingMap {
+  return Object.fromEntries(kinds.map((kind) => [kind, value])) as RuntimeLoadingMap;
+}
+
 export function useNativeRuntimeDetection(): NativeRuntimeDetectionState {
   const [initialCaches] = useState(() => new Map(RUNTIME_KINDS.map((kind) => [kind, readRuntimeCache(kind)] as const)));
   const [runtimes, setRuntimes] = useState<AgentRuntimeDescriptor[]>(() => (
@@ -112,20 +125,24 @@ export function useNativeRuntimeDetection(): NativeRuntimeDetectionState {
       .map((kind) => initialCaches.get(kind)?.runtime)
       .filter((runtime): runtime is AgentRuntimeDescriptor => !!runtime)
   ));
-  const [loadingByKind, setLoadingByKind] = useState<RuntimeLoadingMap>(() => Object.fromEntries(
-    RUNTIME_KINDS.map((kind) => [kind, shouldRevalidate()]),
-  ) as RuntimeLoadingMap);
+  // Only kinds without a fresh sessionStorage copy are fetched on mount.
+  const [request, setRequest] = useState<DetectionRequest>(() => ({
+    seq: 0,
+    kinds: RUNTIME_KINDS.filter((kind) => !initialCaches.get(kind)),
+    force: false,
+  }));
+  const [loadingByKind, setLoadingByKind] = useState<RuntimeLoadingMap>(() => flagsFor(request.kinds, true));
   const [errorByKind, setErrorByKind] = useState<RuntimeErrorMap>({});
-  const [trigger, setTrigger] = useState(0);
-  const forceRef = useRef(false);
 
-  const refresh = useCallback(() => {
-    for (const kind of RUNTIME_KINDS) removeRuntimeCache(kind);
-    forceRef.current = true;
-    setLoadingByKind({ codex: true, claude: true });
-    setErrorByKind({ codex: null, claude: null });
-    setTrigger((value) => value + 1);
+  const revalidate = useCallback((kinds: NativeRuntimeKind[] = RUNTIME_KINDS, options: { force?: boolean } = {}) => {
+    if (kinds.length === 0) return;
+    if (options.force) for (const kind of kinds) removeRuntimeCache(kind);
+    setLoadingByKind((current) => ({ ...current, ...flagsFor(kinds, true) }));
+    setErrorByKind((current) => ({ ...current, ...Object.fromEntries(kinds.map((kind) => [kind, null])) }));
+    setRequest((current) => ({ seq: current.seq + 1, kinds, force: Boolean(options.force) }));
   }, []);
+
+  const refresh = useCallback(() => revalidate(RUNTIME_KINDS, { force: true }), [revalidate]);
 
   useEffect(() => {
     const onSettingsChanged = () => refresh();
@@ -134,20 +151,33 @@ export function useNativeRuntimeDetection(): NativeRuntimeDetectionState {
   }, [refresh]);
 
   useEffect(() => {
+    // The server already re-probed before emitting; a plain fetch reads its cache.
+    const unsubscribeRuntime = subscribeServerEvents('runtime.changed', (event) => {
+      const kinds = RUNTIME_KINDS.filter((kind) => event.runtimes.includes(kind));
+      if (kinds.length > 0) revalidate(kinds);
+    });
+    const unsubscribeSettings = subscribeServerEvents('settings.changed', () => revalidate());
+    const unsubscribeReady = subscribeServerEvents('ready', (event) => {
+      if (event.resync) revalidate();
+    });
+    return () => {
+      unsubscribeRuntime();
+      unsubscribeSettings();
+      unsubscribeReady();
+    };
+  }, [revalidate]);
+
+  useEffect(() => {
+    if (request.kinds.length === 0) return;
     const controllers: AbortController[] = [];
     let cancelled = false;
-    const isForce = forceRef.current;
-    forceRef.current = false;
 
-    for (const kind of RUNTIME_KINDS) {
+    for (const kind of request.kinds) {
       const controller = new AbortController();
       controllers.push(controller);
       const timeout = setTimeout(() => controller.abort(), DETECTION_TIMEOUT_MS);
 
-      setLoadingByKind((current) => ({ ...current, [kind]: true }));
-      setErrorByKind((current) => ({ ...current, [kind]: null }));
-
-      fetch(`/api/agent-runtimes?runtime=${kind}${isForce ? '&force=1' : ''}`, { cache: 'no-store', signal: controller.signal })
+      fetch(`/api/agent-runtimes?runtime=${kind}${request.force ? '&force=1' : ''}`, { cache: 'no-store', signal: controller.signal })
         .then((res) => {
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           return res.json();
@@ -178,7 +208,7 @@ export function useNativeRuntimeDetection(): NativeRuntimeDetectionState {
       cancelled = true;
       controllers.forEach((controller) => controller.abort());
     };
-  }, [initialCaches, trigger]);
+  }, [request]);
 
   return { runtimes, loadingByKind, errorByKind, refresh };
 }

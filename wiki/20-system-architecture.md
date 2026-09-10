@@ -358,6 +358,8 @@ Web 的 `packages/web/app/api/file/route.ts` 只保留 Next.js adapter：读取 
 
 **Web 适配：** `packages/web/lib/acp` 只保留 thin adapters、A2A bridge 和 `acp-tools`。用户配置通过 Web settings 注入为 `overrides`，核心包不读取 Web-only settings。
 
+**Runtime 检测缓存：** `GET /api/agent-runtimes`、六个 `/api/agent-runtimes/*-projections`、`readiness`、`skills/runtime-matches`、Codex thread/model 路由和 native turn gate 都从 `server/handlers/runtime-detection-cache.ts` 读同一份探测结果：进程级（`Symbol.for('mindos.runtimeDetectionCache')`）、key = (settings `acpAgents`+`agentRuntimeEnv` fingerprint, scope `codex|claude|acp`, detector identity)、TTL 60 s、并发共享在途 promise、`force=1` 只跳过新鲜判断。Web 宿主通过 `agentRuntimes.detectionIdentity = 'web-host'` 让所有 route bundle 共享一个桶。探测结果变化时总线 emit `runtime.changed { runtimes }`，`POST /api/settings` emit `settings.changed`；Web hooks（`useNativeRuntimeDetection` / `useAcpDetection` / `useRuntimeReadiness` / `useRuntimeSessionProjection` 等）订阅这两个事件而不是轮询，只在事件流断开时保留 30–60 s 兜底。Codex thread/model 路由另有一个按 `(command, env hash)` 池化的 app-server client（`agent-runtimes-codex.ts`，60 s 空闲关闭）。展示压缩与 `runtimeBridge` 标注在 core descriptor 完成，Web 不再有 `decoratePayload`。详见 `wiki/specs/spec-runtime-detection-cache.md`。
+
 **SDK 集成：** `packages/mindos/src/protocols/acp/subprocess.ts` 使用 SDK `ClientSideConnection` + `ndJsonStream` 建立连接，`packages/mindos/src/protocols/acp/session.ts` 通过 SDK 方法管理完整生命周期（initialize → authenticate → session/new → prompt → cancel → close）
 
 **Agent 工具 (2)：** `list_acp_agents`, `call_acp_agent`

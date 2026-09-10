@@ -27,6 +27,8 @@ export const SERVER_EVENT_TYPES = [
   'skills.changed',
   'mcp.changed',
   'sync.changed',
+  'runtime.changed',
+  'settings.changed',
   'heartbeat',
   'ready',
 ] as const;
@@ -50,6 +52,10 @@ export interface ServerEventMap {
   'skills.changed': { type: 'skills.changed' };
   'mcp.changed': { type: 'mcp.changed' };
   'sync.changed': { type: 'sync.changed' };
+  /** Runtime detection changed on the server; `runtimes` lists the affected ids (`codex`, `claude`, ACP agent ids). */
+  'runtime.changed': { type: 'runtime.changed'; runtimes: string[] };
+  /** `POST /api/settings` persisted a new settings document. */
+  'settings.changed': { type: 'settings.changed' };
   heartbeat: { type: 'heartbeat' };
   ready: { type: 'ready'; lastEventId: number; resync: boolean; treeVersion?: number };
 }

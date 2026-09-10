@@ -173,6 +173,26 @@ describe('useRuntimeReadiness', () => {
       expect(fetchMock).toHaveBeenCalledTimes(2);
     });
 
+    it('refreshes when the server reports runtime.changed', async () => {
+      vi.stubGlobal('EventSource', MockEventSource);
+      const fetchMock = vi.fn(async () => readinessResponse());
+      vi.stubGlobal('fetch', fetchMock);
+
+      await act(async () => {
+        root.render(<Probe visible permissionMode="ask" onState={vi.fn()} />);
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const source = MockEventSource.last();
+      source.ready({ lastEventId: 1 });
+
+      await act(async () => {
+        source.emit('runtime.changed', { type: 'runtime.changed', runtimes: ['codex'] }, 2);
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
     it('polls every 60s only while the stream is unsupported', async () => {
       vi.stubGlobal('EventSource', undefined);
       delete (globalThis as { EventSource?: unknown }).EventSource;

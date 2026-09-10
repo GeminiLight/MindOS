@@ -1,7 +1,4 @@
-import {
-  isMindosPermissionMode,
-  type MindosPermissionMode,
-} from '../../agent/permission/index.js';
+import type { MindosPermissionMode } from '../../agent/permission/index.js';
 import type {
   AgentRuntimeCompatibilityAssessment,
   AgentRuntimeCompatibilityOwner,
@@ -14,6 +11,12 @@ import type {
 } from '../../agent/runtime/registry.js';
 import type { AcpHandshakeHealthResult } from '../../protocols/acp/index.js';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
+import {
+  filterProjectionsByRuntime,
+  parsePermissionMode,
+  runtimeKey,
+  uniqSorted,
+} from './runtime-projection-shared.js';
 import {
   buildAgentRuntimeArtifactProjectionsPayload,
   type AgentRuntimeArtifactProjection,
@@ -199,10 +202,7 @@ export async function handleAgentRuntimeReadinessGet(
       mindosMcpConfig: services.readMcpConfig?.(),
       permissionMode: permissionModeResult.permissionMode,
     });
-    const runtimeFilter = searchParams.get('runtime')?.trim();
-    const projections = runtimeFilter
-      ? payload.projections.filter((projection) => projection.runtimeId === runtimeFilter || projection.runtimeKind === runtimeFilter)
-      : payload.projections;
+    const projections = filterProjectionsByRuntime(payload.projections, searchParams.get('runtime'));
     return json(
       { ...payload, projections },
       { headers: { 'Cache-Control': 'no-store' } },
@@ -739,26 +739,12 @@ function byRuntime<T extends { runtimeId: string }>(projections: T[]): Map<strin
   return new Map(projections.map((projection) => [projection.runtimeId, projection]));
 }
 
-function runtimeKey(runtime: AgentRuntimeDescriptor): string {
-  return runtime.runtimeId ?? runtime.id;
-}
 
 function isCompatibilityScenario(id: AgentRuntimeReadinessUseCaseId): id is AgentRuntimeCompatibilityScenario {
   return id !== 'adapter-contract' && id !== 'session-controls';
 }
 
-function parsePermissionMode(value: string | null):
-  | { permissionMode: MindosPermissionMode }
-  | { error: string } {
-  if (!value) return { permissionMode: 'ask' };
-  if (isMindosPermissionMode(value)) return { permissionMode: value };
-  return { error: `Unsupported permissionMode: ${value}` };
-}
 
 function humanizeGap(id: string): string {
   return id.replace(/-/g, ' ');
-}
-
-function uniqSorted<T extends string>(values: T[]): T[] {
-  return [...new Set(values)].sort();
 }

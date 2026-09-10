@@ -21,6 +21,19 @@ import type {
   AcpSessionCapabilities,
 } from '../../protocols/acp/index.js';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
+import {
+  filterProjectionsByRuntime,
+  reason,
+  runtimeAvailableReason,
+  runtimeKey,
+  uniqSorted,
+  type AgentRuntimeProjectionReason,
+} from './runtime-projection-shared.js';
+
+const ADAPTER_AVAILABILITY_WORDING = {
+  available: 'is available for adapter contract diagnostics.',
+  unavailable: 'is not available, so adapter contract readiness cannot be trusted.',
+};
 
 export type AgentRuntimeAdapterProjectionStatus =
   | 'ready'
@@ -34,12 +47,7 @@ export type AgentRuntimeAdapterFacetStatus =
   | 'blocked'
   | 'unknown';
 
-export type AgentRuntimeAdapterProjectionReason = {
-  id: string;
-  status: AgentRuntimeCompatibilityRequirementStatus;
-  owner: AgentRuntimeCompatibilityOwner;
-  summary: string;
-};
+export type AgentRuntimeAdapterProjectionReason = AgentRuntimeProjectionReason;
 
 type AdapterFacetBase = {
   status: AgentRuntimeAdapterFacetStatus;
@@ -164,10 +172,7 @@ export async function handleAgentRuntimeAdapterProjectionsGet(
       force: searchParams.get('force') === '1',
     }) ?? [];
     const payload = buildAgentRuntimeAdapterProjectionsPayload({ runtimes, acpHandshakeHealth });
-    const runtimeFilter = searchParams.get('runtime')?.trim();
-    const projections = runtimeFilter
-      ? payload.projections.filter((projection) => projection.runtimeId === runtimeFilter || projection.runtimeKind === runtimeFilter)
-      : payload.projections;
+    const projections = filterProjectionsByRuntime(payload.projections, searchParams.get('runtime'));
     return json(
       { ...payload, projections },
       { headers: { 'Cache-Control': 'no-store' } },
@@ -222,7 +227,7 @@ function buildRuntimeAdapterProjection(
     output,
     protocol,
     reasons: [
-      runtimeAvailableReason(runtime),
+      runtimeAvailableReason(runtime, ADAPTER_AVAILABILITY_WORDING),
       ...facets.flatMap((facet) => facet.reasons),
     ],
     ...(blockers.length > 0 ? { blockers } : {}),
@@ -664,34 +669,9 @@ function commandDiscoverySummary(
   return `${runtimeName} does not declare a command discovery contract yet.`;
 }
 
-function runtimeAvailableReason(runtime: AgentRuntimeDescriptor): AgentRuntimeAdapterProjectionReason {
-  return reason(
-    'runtime-available',
-    runtime.status === 'available' ? 'satisfied' : 'missing',
-    runtime.status === 'available' ? 'mindos' : 'shared',
-    runtime.status === 'available'
-      ? `${runtime.name} is available for adapter contract diagnostics.`
-      : `${runtime.name} is not available, so adapter contract readiness cannot be trusted.`,
-  );
-}
 
-function reason(
-  id: string,
-  status: AgentRuntimeCompatibilityRequirementStatus,
-  owner: AgentRuntimeCompatibilityOwner,
-  summary: string,
-): AgentRuntimeAdapterProjectionReason {
-  return { id, status, owner, summary };
-}
 
-function runtimeKey(runtime: AgentRuntimeDescriptor): string {
-  return runtime.runtimeId ?? runtime.id;
-}
 
 function byAcpHandshake(results: AcpHandshakeHealthResult[]): Map<string, AcpHandshakeHealthResult> {
   return new Map(results.map((result) => [result.agentId, result]));
-}
-
-function uniqSorted<T extends string>(values: T[]): T[] {
-  return [...new Set(values)].sort();
 }

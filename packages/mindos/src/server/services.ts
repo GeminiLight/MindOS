@@ -17,7 +17,7 @@ import { getMindosServerEventBus, type MindosServerEventBus } from './events/bus
 import type { A2aServices } from './handlers/a2a.js';
 import type { AcpDetectServices, AcpInstallServices, AcpRegistryServices, AcpSessionServices } from './handlers/acp.js';
 import type { AgentCapabilitiesServices } from './handlers/agent-capabilities.js';
-import type { AgentRuntimePayload, AgentRuntimesPayload, AgentRuntimesServices } from './handlers/agent-runtimes.js';
+import type { AgentRuntimesServices } from './handlers/agent-runtimes.js';
 import type { CodexThreadManagerServices } from './handlers/agent-runtimes-codex.js';
 import type { ChannelsVerifyServices } from './handlers/channels-verify.js';
 import type { EmbeddingServices } from './handlers/embedding.js';
@@ -72,11 +72,14 @@ export type MindosAcpHostServices =
   AcpInstallServices;
 
 /**
- * Runtime detection overrides plus a presentation hook: hosts may compact
- * diagnostics or remember descriptors before the payload leaves the server.
+ * Runtime detection overrides. `detectionIdentity` names one detection-cache
+ * bucket for hosts whose overrides only wrap the product defaults (the Web
+ * host passes `web-host`), so every route bundle in the process shares one
+ * probe. Presentation (failure compaction, bridge labelling) is part of the
+ * core descriptor now, so there is no payload hook.
  */
 export type MindosAgentRuntimeHostServices = AgentRuntimesServices & {
-  decoratePayload?<T extends AgentRuntimesPayload | AgentRuntimePayload>(payload: T): T;
+  detectionIdentity?: string;
 };
 
 /** MCP agent registry enrichers (presence, installed config, skills) layered over `mcpAgents`. */

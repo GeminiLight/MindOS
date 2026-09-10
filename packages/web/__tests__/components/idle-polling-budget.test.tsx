@@ -209,4 +209,26 @@ describe('idle polling budget (35s 空闲请求数 ≤10 的支撑契约)', () =
     expect(sidebar).not.toContain('/api/tree-version');
     expect(sidebar).toContain('useTreeVersionSync(router)');
   });
+
+  it('runtime session projection refreshes on events and only polls (>= 30s) while the stream is down', () => {
+    // Behavioural coverage lives in __tests__/hooks/use-runtime-session-projection.test.tsx;
+    // this pins the constants and guards so a future edit cannot quietly restore the 3.5 s poll.
+    const hook = readFileSync(
+      path.resolve(__dirname, '../../hooks/useRuntimeSessionProjection.ts'),
+      'utf-8',
+    );
+    const m = hook.match(/RUNTIME_SESSION_PROJECTION_FALLBACK_POLL_MS = (\d+_?\d*)/);
+    expect(m, 'useRuntimeSessionProjection must define RUNTIME_SESSION_PROJECTION_FALLBACK_POLL_MS').toBeTruthy();
+    expect(Number(m![1].replace('_', ''))).toBeGreaterThanOrEqual(30_000);
+    expect(hook).toContain("getServerEventsState() === 'connected'");
+    expect(hook).toContain("document.visibilityState !== 'visible'");
+    expect(hook).toContain("subscribeServerEvents('agent-run.event'");
+    expect(hook).toContain("subscribeServerEvents('runtime.changed'");
+    expect(hook).not.toMatch(/refreshMs = 3500/);
+
+    for (const file of ['useNativeRuntimeDetection.ts', 'useAcpDetection.ts', 'useRuntimeReadiness.ts']) {
+      const source = readFileSync(path.resolve(__dirname, '../../hooks', file), 'utf-8');
+      expect(source, file).toContain("subscribeServerEvents('runtime.changed'");
+    }
+  });
 });

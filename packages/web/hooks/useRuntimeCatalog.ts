@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { subscribeServerEvents } from '@/lib/server-events';
 import type {
   AgentRuntimeCatalogEntry,
   AgentRuntimeCatalogPayload,
@@ -87,6 +88,12 @@ export function useRuntimeCatalog(input: { visible: boolean }): RuntimeCatalogSt
     forceRef.current = true;
     setRefreshSeq((value) => value + 1);
   }, []);
+
+  // The server re-probed before emitting, so a plain (non-force) fetch reads its cache.
+  useEffect(() => {
+    if (!visible) return;
+    return subscribeServerEvents('runtime.changed', () => setRefreshSeq((value) => value + 1));
+  }, [visible]);
 
   useEffect(() => {
     if (!visible) {

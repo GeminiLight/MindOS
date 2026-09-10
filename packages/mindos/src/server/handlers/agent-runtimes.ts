@@ -16,15 +16,16 @@ import {
   type ClaudeCodeSdkModule,
 } from '../../agent/runtime/claude-code-sdk.js';
 import {
+  compactRuntimeDiagnosticHints,
   compactRuntimeFailureMessage,
 } from '../../agent/runtime/runtime-errors.js';
 import {
   NATIVE_HEALTH_TIMEOUT_MS,
   RUNTIME_DETECTION_TIMEOUT_MS,
-  applyNativeRuntimeHealth,
   buildAcpScopedPayload,
   buildAgentRuntimesPayload,
   nativeRuntimeDefinitions,
+  type AgentRuntimeBridge,
   type AgentRuntimeDescriptor,
   type AgentRuntimePayload,
   type AgentRuntimesPayload,
@@ -55,6 +56,11 @@ import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { delimiter, join } from 'node:path';
 import { errorResponse, json, privateCacheHeaders, type MindosServerResponse } from '../response.js';
+import {
+  getRuntimeDetection,
+  type RuntimeDetectionEntry,
+  type RuntimeDetectionServices,
+} from './runtime-detection-cache.js';
 
 export {
   buildAgentRuntimesPayload,
@@ -307,12 +313,6 @@ async function resolveCodexRuntimeCommandPlan(
   return { candidates, explicit: false, env };
 }
 
-export async function resolveCodexRuntimeCommandCandidates(
-  services: Pick<AgentRuntimesServices, 'readSettings' | 'resolveRuntimeCommand' | 'resolveRuntimeCommandCandidates'> = {},
-): Promise<string[]> {
-  return (await resolveCodexRuntimeCommandPlan(services)).candidates;
-}
-
 export async function selectCodexRuntimeCandidate(input: {
   services?: Pick<AgentRuntimesServices, 'readSettings' | 'resolveRuntimeCommand' | 'resolveRuntimeCommandCandidates'>;
   checkCandidate(binaryPath: string, env?: NodeJS.ProcessEnv): Promise<NativeRuntimeHealthResult>;
@@ -438,62 +438,31 @@ export async function checkClaudeRuntimeHealth(input: {
   }
 }
 
+/** One cached probe of a native runtime; `env` is the settings-derived runtime env the Codex thread routes reuse. */
+export type NativeRuntimeDetection = {
+  agent: DetectedRuntimeAgent | MissingRuntimeAgent;
+  env?: NodeJS.ProcessEnv;
+};
+
+export type AcpRuntimeDetection = {
+  installed: unknown[];
+  notInstalled: unknown[];
+};
+
 async function detectNativeRuntimeDefinition(
   candidate: typeof nativeRuntimeDefinitions[number],
   services: AgentRuntimesServices,
-): Promise<DetectedRuntimeAgent | MissingRuntimeAgent> {
-  const checkNativeRuntimeHealth = services.checkNativeRuntimeHealth ?? defaultCheckNativeRuntimeHealth;
-  const resolveRuntimeCommand = services.resolveRuntimeCommand ?? resolveCommandPath;
+): Promise<NativeRuntimeDetection> {
   if (candidate.runtime === 'codex') {
     return detectCodexNativeRuntimeDefinition(candidate, services);
   }
-  if (candidate.runtime === 'claude') {
-    return detectClaudeNativeRuntimeDefinition(candidate, services);
-  }
-  const binaryPath = await resolveRuntimeCommand(candidate.command);
-  if (!binaryPath) {
-    return {
-      id: candidate.id,
-      name: candidate.name,
-      installCmd: candidate.installCmd,
-      packageName: candidate.installCmd.match(/npm install -g (.+)/)?.[1],
-      status: 'missing',
-      reason: `${candidate.name} executable was not detected.`,
-    };
-  }
-  try {
-    const health = await checkNativeRuntimeHealth({
-      runtime: candidate.runtime,
-      agent: { id: candidate.id, name: candidate.name, binaryPath },
-      timeoutMs: NATIVE_HEALTH_TIMEOUT_MS,
-    });
-    return {
-      id: candidate.id,
-      name: candidate.name,
-      binaryPath,
-      resolvedCommand: { cmd: candidate.command, args: [], source: 'descriptor' },
-      status: health.status,
-      ...(health.reason ? { reason: health.reason } : {}),
-      ...(health.diagnosticHints ? { diagnosticHints: health.diagnosticHints } : {}),
-      ...(health.runtimeBridge ? { runtimeBridge: health.runtimeBridge } : {}),
-    };
-  } catch (error) {
-    const result = classifyRuntimeFailure(error instanceof Error ? error.message : String(error), candidate.runtime);
-    return {
-      id: candidate.id,
-      name: candidate.name,
-      binaryPath,
-      resolvedCommand: { cmd: candidate.command, args: [], source: 'descriptor' },
-      status: result.status,
-      ...(result.reason ? { reason: result.reason } : {}),
-    };
-  }
+  return { agent: await detectClaudeNativeRuntimeDefinition(candidate, services) };
 }
 
 async function detectCodexNativeRuntimeDefinition(
   candidate: typeof nativeRuntimeDefinitions[number],
   services: AgentRuntimesServices,
-): Promise<DetectedRuntimeAgent | MissingRuntimeAgent> {
+): Promise<NativeRuntimeDetection> {
   const checkNativeRuntimeHealth = services.checkNativeRuntimeHealth ?? defaultCheckNativeRuntimeHealth;
   const selected = await selectCodexRuntimeCandidate({
     services,
@@ -507,25 +476,61 @@ async function detectCodexNativeRuntimeDefinition(
 
   if (!selected) {
     return {
-      id: candidate.id,
-      name: candidate.name,
-      installCmd: candidate.installCmd,
-      packageName: candidate.installCmd.match(/npm install -g (.+)/)?.[1],
-      status: 'missing',
-      reason: `${candidate.name} executable was not detected.`,
+      agent: {
+        id: candidate.id,
+        name: candidate.name,
+        installCmd: candidate.installCmd,
+        packageName: candidate.installCmd.match(/npm install -g (.+)/)?.[1],
+        status: 'missing',
+        reason: `${candidate.name} executable was not detected.`,
+      },
     };
   }
 
   return {
-    id: candidate.id,
-    name: candidate.name,
-    binaryPath: selected.binaryPath,
-    resolvedCommand: { cmd: candidate.command, args: [], source: 'descriptor' },
-    status: selected.health.status,
-    ...(selected.health.reason ? { reason: selected.health.reason } : {}),
-    ...(selected.health.diagnosticHints ? { diagnosticHints: selected.health.diagnosticHints } : {}),
-    ...(selected.health.runtimeBridge ? { runtimeBridge: selected.health.runtimeBridge } : {}),
+    agent: {
+      id: candidate.id,
+      name: candidate.name,
+      binaryPath: selected.binaryPath,
+      resolvedCommand: { cmd: candidate.command, args: [], source: 'descriptor' },
+      status: selected.health.status,
+      ...(selected.health.reason ? { reason: selected.health.reason } : {}),
+      ...(selected.health.diagnosticHints ? { diagnosticHints: selected.health.diagnosticHints } : {}),
+      ...withNativeRuntimeBridge('codex', selected.health),
+    },
+    ...(selected.env ? { env: selected.env } : {}),
   };
+}
+
+/**
+ * The bridge that will serve a turn, as a typed field. Product health checks
+ * already return it; host-provided checks may only describe it in hints, and
+ * the descriptor builder keys `adapter` / `adapterContract` off the typed
+ * field, so the inference happens here rather than in a presentation layer.
+ */
+function withNativeRuntimeBridge(
+  runtime: NativeRuntimeId,
+  health: NativeRuntimeHealthResult,
+): { runtimeBridge?: AgentRuntimeBridge } {
+  if (health.runtimeBridge) return { runtimeBridge: health.runtimeBridge };
+  if (health.status !== 'available') return {};
+  if (runtime === 'codex') return { runtimeBridge: { kind: 'codex-app-server', label: 'App server active' } };
+  const joinedHints = (health.diagnosticHints ?? []).join(' ');
+  if (/Claude Agent SDK bridge is available/i.test(joinedHints)) {
+    return { runtimeBridge: { kind: 'claude-sdk', label: 'SDK bridge active' } };
+  }
+  if (/CLI fallback|will use CLI fallback|SDK bridge is unavailable|did not expose query/i.test(joinedHints)) {
+    const reasonMatch = joinedHints.match(/fallback\.\s*(.+)$/i);
+    return {
+      runtimeBridge: {
+        kind: 'claude-cli',
+        label: 'CLI fallback active',
+        fallback: true,
+        ...(reasonMatch?.[1] ? { reason: reasonMatch[1] } : {}),
+      },
+    };
+  }
+  return {};
 }
 
 async function detectClaudeNativeRuntimeDefinition(
@@ -575,7 +580,7 @@ async function detectClaudeNativeRuntimeDefinition(
       status: health.status,
       ...(health.reason ? { reason: health.reason } : {}),
       ...(health.diagnosticHints ? { diagnosticHints: health.diagnosticHints } : {}),
-      ...(health.runtimeBridge ? { runtimeBridge: health.runtimeBridge } : {}),
+      ...withNativeRuntimeBridge('claude', health),
     };
   } catch (error) {
     const result = classifyRuntimeFailure(error instanceof Error ? error.message : String(error), candidate.runtime);
@@ -588,33 +593,6 @@ async function detectClaudeNativeRuntimeDefinition(
       ...(result.reason ? { reason: result.reason } : {}),
     };
   }
-}
-
-async function detectNativeRuntimes(
-  services: AgentRuntimesServices,
-): Promise<{ installed: DetectedRuntimeAgent[]; notInstalled: MissingRuntimeAgent[] }> {
-  const results = await Promise.all(nativeRuntimeDefinitions.map((candidate) => detectNativeRuntimeDefinition(candidate, services)));
-
-  return {
-    installed: results.filter((agent): agent is DetectedRuntimeAgent => 'binaryPath' in agent),
-    notInstalled: results.filter((agent): agent is MissingRuntimeAgent => 'installCmd' in agent),
-  };
-}
-
-async function detectSingleNativeRuntime(
-  runtime: NativeRuntimeId,
-  services: AgentRuntimesServices,
-): Promise<AgentRuntimeDescriptor> {
-  const candidate = nativeRuntimeDefinitions.find((definition) => definition.runtime === runtime);
-  if (!candidate) throw new Error(`Unsupported native runtime: ${runtime}`);
-  const result = await detectNativeRuntimeDefinition(candidate, services);
-  const checkedAt = new Date(services.now?.() ?? Date.now()).toISOString();
-  return nativeDescriptor({
-    id: runtime,
-    name: candidate.name,
-    checkedAt,
-    ...('binaryPath' in result ? { source: result } : { missing: result }),
-  });
 }
 
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
@@ -631,9 +609,122 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: s
   }
 }
 
+export type AgentRuntimeDetectionServices = RuntimeDetectionServices;
+
+function isoTime(epochMs: number): string {
+  return new Date(epochMs).toISOString();
+}
+
+function nativeRuntimeDefinition(runtime: NativeRuntimeId): typeof nativeRuntimeDefinitions[number] {
+  const candidate = nativeRuntimeDefinitions.find((definition) => definition.runtime === runtime);
+  if (!candidate) throw new Error(`Unsupported native runtime: ${runtime}`);
+  return candidate;
+}
+
+/** Cached (60 s, in-flight de-duplicated) detection of one native runtime; `force` refreshes but still joins an in-flight probe. */
+export function getNativeRuntimeDetection(
+  runtime: NativeRuntimeId,
+  services: AgentRuntimeDetectionServices,
+  options: { settings?: AgentRuntimesSettings; force?: boolean } = {},
+): Promise<RuntimeDetectionEntry<NativeRuntimeDetection>> {
+  const candidate = nativeRuntimeDefinition(runtime);
+  return getRuntimeDetection<NativeRuntimeDetection>({
+    scope: runtime,
+    services,
+    settings: options.settings ?? services.readSettings?.(),
+    force: options.force,
+    probe: () => detectNativeRuntimeDefinition(candidate, services),
+    // The env is derived from settings (already part of the key) and would only add noise to the change comparison.
+    describe: (value) => value.agent,
+  });
+}
+
+/** Cached ACP agent scan; rejects (and caches nothing) when detection times out. */
+export function getAcpRuntimeDetection(
+  services: AgentRuntimeDetectionServices,
+  options: { settings?: AgentRuntimesSettings; force?: boolean } = {},
+): Promise<RuntimeDetectionEntry<AcpRuntimeDetection>> {
+  const settings = options.settings ?? services.readSettings?.();
+  const detectLocalAcpAgents = services.detectLocalAcpAgents ?? defaultDetectLocalAcpAgents;
+  return getRuntimeDetection<AcpRuntimeDetection>({
+    scope: 'acp',
+    services,
+    settings,
+    force: options.force,
+    probe: async () => {
+      const detection = await withTimeout(
+        detectLocalAcpAgents({ overrides: settings?.acpAgents }),
+        RUNTIME_DETECTION_TIMEOUT_MS,
+        `Agent runtime detection timed out after ${RUNTIME_DETECTION_TIMEOUT_MS}ms.`,
+      );
+      return {
+        installed: Array.isArray(detection.installed) ? detection.installed : [],
+        notInstalled: Array.isArray(detection.notInstalled) ? detection.notInstalled : [],
+      };
+    },
+  });
+}
+
+export function buildNativeRuntimeDescriptor(
+  runtime: NativeRuntimeId,
+  entry: RuntimeDetectionEntry<NativeRuntimeDetection>,
+): AgentRuntimeDescriptor {
+  const candidate = nativeRuntimeDefinition(runtime);
+  const agent = entry.value.agent;
+  return nativeDescriptor({
+    id: runtime,
+    name: candidate.name,
+    checkedAt: isoTime(entry.checkedAt),
+    ...('binaryPath' in agent ? { source: agent } : { missing: agent }),
+  });
+}
+
+function isNonNativeAcpAgent(agent: unknown, normalize: (value: unknown) => { id: string; name: string } | null): boolean {
+  const normalized = normalize(agent);
+  return !normalized || (!isCodexAgent(normalized) && !isClaudeAgent(normalized));
+}
+
+const NATIVE_DISPLAY_REASON_FALLBACK = 'Runtime is unavailable.';
+
+function isNativeRuntimeKind(kind: AgentRuntimeDescriptor['kind']): kind is NativeRuntimeId {
+  return kind === 'codex' || kind === 'claude';
+}
+
+/**
+ * One actionable sentence per native runtime failure for every consumer of
+ * the descriptor (picker, projections, readiness). `nativeDescriptor` already
+ * compacts `availability`; this pass extends that to the bridge reason and
+ * drops hints that merely repeat the reason, so the second pass is idempotent
+ * on text the descriptor builder produced. UI components still apply their
+ * own display truncation at render time.
+ */
+export function compactNativeRuntimeDescriptor(runtime: AgentRuntimeDescriptor): AgentRuntimeDescriptor {
+  if (!isNativeRuntimeKind(runtime.kind) || !runtime.availability) return runtime;
+  const compact = (text: string) => compactRuntimeFailureMessage(text, {
+    runtime: runtime.kind as NativeRuntimeId,
+    fallback: NATIVE_DISPLAY_REASON_FALLBACK,
+  });
+  const { diagnosticHints: rawHints, reason: rawReason, ...availability } = runtime.availability;
+  const reason = rawReason ? compact(rawReason) : undefined;
+  const diagnosticHints = compactRuntimeDiagnosticHints(rawHints, { runtime: runtime.kind })
+    .filter((hint) => hint !== reason);
+  const runtimeBridge = runtime.runtimeBridge?.reason
+    ? { ...runtime.runtimeBridge, reason: compact(runtime.runtimeBridge.reason) }
+    : runtime.runtimeBridge;
+  return {
+    ...runtime,
+    ...(runtimeBridge ? { runtimeBridge } : {}),
+    availability: {
+      ...availability,
+      ...(reason ? { reason } : {}),
+      ...(diagnosticHints.length > 0 ? { diagnosticHints } : {}),
+    },
+  };
+}
+
 export async function handleAgentRuntimesGet(
   searchParams: URLSearchParams,
-  services: AgentRuntimesServices = {},
+  services: AgentRuntimeDetectionServices = {},
 ): Promise<MindosServerResponse<AgentRuntimesPayload | AgentRuntimePayload | { error: string }>> {
   try {
     const scope = searchParams.get('scope');
@@ -642,12 +733,14 @@ export async function handleAgentRuntimesGet(
     }
 
     const runtime = searchParams.get('runtime');
+    const force = searchParams.get('force') === '1';
+    const listHeaders = force ? { 'Cache-Control': 'no-store' } : privateCacheHeaders(1800);
     if (runtime) {
       if (!isNativeRuntimeId(runtime)) {
         return json({ error: `Unsupported runtime: ${runtime}` }, { status: 400 });
       }
-      const rawDescriptor = await detectSingleNativeRuntime(runtime, services);
-      const descriptor = attachRuntimeDiagnostics([rawDescriptor])[0];
+      const entry = await getNativeRuntimeDetection(runtime, services, { force });
+      const descriptor = attachRuntimeDiagnostics([buildNativeRuntimeDescriptor(runtime, entry)]).map(compactNativeRuntimeDescriptor)[0];
       if (!descriptor) {
         return json({ error: `Runtime descriptor unavailable: ${runtime}` }, { status: 500 });
       }
@@ -657,59 +750,37 @@ export async function handleAgentRuntimesGet(
       );
     }
 
-    const detectLocalAcpAgents = services.detectLocalAcpAgents ?? defaultDetectLocalAcpAgents;
+    const settings = services.readSettings?.();
     if (scope === 'acp') {
-      const acpDetection = await withTimeout(
-        detectLocalAcpAgents({ overrides: services.readSettings?.().acpAgents }),
-        RUNTIME_DETECTION_TIMEOUT_MS,
-        `Agent runtime detection timed out after ${RUNTIME_DETECTION_TIMEOUT_MS}ms.`,
-      );
-      return json(buildAcpScopedPayload({
-        installed: Array.isArray(acpDetection.installed) ? acpDetection.installed : [],
-        notInstalled: Array.isArray(acpDetection.notInstalled) ? acpDetection.notInstalled : [],
-        checkedAt: new Date(services.now?.() ?? Date.now()).toISOString(),
-      }), { headers: searchParams.get('force') === '1' ? { 'Cache-Control': 'no-store' } : privateCacheHeaders(1800) });
+      const entry = await getAcpRuntimeDetection(services, { settings, force });
+      return json(buildAcpScopedPayload({ ...entry.value, checkedAt: isoTime(entry.checkedAt) }), { headers: listHeaders });
     }
 
-    const nativeDetectionPromise = detectNativeRuntimes(services);
-    const acpDetectionPromise = (async (): Promise<{ installed: unknown[]; notInstalled: unknown[] }> => {
-      try {
-        return await withTimeout(
-          detectLocalAcpAgents({ overrides: services.readSettings?.().acpAgents }),
-          RUNTIME_DETECTION_TIMEOUT_MS,
-          `Agent runtime detection timed out after ${RUNTIME_DETECTION_TIMEOUT_MS}ms.`,
-        );
-      } catch {
-        return { installed: [], notInstalled: [] };
-      }
-    })();
-
-    const [nativeDetection, acpDetection] = await Promise.all([nativeDetectionPromise, acpDetectionPromise]);
-    const acpInstalled = Array.isArray(acpDetection.installed) ? acpDetection.installed : [];
-    const acpNotInstalled = Array.isArray(acpDetection.notInstalled) ? acpDetection.notInstalled : [];
-    const acpRuntimeInstalled = acpInstalled.filter((agent) => {
-      const normalized = normalizeInstalled(agent);
-      return !normalized || (!isCodexAgent(normalized) && !isClaudeAgent(normalized));
-    });
-    const acpRuntimeNotInstalled = acpNotInstalled.filter((agent) => {
-      const normalized = normalizeMissing(agent);
-      return !normalized || (!isCodexAgent(normalized) && !isClaudeAgent(normalized));
-    });
-    const installed = await applyNativeRuntimeHealth(
-      [...nativeDetection.installed, ...acpRuntimeInstalled],
-      services,
-      defaultCheckNativeRuntimeHealth,
-    );
+    const [codex, claude, acp] = await Promise.all([
+      getNativeRuntimeDetection('codex', services, { settings, force }),
+      getNativeRuntimeDetection('claude', services, { settings, force }),
+      // A slow or broken ACP scan must not hide the native runtimes; the failure is not cached, so the next request retries.
+      getAcpRuntimeDetection(services, { settings, force }).catch(() => null),
+    ]);
+    const acpDetection = acp?.value ?? { installed: [], notInstalled: [] };
+    const nativeAgents = [codex.value.agent, claude.value.agent];
     const payload = buildAgentRuntimesPayload({
-      installed,
-      notInstalled: [...nativeDetection.notInstalled, ...acpRuntimeNotInstalled],
-      checkedAt: new Date(services.now?.() ?? Date.now()).toISOString(),
+      installed: [
+        ...nativeAgents.filter((agent) => 'binaryPath' in agent),
+        ...acpDetection.installed.filter((agent) => isNonNativeAcpAgent(agent, normalizeInstalled)),
+      ],
+      notInstalled: [
+        ...nativeAgents.filter((agent) => 'installCmd' in agent),
+        ...acpDetection.notInstalled.filter((agent) => isNonNativeAcpAgent(agent, normalizeMissing)),
+      ],
+      checkedAt: isoTime(Math.max(codex.checkedAt, claude.checkedAt, acp?.checkedAt ?? 0)),
     });
     return json({
       ...payload,
-      installed: acpInstalled.map(normalizeInstalled).filter((agent): agent is DetectedRuntimeAgent => !!agent),
-      notInstalled: acpNotInstalled.map(normalizeMissing).filter((agent): agent is MissingRuntimeAgent => !!agent),
-    }, { headers: searchParams.get('force') === '1' ? { 'Cache-Control': 'no-store' } : privateCacheHeaders(1800) });
+      runtimes: payload.runtimes.map(compactNativeRuntimeDescriptor),
+      installed: acpDetection.installed.map(normalizeInstalled).filter((agent): agent is DetectedRuntimeAgent => !!agent),
+      notInstalled: acpDetection.notInstalled.map(normalizeMissing).filter((agent): agent is MissingRuntimeAgent => !!agent),
+    }, { headers: listHeaders });
   } catch (error) {
     return errorResponse(error);
   }

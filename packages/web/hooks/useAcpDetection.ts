@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { subscribeServerEvents } from '@/lib/server-events';
 import type {
   AgentRuntimeDescriptor,
   DetectedRuntimeAgent,
@@ -29,6 +30,7 @@ const LEGACY_STORAGE_KEYS = ['mindos:acp-detection:v4', 'mindos:acp-detection:v3
 const STALE_TTL_MS = 30 * 60 * 1000;
 const REVALIDATE_TTL_MS = 30 * 60 * 1000;
 const DETECTION_TIMEOUT_MS = 45000;
+const NATIVE_RUNTIME_IDS = new Set(['codex', 'claude']);
 
 export interface DetectionCache {
   installed: DetectedAgent[];
@@ -103,6 +105,11 @@ export function useAcpDetection(): AcpDetectionState {
 
   const forceRef = useRef(false);
 
+  /** Re-read the server's (cached) detection without clearing what this tab already shows. */
+  const revalidate = useCallback(() => {
+    setTrigger((n) => n + 1);
+  }, []);
+
   const refresh = useCallback(() => {
     try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
     for (const key of LEGACY_STORAGE_KEYS) {
@@ -118,6 +125,22 @@ export function useAcpDetection(): AcpDetectionState {
     window.addEventListener('mindos:settings-changed', onSettingsChanged);
     return () => window.removeEventListener('mindos:settings-changed', onSettingsChanged);
   }, [refresh]);
+
+  useEffect(() => {
+    // Detection changes for Codex / Claude alone are the native hook's business.
+    const unsubscribeRuntime = subscribeServerEvents('runtime.changed', (event) => {
+      if (event.runtimes.some((id) => !NATIVE_RUNTIME_IDS.has(id))) revalidate();
+    });
+    const unsubscribeSettings = subscribeServerEvents('settings.changed', () => revalidate());
+    const unsubscribeReady = subscribeServerEvents('ready', (event) => {
+      if (event.resync) revalidate();
+    });
+    return () => {
+      unsubscribeRuntime();
+      unsubscribeSettings();
+      unsubscribeReady();
+    };
+  }, [revalidate]);
 
   useEffect(() => {
     const isForce = forceRef.current;

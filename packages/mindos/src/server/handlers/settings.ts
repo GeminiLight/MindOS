@@ -4,6 +4,7 @@ import {
   type AgentRuntimeEnvironmentSettings,
 } from '../../agent/runtime/runtime-env.js';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
+import { getMindosServerEventBus, type MindosServerEventEmitter } from '../events/bus.js';
 import { normalizeSearchIgnoredPaths } from '../search-ignore.js';
 
 export type MindosSettingsAi = {
@@ -68,6 +69,8 @@ export type MindosSettingsServices = {
   readSearchIgnoreFile?(mindRoot?: string): string[];
   writeSearchIgnoreFile?(mindRoot: string, ignoredPaths: string[]): void;
   providerEnv: MindosProviderEnvServices;
+  /** Receives `settings.changed` after a successful write; defaults to the process bus. */
+  events?: MindosServerEventEmitter;
 };
 
 export type MindosSettingsResetTokenSettings = {
@@ -349,9 +352,23 @@ export function handleSettingsPost(
       || JSON.stringify(nextSearchIgnoredPaths) !== JSON.stringify(resolveSearchIgnoredPaths(current.searchIgnoredPaths, currentFileIgnoredPaths, undefined))
     ) services.invalidateCache();
 
+    emitSettingsChanged(services);
     return json({ ok: true });
   } catch (error) {
     return errorResponse(error);
+  }
+}
+
+/**
+ * Connected clients re-validate settings-derived state (runtime detection,
+ * ACP overrides) on this frame instead of polling. The write already
+ * happened, so a broken bus must not turn the response into an error.
+ */
+function emitSettingsChanged(services: Pick<MindosSettingsServices, 'events'>): void {
+  try {
+    (services.events ?? getMindosServerEventBus()).emit({ type: 'settings.changed' });
+  } catch {
+    // Best-effort notification.
   }
 }
 

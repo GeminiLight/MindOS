@@ -106,6 +106,12 @@ export {
   checkClaudeRuntimeHealth,
   defaultCheckNativeRuntimeHealth,
   handleAgentRuntimesGet,
+  getAcpRuntimeDetection,
+  getNativeRuntimeDetection,
+  buildNativeRuntimeDescriptor,
+  type AcpRuntimeDetection,
+  type AgentRuntimeDetectionServices,
+  type NativeRuntimeDetection,
   mergeCodexProviderAndLoginHealth,
   type AgentRuntimeCapabilities,
   type AgentRuntimeBridge,
@@ -135,6 +141,17 @@ export {
   type NativeRuntimeHealthInput,
   type NativeRuntimeHealthResult,
 } from './handlers/agent-runtimes.js';
+
+export {
+  RUNTIME_DETECTION_CACHE_TTL_MS,
+  fingerprintRuntimeDetectionSettings,
+  getRuntimeDetection,
+  peekRuntimeDetection,
+  resetRuntimeDetectionCacheForTest,
+  type RuntimeDetectionEntry,
+  type RuntimeDetectionScope,
+  type RuntimeDetectionServices,
+} from './handlers/runtime-detection-cache.js';
 
 export {
   buildSkillRuntimeMatchesPayload,
@@ -358,6 +375,9 @@ export {
   handleCodexThreadGet,
   handleCodexThreadUnarchivePost,
   handleCodexThreadsGet,
+  CODEX_APP_SERVER_CLIENT_IDLE_TTL_MS,
+  closePooledCodexAppServerClients,
+  resetCodexAppServerClientPoolForTest,
   type CodexModelListPayload,
   type CodexThreadForkPayload,
   type CodexThreadListPayload,

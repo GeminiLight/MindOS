@@ -215,26 +215,41 @@ describe('route table: setup and connectivity parity', () => {
 });
 
 describe('route table: agent runtime host extensions', () => {
-  it('runs the host decorator on successful runtime payloads only', async () => {
+  it('labels the Claude bridge and compacts failures in core so the picker, projections and readiness agree', async () => {
     const root = makeRoot();
-    const decoratePayload = vi.fn(<T,>(payload: T) => ({ ...payload, decorated: true }) as T);
     const app = hostApp(makeServices(root, {
       agentRuntimes: {
-        decoratePayload,
         detectLocalAcpAgents: async () => ({ installed: [], notInstalled: [] }),
-        resolveRuntimeCommand: async () => null,
+        resolveRuntimeCommand: async (command: string) => (command === 'claude' || command === 'codex' ? `/usr/local/bin/${command}` : null),
         resolveRuntimeCommandCandidates: async () => [],
+        // A host health check that only describes the bridge in prose: the typed field must still come out of core.
+        checkNativeRuntimeHealth: async ({ runtime }) => (runtime === 'claude'
+          ? {
+            status: 'available' as const,
+            diagnosticHints: ['Claude Code CLI is available; Claude Agent SDK bridge is unavailable, so MindOS will use CLI fallback. SDK missing'],
+          }
+          : { status: 'error' as const, reason: ['Error: codex exploded', 'at findCodexExecutable (file:///opt/codex.js:1:1)', 'Node.js v22.0.0'].join('\n') }),
       },
     }));
 
-    const ok = await app.fetch(new Request('http://localhost/api/agent-runtimes?scope=acp'));
-    expect(ok.status).toBe(200);
-    expect(await ok.json()).toMatchObject({ decorated: true });
-    expect(decoratePayload).toHaveBeenCalledTimes(1);
+    const picker = await (await app.fetch(new Request('http://localhost/api/agent-runtimes?runtime=claude'))).json();
+    const list = await (await app.fetch(new Request('http://localhost/api/agent-runtimes'))).json();
+    const adapter = await (await app.fetch(new Request('http://localhost/api/agent-runtimes/adapter-projections?runtime=claude'))).json();
+    const readiness = await (await app.fetch(new Request('http://localhost/api/agent-runtimes/readiness?runtime=claude'))).json();
 
-    const bad = await app.fetch(new Request('http://localhost/api/agent-runtimes?scope=nope'));
-    expect(bad.status).toBe(400);
-    expect(decoratePayload).toHaveBeenCalledTimes(1);
+    const expectedBridge = { kind: 'claude-cli', label: 'CLI fallback active', fallback: true, reason: 'SDK missing' };
+    expect(picker.runtime).toMatchObject({ adapter: 'claude-cli', runtimeBridge: expectedBridge });
+    expect(picker.runtime.adapterContract.connection.kind).toBe('cli');
+    const listed = list.runtimes.find((runtime: { id: string }) => runtime.id === 'claude');
+    expect(listed).toMatchObject({ adapter: 'claude-cli', runtimeBridge: expectedBridge });
+    expect(adapter.projections[0]).toMatchObject({ runtimeId: 'claude', connection: { kind: 'cli' } });
+    expect(readiness.projections[0].useCases.find((useCase: { id: string }) => useCase.id === 'adapter-contract').details.connection.kind).toBe('cli');
+
+    // The Codex failure is the same compact sentence everywhere, never a stack.
+    const codex = list.runtimes.find((runtime: { id: string }) => runtime.id === 'codex');
+    expect(codex.availability.reason).toBe('codex exploded');
+    expect(JSON.stringify(list)).not.toContain('file:///opt');
+    expect(JSON.stringify(readiness)).not.toContain('file:///opt');
   });
 
   it('probes ACP handshakes through the host session factory when handshake=1 and reads the cache otherwise', async () => {

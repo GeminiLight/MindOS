@@ -1,13 +1,23 @@
 import type {
-  AgentRuntimeCompatibilityOwner,
-  AgentRuntimeCompatibilityRequirementStatus,
   AgentRuntimeDescriptor,
   AgentRuntimeKind,
   AgentRuntimeStatus,
 } from '../../agent/runtime/registry.js';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
+import {
+  filterProjectionsByRuntime,
+  reason,
+  runtimeAvailableReason,
+  uniqSorted,
+  type AgentRuntimeProjectionReason,
+} from './runtime-projection-shared.js';
 import type { MindosMcpAgentProfile } from './mcp-agents.js';
 import type { MindosMcpConfigFile, MindosMcpServerEntry } from './mcp-tools.js';
+
+const MCP_AVAILABILITY_WORDING = {
+  available: 'is available for MCP projection diagnostics.',
+  unavailable: 'is not available, so MCP readiness cannot be trusted.',
+};
 
 export type AgentRuntimeMcpProjectionStatus =
   | 'ready'
@@ -16,12 +26,7 @@ export type AgentRuntimeMcpProjectionStatus =
   | 'blocked'
   | 'unknown';
 
-export type AgentRuntimeMcpProjectionReason = {
-  id: string;
-  status: AgentRuntimeCompatibilityRequirementStatus;
-  owner: AgentRuntimeCompatibilityOwner;
-  summary: string;
-};
+export type AgentRuntimeMcpProjectionReason = AgentRuntimeProjectionReason;
 
 export type AgentRuntimeMcpProjection = {
   schemaVersion: 1;
@@ -74,10 +79,7 @@ export async function handleAgentRuntimeMcpProjectionsGet(
       mcpAgents,
       mindosMcpConfig: services.readMcpConfig?.(),
     });
-    const runtimeFilter = searchParams.get('runtime')?.trim();
-    const filtered = runtimeFilter
-      ? payload.projections.filter((projection) => projection.runtimeId === runtimeFilter || projection.runtimeKind === runtimeFilter)
-      : payload.projections;
+    const filtered = filterProjectionsByRuntime(payload.projections, searchParams.get('runtime'));
     return json(
       { ...payload, projections: filtered },
       { headers: { 'Cache-Control': 'no-store' } },
@@ -111,7 +113,7 @@ function buildRuntimeMcpProjection(input: {
 }): AgentRuntimeMcpProjection {
   const { runtime, agentByKey, mindosContext } = input;
   const mcpAgent = resolveRuntimeMcpAgent(runtime, agentByKey);
-  const mcpAgentKey = mcpAgent?.key ?? fallbackMcpAgentKey(runtime);
+  const mcpAgentKey = mcpAgent?.key ?? runtime.mcpAgentKey;
   const configuredServers = uniqSorted(mcpAgent?.configuredMcpServers ?? []);
   const configuredSources = uniqSorted(mcpAgent?.configuredMcpSources ?? []);
   const supportsNativeConfig = !!mcpAgent || runtime.capabilities.supportsMcpConfig;
@@ -122,14 +124,7 @@ function buildRuntimeMcpProjection(input: {
   const reasons: AgentRuntimeMcpProjectionReason[] = [];
   const blockers: string[] = [];
 
-  reasons.push(reason(
-    'runtime-available',
-    runtime.status === 'available' ? 'satisfied' : 'missing',
-    runtime.status === 'available' ? 'mindos' : 'shared',
-    runtime.status === 'available'
-      ? `${runtime.name} is available for MCP projection diagnostics.`
-      : `${runtime.name} is not available, so MCP readiness cannot be trusted.`,
-  ));
+  reasons.push(runtimeAvailableReason(runtime, MCP_AVAILABILITY_WORDING));
 
   reasons.push(reason(
     'mcp-agent-profile',
@@ -241,7 +236,6 @@ function resolveRuntimeMcpAgent(
 function runtimeMcpAgentKeyCandidates(runtime: AgentRuntimeDescriptor): string[] {
   return uniqSorted([
     runtime.mcpAgentKey,
-    fallbackMcpAgentKey(runtime),
     runtime.runtimeId,
     runtime.id,
     runtime.sourceAgentId,
@@ -250,12 +244,6 @@ function runtimeMcpAgentKeyCandidates(runtime: AgentRuntimeDescriptor): string[]
   ]);
 }
 
-function fallbackMcpAgentKey(runtime: AgentRuntimeDescriptor): string | undefined {
-  if (runtime.kind === 'mindos') return 'mindos';
-  if (runtime.kind === 'codex') return 'codex';
-  if (runtime.kind === 'claude') return 'claude-code';
-  return undefined;
-}
 
 function buildMindosMcpProjectionContext(config: MindosMcpConfigFile | null | undefined): MindosMcpProjectionContext {
   const normalized = normalizeMindosMcpConfig(config);
@@ -300,17 +288,4 @@ function readRecord(value: unknown, key: string): Record<string, unknown> | unde
   const child = (value as Record<string, unknown>)[key];
   if (!child || typeof child !== 'object' || Array.isArray(child)) return undefined;
   return child as Record<string, unknown>;
-}
-
-function reason(
-  id: string,
-  status: AgentRuntimeCompatibilityRequirementStatus,
-  owner: AgentRuntimeCompatibilityOwner,
-  summary: string,
-): AgentRuntimeMcpProjectionReason {
-  return { id, status, owner, summary };
-}
-
-function uniqSorted(values: Array<string | undefined | null>): string[] {
-  return Array.from(new Set(values.map((value) => value?.trim()).filter((value): value is string => !!value))).sort();
 }

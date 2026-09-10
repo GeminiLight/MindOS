@@ -15,16 +15,27 @@ import {
   rememberAvailableNativeRuntimeDescriptor,
 } from '@/lib/agent/native-runtime-descriptor-cache';
 import {
+  buildNativeRuntimeDescriptor,
   handleAgentRuntimesGet,
+  peekRuntimeDetection,
   type AgentRuntimeDescriptor,
+  type AgentRuntimeDetectionServices,
   type AgentRuntimesServices,
+  type NativeRuntimeDetection,
 } from '@geminilight/mindos/server';
 import type { MindosAgentRuntimeSelection } from '@geminilight/mindos/agent/runtime';
 
 const NATIVE_AGENT_TURN_HEALTH_GATE_TIMEOUT_MS = 3000;
 
-export function createAgentRuntimesServices(): AgentRuntimesServices {
+/**
+ * The detectors wrap the product defaults through `@/lib/acp/detect-local`
+ * (the seam the API tests mock); `detectionIdentity` keeps this caller in the
+ * same detection-cache bucket as the route table, so a turn reuses the probe
+ * the runtime picker or the Agents panel already paid for.
+ */
+export function createAgentRuntimesServices(): AgentRuntimeDetectionServices {
   return {
+    detectionIdentity: 'web-host',
     readSettings: readSettings as AgentRuntimesServices['readSettings'],
     detectLocalAcpAgents: detectLocalAcpAgents as AgentRuntimesServices['detectLocalAcpAgents'],
     resolveRuntimeCommand: resolveCommandPath as AgentRuntimesServices['resolveRuntimeCommand'],
@@ -106,12 +117,15 @@ export async function resolveAvailableNativeRuntime(
   runtime: MindosAgentRuntimeSelection,
 ): Promise<{ runtime: MindosAgentRuntimeSelection; unavailableReason: null } | { runtime: null; unavailableReason: string }> {
   const services = createAgentRuntimesServices();
+  // Cache-first: a fresh probe (picker, Agents panel, previous turn) answers immediately;
+  // only a stale or missing entry spawns the health checks again.
   const res = await Promise.race([
-    handleAgentRuntimesGet(new URLSearchParams(`runtime=${runtime.kind}&force=1`), services),
+    handleAgentRuntimesGet(new URLSearchParams(`runtime=${runtime.kind}`), services),
     new Promise<null>((resolve) => setTimeout(() => resolve(null), NATIVE_AGENT_TURN_HEALTH_GATE_TIMEOUT_MS)),
   ]);
   if (!res) {
-    const cachedDescriptor = getCachedAvailableNativeRuntimeDescriptor(runtime.kind, runtime.id);
+    const cachedDescriptor = lastKnownNativeRuntimeDescriptor(runtime, services)
+      ?? getCachedAvailableNativeRuntimeDescriptor(runtime.kind, runtime.id);
     const cachedRuntime = runtimeSelectionWithVerifiedBinaryPath(runtime, cachedDescriptor ?? undefined);
     if (cachedRuntime) {
       return {
@@ -163,6 +177,28 @@ export async function resolveAvailableNativeRuntime(
   return {
     runtime: null,
     unavailableReason: `${descriptor.name} is ${statusText}.${compactReason ? ` ${compactReason}` : ''}`,
+  };
+}
+
+/**
+ * The most recent core detection for this runtime, expired or not, presented
+ * the way the picker saw it (`stale: true`), so a slow re-probe does not turn
+ * a runtime the user just used into "still being verified".
+ */
+function lastKnownNativeRuntimeDescriptor(
+  runtime: MindosAgentRuntimeSelection,
+  services: AgentRuntimeDetectionServices,
+): AgentRuntimeDescriptor | null {
+  const entry = peekRuntimeDetection<NativeRuntimeDetection>({ scope: runtime.kind, services, settings: services.readSettings?.() });
+  if (!entry || !('binaryPath' in entry.value.agent) || entry.value.agent.status !== 'available') return null;
+  const descriptor = buildNativeRuntimeDescriptor(runtime.kind, entry);
+  if (descriptor.id !== runtime.id) return null;
+  return {
+    ...descriptor,
+    availability: {
+      ...(descriptor.availability ?? { checkedAt: new Date(entry.checkedAt).toISOString(), sources: ['native-health'] }),
+      stale: true,
+    },
   };
 }
 

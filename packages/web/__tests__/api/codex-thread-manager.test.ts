@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { resetRuntimeDetectionCacheForTest } from '@geminilight/mindos/server';
 
 const mocks = vi.hoisted(() => ({
   resolveCommandPath: vi.fn(),
@@ -29,6 +30,8 @@ const ROUTES = [
 
 describe('/api/agent-runtimes/codex/threads', () => {
   beforeEach(() => {
+    // The core detection cache is process-wide; each test asserts on fresh detector calls.
+    resetRuntimeDetectionCacheForTest();
     mocks.resolveCommandPath.mockReset().mockResolvedValue(null);
     mocks.resolveCommandPathCandidates.mockReset().mockResolvedValue([]);
     mocks.checkNativeRuntimeHealth.mockReset().mockResolvedValue({ status: 'available' });

@@ -3,19 +3,30 @@ import {
   type MindosAgentPermissionPolicy,
 } from '../../agent/mindos-pi/permission/policy.js';
 import {
-  isMindosPermissionMode,
   MINDOS_PERMISSION_MODES,
   type MindosPermissionMode,
 } from '../../agent/permission/index.js';
 import type {
-  AgentRuntimeCompatibilityOwner,
-  AgentRuntimeCompatibilityRequirementStatus,
   AgentRuntimeDescriptor,
   AgentRuntimeKind,
   AgentRuntimeOwner,
   AgentRuntimeStatus,
 } from '../../agent/runtime/registry.js';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
+import {
+  filterProjectionsByRuntime,
+  parsePermissionMode,
+  reason,
+  runtimeAvailableReason,
+  runtimeKey,
+  uniqSorted,
+  type AgentRuntimeProjectionReason,
+} from './runtime-projection-shared.js';
+
+const PERMISSION_AVAILABILITY_WORDING = {
+  available: 'is available for permission projection diagnostics.',
+  unavailable: 'is not available, so permission readiness cannot be trusted.',
+};
 
 export type AgentRuntimePermissionProjectionStatus =
   | 'ready'
@@ -38,12 +49,7 @@ export type AgentRuntimePermissionUnattendedStatus =
   | 'blocked'
   | 'unknown';
 
-export type AgentRuntimePermissionProjectionReason = {
-  id: string;
-  status: AgentRuntimeCompatibilityRequirementStatus;
-  owner: AgentRuntimeCompatibilityOwner;
-  summary: string;
-};
+export type AgentRuntimePermissionProjectionReason = AgentRuntimeProjectionReason;
 
 export type AgentRuntimePermissionPolicyProjection = {
   permissionMode: MindosPermissionMode;
@@ -112,10 +118,7 @@ export async function handleAgentRuntimePermissionProjectionsGet(
       runtimes,
       permissionMode: permissionModeResult.permissionMode,
     });
-    const runtimeFilter = searchParams.get('runtime')?.trim();
-    const projections = runtimeFilter
-      ? payload.projections.filter((projection) => projection.runtimeId === runtimeFilter || projection.runtimeKind === runtimeFilter)
-      : payload.projections;
+    const projections = filterProjectionsByRuntime(payload.projections, searchParams.get('runtime'));
     return json(
       { ...payload, projections },
       { headers: { 'Cache-Control': 'no-store' } },
@@ -152,10 +155,10 @@ function buildMindosPermissionProjection(
   runtime: AgentRuntimeDescriptor,
   requestedPermissionMode: MindosPermissionMode,
 ): AgentRuntimePermissionProjection {
-  const policy = createMindosAgentPermissionPolicy(requestedPermissionMode);
-  const policyProjection = projectMindosPolicy(policy);
+  const policyProjection = MINDOS_POLICY_PROJECTION_BY_MODE.get(requestedPermissionMode)
+    ?? projectMindosPolicy(createMindosAgentPermissionPolicy(requestedPermissionMode));
   const reasons: AgentRuntimePermissionProjectionReason[] = [
-    runtimeAvailableReason(runtime),
+    runtimeAvailableReason(runtime, PERMISSION_AVAILABILITY_WORDING),
     reason('permission-owner', 'satisfied', 'mindos', 'MindOS owns permission policy inside the Pi runtime lane.'),
     reason('turn-policy', 'satisfied', 'mindos', 'The selected read/ask/auto/full mode maps to a deterministic Pi tool policy.'),
   ];
@@ -166,7 +169,7 @@ function buildMindosPermissionProjection(
 
   return {
     schemaVersion: 1,
-    runtimeId: runtime.runtimeId ?? runtime.id,
+    runtimeId: runtimeKey(runtime),
     runtimeName: runtime.name,
     runtimeKind: runtime.kind,
     runtimeStatus: runtime.status,
@@ -182,7 +185,7 @@ function buildMindosPermissionProjection(
     },
     unattendedApproval: unattended,
     policy: policyProjection,
-    policyModes: MINDOS_PERMISSION_MODES.map((mode) => projectMindosPolicy(createMindosAgentPermissionPolicy(mode))),
+    policyModes: MINDOS_POLICY_MODE_PROJECTIONS,
     reasons,
     ...(blockers.length > 0 ? { blockers: uniqSorted(blockers) } : {}),
   };
@@ -204,7 +207,7 @@ function buildNativePermissionProjection(
 
   return {
     schemaVersion: 1,
-    runtimeId: runtime.runtimeId ?? runtime.id,
+    runtimeId: runtimeKey(runtime),
     runtimeName: runtime.name,
     runtimeKind: runtime.kind,
     runtimeStatus: runtime.status,
@@ -227,7 +230,7 @@ function buildNativePermissionProjection(
       blockers: ['durable-approval-queue', 'approval-timeout-recovery'],
     },
     reasons: [
-      runtimeAvailableReason(runtime),
+      runtimeAvailableReason(runtime, PERMISSION_AVAILABILITY_WORDING),
       reason(
         'runtime-approval-contract',
         supportsApprovals ? 'satisfied' : 'unknown',
@@ -252,7 +255,7 @@ function buildAcpPermissionProjection(
     : ['runtime-available', 'adapter-approval-contract'];
   return {
     schemaVersion: 1,
-    runtimeId: runtime.runtimeId ?? runtime.id,
+    runtimeId: runtimeKey(runtime),
     runtimeName: runtime.name,
     runtimeKind: runtime.kind,
     runtimeStatus: runtime.status,
@@ -273,7 +276,7 @@ function buildAcpPermissionProjection(
       blockers: ['adapter-approval-contract'],
     },
     reasons: [
-      runtimeAvailableReason(runtime),
+      runtimeAvailableReason(runtime, PERMISSION_AVAILABILITY_WORDING),
       reason('adapter-approval-contract', 'unknown', 'external', 'ACP adapters need to declare approval behavior before MindOS can route or preauthorize actions safely.'),
     ],
     blockers,
@@ -315,6 +318,12 @@ function mindosUnattendedApproval(
   };
 }
 
+/** The four MindOS policy projections are pure functions of the mode; build them once instead of per request. */
+const MINDOS_POLICY_PROJECTION_BY_MODE: ReadonlyMap<MindosPermissionMode, AgentRuntimePermissionPolicyProjection> = new Map(
+  MINDOS_PERMISSION_MODES.map((mode) => [mode, projectMindosPolicy(createMindosAgentPermissionPolicy(mode))]),
+);
+const MINDOS_POLICY_MODE_PROJECTIONS: AgentRuntimePermissionPolicyProjection[] = [...MINDOS_POLICY_PROJECTION_BY_MODE.values()];
+
 function projectMindosPolicy(policy: MindosAgentPermissionPolicy): AgentRuntimePermissionPolicyProjection {
   return {
     permissionMode: policy.permissionMode,
@@ -331,36 +340,4 @@ function projectMindosPolicy(policy: MindosAgentPermissionPolicy): AgentRuntimeP
     userExtensions: policy.toolScope.userExtensions,
     extensionScopes: [...policy.extensionScopes],
   };
-}
-
-function runtimeAvailableReason(runtime: AgentRuntimeDescriptor): AgentRuntimePermissionProjectionReason {
-  return reason(
-    'runtime-available',
-    runtime.status === 'available' ? 'satisfied' : 'missing',
-    runtime.status === 'available' ? 'mindos' : 'shared',
-    runtime.status === 'available'
-      ? `${runtime.name} is available for permission projection diagnostics.`
-      : `${runtime.name} is not available, so permission readiness cannot be trusted.`,
-  );
-}
-
-function reason(
-  id: string,
-  status: AgentRuntimeCompatibilityRequirementStatus,
-  owner: AgentRuntimeCompatibilityOwner,
-  summary: string,
-): AgentRuntimePermissionProjectionReason {
-  return { id, status, owner, summary };
-}
-
-function parsePermissionMode(value: string | null):
-  | { permissionMode: MindosPermissionMode }
-  | { error: string } {
-  if (!value) return { permissionMode: 'ask' };
-  if (isMindosPermissionMode(value)) return { permissionMode: value };
-  return { error: `Unsupported permissionMode: ${value}` };
-}
-
-function uniqSorted(values: string[]): string[] {
-  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean))).sort();
 }

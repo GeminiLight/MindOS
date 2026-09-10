@@ -1,6 +1,4 @@
 import type {
-  AgentRuntimeCompatibilityOwner,
-  AgentRuntimeCompatibilityRequirementStatus,
   AgentRuntimeDescriptor,
   AgentRuntimeHarnessCapabilities,
   AgentRuntimeKind,
@@ -11,6 +9,19 @@ import {
   type AgentArtifactLedgerRecord,
 } from '../../agent/ledger/artifact-ledger.js';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
+import {
+  filterProjectionsByRuntime,
+  reason,
+  runtimeAvailableReason,
+  runtimeKey,
+  uniqSorted,
+  type AgentRuntimeProjectionReason,
+} from './runtime-projection-shared.js';
+
+const ARTIFACT_AVAILABILITY_WORDING = {
+  available: 'is available for artifact projection diagnostics.',
+  unavailable: 'is not available, so artifact output readiness cannot be trusted.',
+};
 
 export type AgentRuntimeArtifactProjectionStatus =
   | 'ready'
@@ -28,12 +39,7 @@ export type AgentRuntimeArtifactHandoffTarget =
   | 'branch'
   | 'pull-request';
 
-export type AgentRuntimeArtifactProjectionReason = {
-  id: string;
-  status: AgentRuntimeCompatibilityRequirementStatus;
-  owner: AgentRuntimeCompatibilityOwner;
-  summary: string;
-};
+export type AgentRuntimeArtifactProjectionReason = AgentRuntimeProjectionReason;
 
 export type AgentRuntimeArtifactProjection = {
   schemaVersion: 1;
@@ -106,10 +112,7 @@ export async function handleAgentRuntimeArtifactProjectionsGet(
       services.listArtifacts?.() ?? listAgentArtifacts(),
     ]);
     const payload = buildAgentRuntimeArtifactProjectionsPayload({ runtimes, artifacts });
-    const runtimeFilter = searchParams.get('runtime')?.trim();
-    const projections = runtimeFilter
-      ? payload.projections.filter((projection) => projection.runtimeId === runtimeFilter || projection.runtimeKind === runtimeFilter)
-      : payload.projections;
+    const projections = filterProjectionsByRuntime(payload.projections, searchParams.get('runtime'));
     return json(
       { ...payload, projections },
       { headers: { 'Cache-Control': 'no-store' } },
@@ -138,28 +141,25 @@ function buildRuntimeArtifactProjection(
   const reviewableOutputKinds = outputKinds.filter(isReviewableOutputKind);
   const nativeHandoffTargets = outputKinds.map(outputKindToHandoffTarget);
   const runtimeArtifacts = artifactsForRuntime(runtime, artifacts);
-  const artifactIndexReady = true;
   const hasDeclaredOutputContract = !!runtime.harnessCapabilities;
   const hasReviewableOutput = reviewableOutputKinds.length > 0;
   const blockers = new Set<string>();
 
   if (runtime.status !== 'available') blockers.add('runtime-available');
   if (!hasDeclaredOutputContract) blockers.add('runtime-output-contract');
-  if (!artifactIndexReady) blockers.add('artifact-index');
   if (!hasReviewableOutput) {
     blockers.add(runtime.kind === 'acp' ? 'adapter-artifact-contract' : 'runtime-review-output');
   }
 
   const status = resolveArtifactProjectionStatus({
     runtime,
-    artifactIndexReady,
     hasDeclaredOutputContract,
     hasReviewableOutput,
   });
 
   return {
     schemaVersion: 1,
-    runtimeId: runtime.runtimeId ?? runtime.id,
+    runtimeId: runtimeKey(runtime),
     runtimeName: runtime.name,
     runtimeKind: runtime.kind,
     runtimeStatus: runtime.status,
@@ -173,13 +173,13 @@ function buildRuntimeArtifactProjection(
         ? `${runtime.name} declares reviewable output kinds: ${reviewableOutputKinds.join(', ')}.`
         : `${runtime.name} does not declare durable diff, artifact, checkpoint, branch, or PR output yet.`,
     },
+    // The artifact pointer ledger ships with MindOS, so the index is always present; the
+    // `status` union keeps `missing` / `unknown` for API compatibility only.
     artifactIndex: {
-      supported: artifactIndexReady,
-      status: artifactIndexReady ? 'ready' : 'missing',
+      supported: true,
+      status: 'ready',
       owner: 'mindos',
-      summary: artifactIndexReady
-        ? `MindOS has a unified artifact pointer ledger for this runtime (${runtimeArtifacts.length} record(s)).`
-        : 'MindOS still needs a cross-runtime artifact index before outputs can be durably reviewed and compared.',
+      summary: `MindOS has a unified artifact pointer ledger for this runtime (${runtimeArtifacts.length} record(s)).`,
       recordCount: runtimeArtifacts.length,
       recentArtifacts: runtimeArtifacts.slice(0, 10).map((record) => ({
         id: record.id,
@@ -213,7 +213,7 @@ function buildRuntimeArtifactProjection(
         : `${runtime.name} does not declare branch or PR handoff output.`,
     },
     reasons: [
-      runtimeAvailableReason(runtime),
+      runtimeAvailableReason(runtime, ARTIFACT_AVAILABILITY_WORDING),
       reason(
         'runtime-output-contract',
         hasReviewableOutput ? 'satisfied' : runtime.kind === 'acp' ? 'unknown' : 'missing',
@@ -232,11 +232,9 @@ function buildRuntimeArtifactProjection(
       ),
       reason(
         'artifact-index',
-        artifactIndexReady ? 'satisfied' : 'missing',
+        'satisfied',
         'mindos',
-        artifactIndexReady
-          ? 'MindOS can persist outputs in a unified cross-runtime artifact index.'
-          : 'MindOS cannot yet persist cross-runtime outputs in a unified artifact index.',
+        'MindOS can persist outputs in a unified cross-runtime artifact index.',
       ),
       reason(
         'checkpoint-rollback',
@@ -274,28 +272,16 @@ function artifactsForRuntime(
 
 function resolveArtifactProjectionStatus(input: {
   runtime: AgentRuntimeDescriptor;
-  artifactIndexReady: boolean;
   hasDeclaredOutputContract: boolean;
   hasReviewableOutput: boolean;
 }): AgentRuntimeArtifactProjectionStatus {
   if (input.runtime.status !== 'available') return 'blocked';
   if (!input.hasDeclaredOutputContract) return 'unknown';
-  if (input.artifactIndexReady && input.hasReviewableOutput) return 'ready';
-  if (input.hasReviewableOutput) return 'limited';
+  if (input.hasReviewableOutput) return 'ready';
   if (input.runtime.kind === 'acp') return 'unknown';
   return 'blocked';
 }
 
-function runtimeAvailableReason(runtime: AgentRuntimeDescriptor): AgentRuntimeArtifactProjectionReason {
-  return reason(
-    'runtime-available',
-    runtime.status === 'available' ? 'satisfied' : 'missing',
-    runtime.status === 'available' ? 'mindos' : 'shared',
-    runtime.status === 'available'
-      ? `${runtime.name} is available for artifact projection diagnostics.`
-      : `${runtime.name} is not available, so artifact output readiness cannot be trusted.`,
-  );
-}
 
 function isReviewableOutputKind(kind: AgentRuntimeArtifactOutputKind): boolean {
   return kind === 'diff' || kind === 'checkpoint' || kind === 'artifact' || kind === 'branch' || kind === 'pr';
@@ -316,17 +302,4 @@ function outputKindToHandoffTarget(kind: AgentRuntimeArtifactOutputKind): AgentR
     case 'text':
       return 'message';
   }
-}
-
-function reason(
-  id: string,
-  status: AgentRuntimeCompatibilityRequirementStatus,
-  owner: AgentRuntimeCompatibilityOwner,
-  summary: string,
-): AgentRuntimeArtifactProjectionReason {
-  return { id, status, owner, summary };
-}
-
-function uniqSorted<T extends string>(values: T[]): T[] {
-  return [...new Set(values)].sort();
 }

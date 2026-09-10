@@ -10,7 +10,8 @@ import type {
 
 /**
  * Safety refresh cadence, applied only while the `/api/events` stream is not
- * connected. While connected, `mcp.changed` frames trigger the refresh.
+ * connected. While connected, `mcp.changed` and `runtime.changed` frames
+ * trigger the refresh.
  */
 export const RUNTIME_READINESS_FALLBACK_POLL_MS = 60_000;
 
@@ -114,14 +115,16 @@ export function useRuntimeReadiness(input: {
 
   useEffect(() => {
     if (!visible) return;
-    const unsubscribe = subscribeServerEvents('mcp.changed', () => refresh());
+    const unsubscribeMcp = subscribeServerEvents('mcp.changed', () => refresh());
+    const unsubscribeRuntime = subscribeServerEvents('runtime.changed', () => refresh());
     const interval = setInterval(() => {
       if (document.visibilityState !== 'visible') return;
       if (getServerEventsState() === 'connected') return;
       refresh();
     }, RUNTIME_READINESS_FALLBACK_POLL_MS);
     return () => {
-      unsubscribe();
+      unsubscribeMcp();
+      unsubscribeRuntime();
       clearInterval(interval);
     };
   }, [refresh, visible]);

@@ -18,6 +18,8 @@ export type MindosServerEventType =
   | 'skills.changed'
   | 'mcp.changed'
   | 'sync.changed'
+  | 'runtime.changed'
+  | 'settings.changed'
   | 'heartbeat';
 
 /** Compact projection of a ledger event; the client only uses it as a trigger. */
@@ -38,6 +40,10 @@ export type MindosServerEvent =
   | { type: 'skills.changed' }
   | { type: 'mcp.changed' }
   | { type: 'sync.changed' }
+  /** Runtime detection produced a different result than the cached one; `runtimes` lists the changed ids (`codex`, `claude`, ACP agent ids). */
+  | { type: 'runtime.changed'; runtimes: string[] }
+  /** `POST /api/settings` persisted a new settings document. */
+  | { type: 'settings.changed' }
   | { type: 'heartbeat' };
 
 export const MINDOS_SERVER_EVENT_TYPES: readonly MindosServerEventType[] = [
@@ -46,6 +52,8 @@ export const MINDOS_SERVER_EVENT_TYPES: readonly MindosServerEventType[] = [
   'skills.changed',
   'mcp.changed',
   'sync.changed',
+  'runtime.changed',
+  'settings.changed',
   'heartbeat',
 ];
 

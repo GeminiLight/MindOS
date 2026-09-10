@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   createCodexAppServerClient,
   createCodexAppServerStdioTransport,
@@ -9,22 +10,28 @@ import {
   type CodexThreadReadResult,
   type CodexThreadForkResult,
 } from '../../agent/runtime/codex-app-server.js';
+import { deleteProcessGlobal, getProcessGlobal } from '../../agent/global-state.js';
 import { compactRuntimeFailureMessage } from '../../agent/runtime/runtime-errors.js';
-import { resolveCommandPath } from '../../protocols/acp/index.js';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
 import {
+  getNativeRuntimeDetection,
+  type AgentRuntimeDetectionServices,
   type AgentRuntimesServices,
-  defaultCheckNativeRuntimeHealth,
-  selectCodexRuntimeCandidate,
   type NativeRuntimeHealthResult,
 } from './agent-runtimes.js';
 
 export type CodexThreadManagerServices = {
+  /** Host-owned client: one per request, the host controls its lifecycle. */
   createCodexClient?(): CodexAppServerClient | Promise<CodexAppServerClient>;
+  /** Factory behind the product client pool (tests inject a fake); defaults to the stdio app-server transport. */
+  createPooledCodexClient?(input: { command: string; env?: NodeJS.ProcessEnv }): CodexAppServerClient;
   resolveRuntimeCommand?(command: string): Promise<string | null>;
   resolveRuntimeCommandCandidates?: AgentRuntimesServices['resolveRuntimeCommandCandidates'];
   readSettings?: AgentRuntimesServices['readSettings'];
   checkCodexRuntimeHealth?(binaryPath: string, env?: NodeJS.ProcessEnv): Promise<NativeRuntimeHealthResult>;
+  /** Shares the detection-cache bucket with the runtime routes (see `RuntimeDetectionServices`). */
+  detectionIdentity?: string;
+  now?(): number;
 };
 
 export type CodexThreadListPayload = CodexThreadListResult;
@@ -152,44 +159,193 @@ async function withCodexClient<T>(
   services: CodexThreadManagerServices,
   run: (client: CodexAppServerClient) => Promise<T>,
 ): Promise<T> {
+  if (services.createCodexClient) {
+    const client = await services.createCodexClient();
+    try {
+      await client.initialize();
+      return await run(client);
+    } finally {
+      await client.close?.();
+    }
+  }
+
   const runtime = await ensureCodexThreadRuntimeAvailable(services);
-  const client = await (services.createCodexClient?.() ?? createCodexAppServerClient(createCodexAppServerStdioTransport({
-    ...(runtime?.binaryPath ? { command: runtime.binaryPath } : {}),
-    ...(runtime?.env ? { env: runtime.env } : {}),
-  })));
+  const entry = await acquirePooledCodexClient({
+    command: runtime.binaryPath,
+    env: runtime.env,
+    factory: services.createPooledCodexClient ?? createDefaultPooledCodexClient,
+  });
+  let failed = false;
   try {
-    await client.initialize();
-    return await run(client);
+    return await run(entry.client);
+  } catch (error) {
+    // A rejected request may mean the app-server died; a fresh process on the next request is cheaper than a stuck one.
+    failed = true;
+    throw error;
   } finally {
-    await client.close?.();
+    releasePooledCodexClient(entry, { failed });
   }
 }
 
+/** Health-check wrappers are memoised per host function so consecutive requests share one detection-cache bucket. */
+const healthCheckAdapters = new WeakMap<NonNullable<CodexThreadManagerServices['checkCodexRuntimeHealth']>, AgentRuntimesServices['checkNativeRuntimeHealth']>();
+
+function detectionServicesFor(services: CodexThreadManagerServices): AgentRuntimeDetectionServices {
+  let checkNativeRuntimeHealth: AgentRuntimesServices['checkNativeRuntimeHealth'];
+  if (services.checkCodexRuntimeHealth) {
+    const hostCheck = services.checkCodexRuntimeHealth;
+    checkNativeRuntimeHealth = healthCheckAdapters.get(hostCheck);
+    if (!checkNativeRuntimeHealth) {
+      checkNativeRuntimeHealth = ({ agent, env }) => hostCheck(agent.binaryPath, env);
+      healthCheckAdapters.set(hostCheck, checkNativeRuntimeHealth);
+    }
+  }
+  return {
+    readSettings: services.readSettings,
+    resolveRuntimeCommand: services.resolveRuntimeCommand,
+    resolveRuntimeCommandCandidates: services.resolveRuntimeCommandCandidates,
+    checkNativeRuntimeHealth,
+    detectionIdentity: services.detectionIdentity,
+    now: services.now,
+  };
+}
+
+/** The cached Codex detection (shared with the runtime picker and projections) decides whether a thread route may start an app-server. */
 async function ensureCodexThreadRuntimeAvailable(
   services: CodexThreadManagerServices,
-): Promise<{ binaryPath: string; env?: NodeJS.ProcessEnv } | undefined> {
-  if (services.createCodexClient) return undefined;
-  const resolveRuntimeCommand = services.resolveRuntimeCommand ?? resolveCommandPath;
-  const selected = await selectCodexRuntimeCandidate({
-    services: {
-      readSettings: services.readSettings,
-      resolveRuntimeCommand,
-      resolveRuntimeCommandCandidates: services.resolveRuntimeCommandCandidates,
-    },
-    checkCandidate: (binaryPath, env) => services.checkCodexRuntimeHealth?.(binaryPath, env) ?? defaultCheckNativeRuntimeHealth({
-      runtime: 'codex',
-      agent: { id: 'codex-acp', name: 'Codex', binaryPath },
-      ...(env ? { env } : {}),
-    }),
-  });
-  if (!selected) {
+): Promise<{ binaryPath: string; env?: NodeJS.ProcessEnv }> {
+  const entry = await getNativeRuntimeDetection('codex', detectionServicesFor(services));
+  const agent = entry.value.agent;
+  if (!('binaryPath' in agent)) {
     throw new CodexThreadRuntimeUnavailableError('Codex executable was not detected. Install Codex or start MindOS from an environment where the codex command is available.');
   }
-  const { binaryPath, health } = selected;
-  if (health.status !== 'available') {
-    throw new CodexThreadRuntimeUnavailableError(`Codex is ${health.status === 'signed-out' ? 'signed out' : 'unavailable'}.${health.reason ? ` ${health.reason}` : ''}`);
+  if (agent.status !== 'available') {
+    throw new CodexThreadRuntimeUnavailableError(`Codex is ${agent.status === 'signed-out' ? 'signed out' : 'unavailable'}.${agent.reason ? ` ${agent.reason}` : ''}`);
   }
-  return { binaryPath, ...(selected.env ? { env: selected.env } : {}) };
+  return { binaryPath: agent.binaryPath, ...(entry.value.env ? { env: entry.value.env } : {}) };
+}
+
+// ── App-server client pool ────────────────────────────────────────────────────
+// Thread and model routes used to spawn a fresh `codex app-server` per HTTP
+// request. One initialized client per (command, env hash) now serves them and
+// closes after an idle period; the turn lane in agent/runtime/run.ts keeps its
+// own per-turn process and is not routed through here.
+
+export const CODEX_APP_SERVER_CLIENT_IDLE_TTL_MS = 60_000;
+
+type PooledCodexClient = {
+  key: string;
+  client: CodexAppServerClient;
+  ready: Promise<void>;
+  inUse: number;
+  idleTimer: ReturnType<typeof setTimeout> | null;
+  closed: boolean;
+};
+
+type CodexClientPoolState = {
+  clients: Map<string, PooledCodexClient>;
+  exitHookInstalled: boolean;
+};
+
+const CODEX_CLIENT_POOL_KEY = Symbol.for('mindos.codexAppServerClientPool');
+
+function poolState(): CodexClientPoolState {
+  return getProcessGlobal<CodexClientPoolState>(CODEX_CLIENT_POOL_KEY, () => ({ clients: new Map(), exitHookInstalled: false }));
+}
+
+function pooledClientKey(command: string, env: NodeJS.ProcessEnv | undefined): string {
+  const digest = createHash('sha256');
+  const entries = Object.entries(env ?? {}).filter(([, value]) => value !== undefined).sort(([a], [b]) => a.localeCompare(b));
+  digest.update(JSON.stringify(entries));
+  return `${command}|${digest.digest('hex').slice(0, 16)}`;
+}
+
+function createDefaultPooledCodexClient(input: { command: string; env?: NodeJS.ProcessEnv }): CodexAppServerClient {
+  return createCodexAppServerClient(createCodexAppServerStdioTransport({
+    command: input.command,
+    ...(input.env ? { env: input.env } : {}),
+  }));
+}
+
+async function acquirePooledCodexClient(input: {
+  command: string;
+  env?: NodeJS.ProcessEnv;
+  factory: (input: { command: string; env?: NodeJS.ProcessEnv }) => CodexAppServerClient;
+}): Promise<PooledCodexClient> {
+  const state = poolState();
+  if (!state.exitHookInstalled) {
+    state.exitHookInstalled = true;
+    process.once('exit', closePooledCodexAppServerClients);
+  }
+  const key = pooledClientKey(input.command, input.env);
+  let entry = state.clients.get(key);
+  if (!entry || entry.closed) {
+    const client = input.factory({ command: input.command, env: input.env });
+    const created: PooledCodexClient = { key, client, ready: Promise.resolve(), inUse: 0, idleTimer: null, closed: false };
+    created.ready = Promise.resolve()
+      .then(() => client.initialize())
+      .catch((error) => {
+        dropPooledCodexClient(created);
+        throw error;
+      });
+    state.clients.set(key, created);
+    entry = created;
+  }
+  clearIdleTimer(entry);
+  entry.inUse += 1;
+  try {
+    await entry.ready;
+  } catch (error) {
+    entry.inUse -= 1;
+    throw error;
+  }
+  return entry;
+}
+
+function releasePooledCodexClient(entry: PooledCodexClient, options: { failed: boolean }): void {
+  entry.inUse = Math.max(0, entry.inUse - 1);
+  if (options.failed) {
+    dropPooledCodexClient(entry);
+    return;
+  }
+  if (entry.inUse === 0 && !entry.closed) {
+    entry.idleTimer = setTimeout(() => {
+      entry.idleTimer = null;
+      if (entry.inUse === 0) dropPooledCodexClient(entry);
+    }, CODEX_APP_SERVER_CLIENT_IDLE_TTL_MS);
+    // An idle app-server must not keep the host process alive.
+    (entry.idleTimer as { unref?: () => void }).unref?.();
+  }
+}
+
+function clearIdleTimer(entry: PooledCodexClient): void {
+  if (entry.idleTimer) {
+    clearTimeout(entry.idleTimer);
+    entry.idleTimer = null;
+  }
+}
+
+function dropPooledCodexClient(entry: PooledCodexClient): void {
+  if (entry.closed) return;
+  entry.closed = true;
+  clearIdleTimer(entry);
+  const state = poolState();
+  if (state.clients.get(entry.key) === entry) state.clients.delete(entry.key);
+  try {
+    void Promise.resolve(entry.client.close?.()).catch(() => {});
+  } catch {
+    // Closing is best-effort; the entry is already out of the pool.
+  }
+}
+
+/** Closes every pooled app-server (server shutdown, tests). */
+export function closePooledCodexAppServerClients(): void {
+  for (const entry of [...poolState().clients.values()]) dropPooledCodexClient(entry);
+}
+
+export function resetCodexAppServerClientPoolForTest(): void {
+  closePooledCodexAppServerClients();
+  deleteProcessGlobal(CODEX_CLIENT_POOL_KEY);
 }
 
 function parseThreadListParams(searchParams: URLSearchParams): CodexThreadListInput | { error: string } {

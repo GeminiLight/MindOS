@@ -48,19 +48,19 @@ export const codexThreadAuthGuard: MindosRouteAuthGuard = {
   auth: 'required',
 };
 
-/** Product detection defaults plus host overrides (Web injects its settings-aware detectors). */
+/** Product detection defaults plus host overrides (Web injects its settings-aware detectors); the bus receives `runtime.changed`. */
 function createHttpRuntimeServices(services: MindosHttpServices) {
-  const { decoratePayload: _decoratePayload, ...overrides } = services.agentRuntimes ?? {};
-  return { readSettings: services.readSettings, ...overrides };
+  return { readSettings: services.readSettings, events: services.events, ...(services.agentRuntimes ?? {}) };
 }
 
-/** Codex thread routes discover the binary with the host's detectors and may use a host-provided app-server client. */
+/** Codex thread routes share the runtime picker's cached detection and may use a host-provided app-server client. */
 function createHttpCodexServices(services: MindosHttpServices) {
   return {
     readSettings: services.readSettings,
     createCodexClient: services.createCodexClient,
     resolveRuntimeCommand: services.agentRuntimes?.resolveRuntimeCommand,
     resolveRuntimeCommandCandidates: services.agentRuntimes?.resolveRuntimeCommandCandidates,
+    detectionIdentity: services.agentRuntimes?.detectionIdentity,
   };
 }
 
@@ -79,12 +79,7 @@ function withDefaultCwdBody(body: unknown, mindRoot: string): unknown {
 
 export const agentRuntimeRoutes = defineRoutes([
   { id: 'agent-runtimes', method: 'GET', path: '/api/agent-runtimes', auth: 'required',
-    handler: async ({ query, services }) => {
-      const response = await handleAgentRuntimesGet(query, createHttpRuntimeServices(services));
-      const decorate = services.agentRuntimes?.decoratePayload;
-      if (!decorate || response.status !== 200 || !response.body || 'error' in response.body) return response;
-      return { ...response, body: decorate(response.body) };
-    } },
+    handler: ({ query, services }) => handleAgentRuntimesGet(query, createHttpRuntimeServices(services)) },
   { id: 'agent-runtimes.mcp-projections', method: 'GET', path: '/api/agent-runtimes/mcp-projections', auth: 'required',
     handler: ({ query, services }) => handleAgentRuntimeMcpProjectionsGet(query, createHttpMcpProjectionServices(services, query)) },
   { id: 'agent-runtimes.adapter-projections', method: 'GET', path: '/api/agent-runtimes/adapter-projections', auth: 'required',

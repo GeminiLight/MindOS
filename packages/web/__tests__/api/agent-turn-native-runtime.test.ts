@@ -4,7 +4,7 @@ import { getTestMindRoot, seedFile } from '../setup';
 import { invalidateCache } from '../../lib/fs';
 import { realpathSync } from 'node:fs';
 import type { MindosNativeAgentTurnOptions } from '@geminilight/mindos/agent/runtime';
-import type { AgentRuntimeDescriptor } from '@geminilight/mindos/server';
+import { resetRuntimeDetectionCacheForTest, type AgentRuntimeDescriptor } from '@geminilight/mindos/server';
 import { listAgentEvents, listAgentRuns, resetAgentRunsForTest, startAgentRun } from '@geminilight/mindos/agent/ledger/run-ledger';
 import { listAgentRunCapsules } from '@geminilight/mindos/agent/capsules/store';
 import {
@@ -257,6 +257,8 @@ describe('/api/agent/sessions/:sessionId/turns native runtime routing', () => {
       throw new Error('pi runtime should not initialize for native runtime requests');
     });
     resetNativeRuntimeDescriptorCacheForTest();
+    // The core detection cache is process-wide; every test here changes the detection mocks.
+    resetRuntimeDetectionCacheForTest();
     mockRunMindosNativeAgentTurn.mockImplementation(async (options: MindosNativeAgentTurnOptions) => {
       capturedNativeOptions = options;
       options.send({ type: 'text_delta', delta: 'native ok' });

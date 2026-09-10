@@ -1,6 +1,4 @@
 import type {
-  AgentRuntimeCompatibilityOwner,
-  AgentRuntimeCompatibilityRequirementStatus,
   AgentRuntimeDescriptor,
   AgentRuntimeKind,
   AgentRuntimeOwner,
@@ -15,6 +13,19 @@ import type {
   AcpToolCallFull,
 } from '../../protocols/acp/index.js';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
+import {
+  filterProjectionsByRuntime,
+  reason,
+  runtimeAvailableReason,
+  runtimeKey,
+  uniqSorted,
+  type AgentRuntimeProjectionReason,
+} from './runtime-projection-shared.js';
+
+const SESSION_AVAILABILITY_WORDING = {
+  available: 'is available for runtime session projection.',
+  unavailable: 'is not available, so runtime session controls may be stale or absent.',
+};
 
 export type AgentRuntimeSessionProjectionStatus =
   | 'ready'
@@ -24,12 +35,7 @@ export type AgentRuntimeSessionProjectionStatus =
   | 'blocked'
   | 'unknown';
 
-export type AgentRuntimeSessionProjectionReason = {
-  id: string;
-  status: AgentRuntimeCompatibilityRequirementStatus;
-  owner: AgentRuntimeCompatibilityOwner;
-  summary: string;
-};
+export type AgentRuntimeSessionProjectionReason = AgentRuntimeProjectionReason;
 
 export type RuntimeSessionProjectionControl = {
   status: 'available' | 'unavailable';
@@ -118,13 +124,10 @@ export async function handleRuntimeSessionProjectionsGet(
       services.getAcpSessionSnapshots?.() ?? [],
     ]);
     const payload = buildRuntimeSessionProjectionsPayload({ runtimes, acpSessions });
-    const runtimeFilter = searchParams.get('runtime')?.trim();
     const sessionFilter = searchParams.get('sessionId')?.trim();
-    const projections = payload.projections.filter((projection) => {
-      if (runtimeFilter && projection.runtimeId !== runtimeFilter && projection.runtimeKind !== runtimeFilter) return false;
-      if (sessionFilter && projection.session?.sessionId !== sessionFilter && projection.session?.externalSessionId !== sessionFilter) return false;
-      return true;
-    });
+    const projections = filterProjectionsByRuntime(payload.projections, searchParams.get('runtime')).filter((projection) => (
+      !sessionFilter || projection.session?.sessionId === sessionFilter || projection.session?.externalSessionId === sessionFilter
+    ));
     return json({ ...payload, projections }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     return errorResponse(error);
@@ -184,7 +187,7 @@ function buildRuntimeSessionProjection(
     permissionEvents,
     mcpServers,
     reasons: [
-      runtimeAvailableReason(runtime),
+      runtimeAvailableReason(runtime, SESSION_AVAILABILITY_WORDING),
       sessionSnapshotReason(runtime, acpSession),
       controlReason(runtime, 'model', controls.model),
       controlReason(runtime, 'mode', controls.mode),
@@ -392,16 +395,6 @@ function resolveStatus(
   return 'ready';
 }
 
-function runtimeAvailableReason(runtime: AgentRuntimeDescriptor): AgentRuntimeSessionProjectionReason {
-  return reason(
-    'runtime-available',
-    runtime.status === 'available' ? 'satisfied' : 'missing',
-    runtime.status === 'available' ? 'mindos' : 'shared',
-    runtime.status === 'available'
-      ? `${runtime.name} is available for runtime session projection.`
-      : `${runtime.name} is not available, so runtime session controls may be stale or absent.`,
-  );
-}
 
 function sessionSnapshotReason(
   runtime: AgentRuntimeDescriptor,
@@ -485,24 +478,9 @@ function mcpServersReason(
   );
 }
 
-function reason(
-  id: string,
-  status: AgentRuntimeCompatibilityRequirementStatus,
-  owner: AgentRuntimeCompatibilityOwner,
-  summary: string,
-): AgentRuntimeSessionProjectionReason {
-  return { id, status, owner, summary };
-}
 
-function runtimeKey(runtime: AgentRuntimeDescriptor): string {
-  return runtime.runtimeId ?? runtime.id;
-}
 
 function controlLabel(key: string): string {
   if (key === 'thoughtLevel' || key === 'thought-level') return 'thought level';
   return key;
-}
-
-function uniqSorted(values: string[]): string[] {
-  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean))).sort();
 }
