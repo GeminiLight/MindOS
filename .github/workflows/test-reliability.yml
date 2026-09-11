@@ -1,5 +1,3 @@
-# Template: copy to .github/workflows/test-reliability.yml with a credential that has the `workflow` scope.
-# Kept under wiki/refs because the branch that authored it was pushed with an OAuth token lacking that scope.
 name: Test Reliability Boundaries
 
 on:
