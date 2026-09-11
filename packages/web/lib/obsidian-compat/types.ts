@@ -463,7 +463,39 @@ export interface PluginSettingTab extends IComponent {
   display(): void;
 }
 
-export type SettingKind = 'text' | 'toggle' | 'dropdown' | 'button';
+export type SettingKind = 'text' | 'toggle' | 'dropdown' | 'button' | 'search' | 'slider' | 'color';
+
+/** Minimal stand-in for Obsidian's `#${string}` template literal. */
+export type HexString = string;
+
+export interface RGB {
+  r: number;
+  g: number;
+  b: number;
+}
+
+export interface HSL {
+  h: number;
+  s: number;
+  l: number;
+}
+
+export type SearchMatchPart = [number, number];
+export type SearchMatches = SearchMatchPart[];
+
+export interface Point {
+  x: number;
+  y: number;
+}
+
+export interface SearchResult {
+  score: number;
+  matches: SearchMatches;
+}
+
+export interface SearchResultContainer {
+  match: SearchResult;
+}
 
 export type DeclarativeSettingControlType =
   | 'toggle'

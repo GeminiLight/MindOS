@@ -493,3 +493,46 @@ export function createObsidianElement(tagName = 'div'): ObsidianElement {
 export function ensureObsidianElement(el: HTMLElement): ObsidianElement {
   return attachHelpers(el);
 }
+
+export type ObsidianDocumentFragment = DocumentFragment & {
+  /** Raw text extracted by the server-tier degraded sanitizer. */
+  __obsidianSanitizedText?: string;
+};
+
+function createStubDocumentFragment(textContent: string): ObsidianDocumentFragment {
+  const fragment = {
+    childNodes: [] as Node[],
+    children: [] as HTMLElement[],
+    textContent,
+    __obsidianSanitizedText: textContent,
+    firstChild: null,
+    lastChild: null,
+    appendChild<T extends Node>(child: T): T {
+      // The degraded sanitizer produces text-only fragments; appends are tolerated and dropped.
+      return child;
+    },
+    querySelector(): HTMLElement | null {
+      return null;
+    },
+    querySelectorAll(): HTMLElement[] {
+      return [];
+    },
+    getElementsByClassName(): HTMLElement[] {
+      return [];
+    },
+    hasChildNodes(): boolean {
+      return false;
+    },
+  };
+  return fragment as unknown as ObsidianDocumentFragment;
+}
+
+export function createObsidianDocumentFragment(textContent = ''): ObsidianDocumentFragment {
+  if (typeof document !== 'undefined') {
+    // textContent assignment never parses HTML, so this stays an injection-free path.
+    const fragment = document.createDocumentFragment();
+    fragment.textContent = textContent;
+    return fragment as ObsidianDocumentFragment;
+  }
+  return createStubDocumentFragment(textContent);
+}

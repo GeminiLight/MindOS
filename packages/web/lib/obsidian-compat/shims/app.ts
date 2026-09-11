@@ -57,10 +57,9 @@ class WorkspaceLeafShim implements WorkspaceLeaf {
 /**
  * Minimal Workspace implementation.
  */
-class WorkspaceShim extends Events implements Workspace {
+export class WorkspaceShim extends Events implements Workspace {
   activeLeaf: WorkspaceLeaf;
-  activeEditor: MarkdownView | null = null;
-  layoutReady = true;
+  activeEditor: MarkdownView | null = null;  layoutReady = true;
   private readonly leaves: WorkspaceLeaf[] = [];
   private readonly leftLeaves: WorkspaceLeaf[] = [];
   private readonly rightLeaves: WorkspaceLeaf[] = [];

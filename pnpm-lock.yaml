@@ -478,7 +478,7 @@ importers:
         specifier: ^6.12.3
         version: 6.12.3
       '@codemirror/state':
-        specifier: ^6.5.4
+        specifier: 6.6.0
         version: 6.6.0
       '@codemirror/theme-one-dark':
         specifier: ^6.1.3

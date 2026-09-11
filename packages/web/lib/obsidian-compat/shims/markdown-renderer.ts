@@ -20,19 +20,29 @@ export function seedMarkdownPreviewElement(element: ObsidianElement, markdown: s
   const lines = markdown.split(/\r?\n/);
   let inFence = false;
   let codeLines: string[] = [];
+  let codeLanguage = '';
   let codeElement: ObsidianElement | null = null;
+
+  const finishCodeBlock = () => {
+    const attrs = codeLanguage
+      ? { text: codeLines.join('\n'), cls: `language-${codeLanguage}` }
+      : { text: codeLines.join('\n') };
+    codeElement?.createEl('code', attrs);
+    codeLines = [];
+    codeElement = null;
+    codeLanguage = '';
+  };
 
   for (const rawLine of lines) {
     const line = rawLine.replace(/\s+$/, '');
-    const fenceMatch = line.match(/^(```|~~~)/);
+    const fenceMatch = line.match(/^(```|~~~)(.*)$/);
     if (fenceMatch) {
       if (inFence) {
-        codeElement?.createEl('code', { text: codeLines.join('\n') });
-        codeLines = [];
-        codeElement = null;
+        finishCodeBlock();
         inFence = false;
       } else {
         codeElement = element.createEl('pre');
+        codeLanguage = fenceMatch[2].trim();
         inFence = true;
       }
       continue;
@@ -62,7 +72,7 @@ export function seedMarkdownPreviewElement(element: ObsidianElement, markdown: s
   }
 
   if (inFence && codeElement) {
-    codeElement.createEl('code', { text: codeLines.join('\n') });
+    finishCodeBlock();
   }
 }
 
@@ -101,5 +111,54 @@ export class MarkdownRenderer {
     if (target !== el) {
       el.textContent = collectElementText(target);
     }
+  }
+}
+
+export interface MarkdownPreviewPostProcessorEntry {
+  processor: (el: HTMLElement, ctx: unknown) => void;
+  sortOrder: number;
+}
+
+const MARKDOWN_PREVIEW_DEFAULT_SORT_ORDER = 100;
+const markdownPreviewPostProcessors: MarkdownPreviewPostProcessorEntry[] = [];
+
+/**
+ * Registered preview post processors in registration order. The MindOS
+ * snapshot render pipeline does not invoke them yet; the registry keeps the
+ * register/unregister contract observable for the host and for tests.
+ */
+export function getMarkdownPreviewPostProcessors(): readonly MarkdownPreviewPostProcessorEntry[] {
+  return markdownPreviewPostProcessors;
+}
+
+function isCodeBlockForLanguage(el: HTMLElement, language: string): boolean {
+  for (const child of getElementChildren(el)) {
+    if (String(child.tagName).toLowerCase() !== 'code') continue;
+    if (child.classList?.contains(`language-${language}`)) return true;
+  }
+  return false;
+}
+
+export class MarkdownPreviewRenderer {
+  static registerPostProcessor(postProcessor: (el: HTMLElement, ctx: unknown) => void, sortOrder = MARKDOWN_PREVIEW_DEFAULT_SORT_ORDER): void {
+    markdownPreviewPostProcessors.push({ processor: postProcessor, sortOrder });
+  }
+
+  static unregisterPostProcessor(postProcessor: (el: HTMLElement, ctx: unknown) => void): void {
+    const index = markdownPreviewPostProcessors.findIndex((entry) => entry.processor === postProcessor);
+    if (index >= 0) {
+      markdownPreviewPostProcessors.splice(index, 1);
+    }
+  }
+
+  static createCodeBlockPostProcessor(
+    language: string,
+    handler: (source: string, el: HTMLElement, ctx: unknown) => Promise<unknown> | void,
+  ): (el: HTMLElement, ctx: unknown) => void {
+    return (el, ctx) => {
+      if (!isCodeBlockForLanguage(el, language)) return;
+      const code = getElementChildren(el).find((child) => String(child.tagName).toLowerCase() === 'code');
+      void handler(code?.textContent ?? '', el, ctx);
+    };
   }
 }
