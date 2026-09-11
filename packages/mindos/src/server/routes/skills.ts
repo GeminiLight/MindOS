@@ -2,7 +2,7 @@ import { resolveSkillLinkAgents, type MindosMcpAgentRegistryDef } from '../handl
 import { handleSkillRuntimeMatchesGet } from '../handlers/skill-runtime-matches.js';
 import type { MindosSkillLinkAgent } from '../handlers/skill-links.js';
 import { handleSkillMatrixGet, handleSkillsGet, handleSkillsPost } from '../handlers/skills.js';
-import { createDefaultSkillAgentRegistry } from '../mcp-agent-registry.js';
+import { createDefaultSkillAgentRegistry } from '../../agent/config/registry.js';
 import { defineRoutes } from '../route-table.js';
 import type { MindosHttpServices } from '../services.js';
 import { listHttpRuntimeDescriptors } from './agent-runtimes.js';

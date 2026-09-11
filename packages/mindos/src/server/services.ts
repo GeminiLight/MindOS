@@ -12,7 +12,7 @@ import {
 } from './runtime.js';
 import { createMindRootTreeCache } from './tree-cache.js';
 import { MindosSearchIndex } from './search/index.js';
-import { createDefaultMcpAgents } from './mcp-agent-registry.js';
+import { createDefaultMcpAgents } from '../agent/config/registry.js';
 import { getMindosServerEventBus, type MindosServerEventBus } from './events/bus.js';
 import type { A2aServices } from './handlers/a2a.js';
 import type { AcpDetectServices, AcpInstallServices, AcpRegistryServices, AcpSessionServices } from './handlers/acp.js';

@@ -13,7 +13,7 @@ import {
   learningIdSchema,
 } from '../learning/index.js';
 import { effectiveMindRoot } from '../../foundation/mind-root/index.js';
-import { listAgentRuns } from '../../agent/ledger/run-ledger.js';
+import { listKnowledgeAgentRuns } from '../agent-run-data.js';
 import { listRetrievalReceipts } from '../../retrieval/receipt.js';
 import { methodHandoffPreview, buildMethodHandoff } from './handoff.js';
 import {
@@ -347,7 +347,7 @@ export function methodCheckRuns(
     assetId: record.method.assetId,
     limit: 500,
   });
-  const live: MethodCheckRun[] = listAgentRuns({ limit: 1000 }).flatMap(
+  const live: MethodCheckRun[] = listKnowledgeAgentRuns({ limit: 1000 }).flatMap(
     (run) => {
       const ids = [
         run.metadata?.retrievalReceiptId,

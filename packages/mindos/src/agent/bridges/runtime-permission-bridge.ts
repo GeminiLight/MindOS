@@ -25,7 +25,7 @@ import { RUNTIME_PERMISSION_BRIDGE_KEY, getProcessGlobal } from '../global-state
 import {
   redactSensitiveObject,
   redactSensitiveText,
-} from '../redaction.js';
+} from '../../foundation/security/redaction.js';
 import { ensurePendingDecisionTail } from './pending-prompt-changes.js';
 import { finishPendingPrompt, pendingPromptKey, recordPendingPrompt } from './pending-prompt-store.js';
 

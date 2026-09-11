@@ -98,6 +98,12 @@ export type AgentTurnRequestContext = {
   signal?: AbortSignal;
   request?: Request;
   activeAssistant?: MindosActiveAssistantPrompt;
+  /**
+   * Reasoning-effort fallback note from `agent/turn/request.ts` normalisation;
+   * the turn runner emits it as one visible SSE `status` event before the lane
+   * starts (spec-knowledge-layering-and-export-surface follow-up).
+   */
+  effortNotice?: string;
   capsuleRecovery?: {
     planId: string;
     runId: string;
@@ -187,10 +193,14 @@ export function getLastUserImages(messages: FrontendMessage[]): unknown[] {
 export function normalizeAgentSessionTurnBody(
   rawBody: unknown,
   sessionId: string,
-): { ok: true; body: AgentTurnRequestBody } | { ok: false; message: string } {
+): { ok: true; body: AgentTurnRequestBody; effortNotice?: string } | { ok: false; message: string } {
   const normalized = normalizeMindosAgentSessionTurnBody(rawBody, sessionId);
   if (!normalized.ok) return normalized;
-  return { ok: true, body: normalized.body as unknown as AgentTurnRequestBody };
+  return {
+    ok: true,
+    body: normalized.body as unknown as AgentTurnRequestBody,
+    ...(normalized.effortNotice ? { effortNotice: normalized.effortNotice } : {}),
+  };
 }
 
 export function validateAgentTurnRequestContract(body: unknown) {

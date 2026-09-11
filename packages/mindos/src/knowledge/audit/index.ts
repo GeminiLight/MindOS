@@ -5,12 +5,6 @@ import type { IFileSystem } from '../storage/index.js';
 import { existsSync } from 'node:fs';
 import * as path from 'path';
 import { redactSensitiveObject, redactSensitiveText } from '../../foundation/security/redaction.js';
-import {
-  appendContentChangeToLog,
-  getContentChangeSummaryFromLog,
-  listContentChangesFromLog,
-  markContentChangesSeenInLog,
-} from '../../server/handlers/change-log-store.js';
 
 // Helper functions for Result type
 function ok<T>(value: T): Result<T> {
@@ -71,6 +65,45 @@ export interface ContentChangeSummary {
   latest: ContentChangeEvent | null;
 }
 
+/* ── Content-change log store port ──────────────────────────────────────── */
+
+/**
+ * The SQLite-backed content-change store lives in the server layer
+ * (`server/handlers/change-log-store.ts`, spec-sqlite-derived-stores). This
+ * facade used to import it statically, which pointed knowledge → server and
+ * formed a mutual import with the store's type imports from this module.
+ * knowledge now declares the port and the store module installs itself at
+ * load (spec-knowledge-layering-and-export-surface); the `src/knowledge.ts`
+ * barrel side-effect-imports the store so barrel consumers stay wired exactly
+ * like the old static graph. The registry is process-global (`Symbol.for`,
+ * same reasoning as `agent/global-state.ts`) so every module copy in a
+ * multi-bundle host shares one installation.
+ */
+export interface ContentChangeLogStore {
+  appendContentChangeToLog(mindRoot: string, input: ContentChangeInput): ContentChangeEvent;
+  listContentChangesFromLog(mindRoot: string, options?: ListOptions): ContentChangeEvent[];
+  markContentChangesSeenInLog(mindRoot: string): void;
+  getContentChangeSummaryFromLog(mindRoot: string): ContentChangeSummary;
+}
+
+const CONTENT_CHANGE_LOG_STORE_KEY = Symbol.for('mindos.knowledgeContentChangeLogStore');
+
+export function installContentChangeLogStore(store: ContentChangeLogStore | null): void {
+  const registry = globalThis as unknown as Record<symbol, ContentChangeLogStore | undefined>;
+  if (store) registry[CONTENT_CHANGE_LOG_STORE_KEY] = store;
+  else delete registry[CONTENT_CHANGE_LOG_STORE_KEY];
+}
+
+function contentChangeLogStore(): ContentChangeLogStore {
+  const store = (globalThis as unknown as Record<symbol, ContentChangeLogStore | undefined>)[CONTENT_CHANGE_LOG_STORE_KEY];
+  if (!store) {
+    throw new Error(
+      'The content-change log store is not wired in this process. Load the @geminilight/mindos/knowledge barrel or import server/handlers/change-log-store.js.',
+    );
+  }
+  return store;
+}
+
 const LOG_DIR_NAME = '.mindos';
 
 function nowIso() {
@@ -95,9 +128,10 @@ function changeLogError(mindRoot: string, error: unknown): Error {
 
 /**
  * Content change log facade. The store itself is the SQLite-backed
- * `server/handlers/change-log-store` (spec-sqlite-derived-stores); the
- * `IFileSystem` parameter is kept for signature compatibility and no longer
- * used, since SQLite owns its own file I/O.
+ * `server/handlers/change-log-store` (spec-sqlite-derived-stores), reached
+ * through the `ContentChangeLogStore` port above; the `IFileSystem` parameter
+ * is kept for signature compatibility and no longer used, since SQLite owns
+ * its own file I/O.
  */
 export async function appendContentChange(
   _fs: IFileSystem,
@@ -105,7 +139,7 @@ export async function appendContentChange(
   input: ContentChangeInput
 ): Promise<Result<ContentChangeEvent>> {
   try {
-    return ok(appendContentChangeToLog(mindRoot, input));
+    return ok(contentChangeLogStore().appendContentChangeToLog(mindRoot, input));
   } catch (error) {
     return err(changeLogError(mindRoot, error));
   }
@@ -117,7 +151,7 @@ export async function listContentChanges(
   options: ListOptions = {}
 ): Promise<Result<ContentChangeEvent[]>> {
   try {
-    return ok(listContentChangesFromLog(mindRoot, options));
+    return ok(contentChangeLogStore().listContentChangesFromLog(mindRoot, options));
   } catch (error) {
     return err(changeLogError(mindRoot, error));
   }
@@ -128,7 +162,7 @@ export async function markContentChangesSeen(
   mindRoot: string
 ): Promise<Result<void>> {
   try {
-    markContentChangesSeenInLog(mindRoot);
+    contentChangeLogStore().markContentChangesSeenInLog(mindRoot);
     return ok(undefined);
   } catch (error) {
     return err(changeLogError(mindRoot, error));
@@ -140,7 +174,7 @@ export async function getContentChangeSummary(
   mindRoot: string
 ): Promise<Result<ContentChangeSummary>> {
   try {
-    return ok(getContentChangeSummaryFromLog(mindRoot));
+    return ok(contentChangeLogStore().getContentChangeSummaryFromLog(mindRoot));
   } catch (error) {
     return err(changeLogError(mindRoot, error));
   }

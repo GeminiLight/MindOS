@@ -13,7 +13,7 @@ import type {
 import {
   redactSensitiveObject,
   redactSensitiveText,
-} from '../redaction.js';
+} from '../../foundation/security/redaction.js';
 
 type PermissionOptionSummary = {
   id: string;

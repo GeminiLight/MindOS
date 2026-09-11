@@ -67,13 +67,7 @@ describe('redactSensitiveObject', () => {
   });
 });
 
-describe('compatibility re-exports', () => {
-  it('keeps agent/redaction.ts and agent/turn/redaction.ts as re-exports of the foundation implementation', async () => {
-    const agentRedaction = await import('../../agent/redaction.js');
-    const agentTurnRedaction = await import('../../agent/turn/redaction.js');
-    expect(agentRedaction.redactSensitiveText).toBe(redactSensitiveText);
-    expect(agentRedaction.redactSensitiveObject).toBe(redactSensitiveObject);
-    expect(agentTurnRedaction.redactSensitiveText).toBe(redactSensitiveText);
-    expect(agentTurnRedaction.redactSensitiveObject).toBe(redactSensitiveObject);
-  });
-});
+// The former `agent/redaction.ts` / `agent/turn/redaction.ts` compatibility
+// shells were deleted after every importer was repointed to this module
+// (spec-knowledge-layering-and-export-surface), so their re-export pin is gone
+// with them; the agent barrels re-export from here directly.

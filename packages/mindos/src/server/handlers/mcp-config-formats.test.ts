@@ -25,7 +25,7 @@ import {
   writeFileAtomically,
   writeMcpServerEntryToFile,
   type McpServerEntryLocation,
-} from './mcp-config-formats.js';
+} from '../../agent/config/formats.js';
 
 const STDIO_ENTRY = { type: 'stdio', command: 'mindos', args: ['mcp'], env: { MCP_TRANSPORT: 'stdio' } };
 const JSON_LOCATION: McpServerEntryLocation = { format: 'json', sectionKey: 'mcpServers' };

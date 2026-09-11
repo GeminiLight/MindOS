@@ -11,7 +11,7 @@ import {
   type MindosContextPromptSection,
 } from '../prompt/context-prompt.js';
 
-export { redactSensitiveObject, redactSensitiveText } from './redaction.js';
+export { redactSensitiveObject, redactSensitiveText } from '../../foundation/security/redaction.js';
 // Turn-request wire contract and context-omission signatures are shared by the
 // Product Server handler and the Next host route; the barrel stays the single
 // import surface (spec-runtime-lane-contract).

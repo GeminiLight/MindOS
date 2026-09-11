@@ -1158,7 +1158,7 @@ export {
   stripBom,
   type McpConfigFormat,
   type McpServerEntryLocation,
-} from './handlers/mcp-config-formats.js';
+} from '../agent/config/formats.js';
 
 export {
   detectAgentConfiguredMcpServersFromConfigs,
@@ -1186,7 +1186,7 @@ export {
   createDefaultSkillAgentRegistry,
   DEFAULT_MCP_AGENTS,
   DEFAULT_SKILL_AGENT_REGISTRY,
-} from './mcp-agent-registry.js';
+} from '../agent/config/registry.js';
 
 // agent/config: the single adapter layer behind the MCP handlers, the Web host
 // and the generated CLI bundle (spec-agent-config-adapter.md). Names already

@@ -210,6 +210,25 @@ mindos/
 
 这些 adapter 依赖 `@geminilight/mindos/retrieval` 的核心 contracts；`packages/mindos` 不反向 import 它们。
 
+#### 包内分层与依赖方向（2026-09-11）
+
+spec：`wiki/specs/spec-knowledge-layering-and-export-surface.md`。`packages/mindos/src` 的依赖箭头必须单向：`foundation ← knowledge ← agent ← server`，`retrieval` / `protocols` 是低层 domain。由 `packages/mindos/src/layering.test.ts` 静态扫描强制执行（`DOCUMENTED_EXCEPTIONS` 为空且带"例外过期即红灯"断言）：
+
+| 层 | 允许 import | 说明 |
+| --- | --- | --- |
+| `foundation` | 无内部依赖 | 跨层原语（config/errors/logger/mind-root/permissions/plugins/security/storage） |
+| `retrieval` | foundation | receipt/chunking/contracts |
+| `knowledge` | foundation、retrieval | agent run 数据与 content-change store 一律经 `knowledge/agent-run-data.ts` / `knowledge/audit` 声明的 port 读取 |
+| `agent` | foundation、knowledge；protocols 仅 `agent/runtime/acp-types.ts` wire-type door | automations 事件/状态核心在 `agent/automations/{types,store,events}.ts`（run ledger 终态直接投影 automation 事件）；`run-ledger.ts` / `capsules/store.ts` 模块加载时安装 knowledge port |
+| `server` | 全部 | handlers/routes/services；`runtime-control-plane.ts` 加载时安装 automation failure-audit writer，`change-log-store.ts` 加载时安装 ContentChangeLogStore |
+| `protocols` | foundation、agent（host 驱动 turn/process-supervisor） | 反向：包内只有 server 与 acp-types door 可 import protocols（capabilities.ts allowedImporters）；`session-registry.ts` 的 `acp.session.changed` 经 Symbol.for 进程级 sink 由 `server/events/bus.ts` 注册 |
+
+根 barrel / 胶水（`src/*.ts`、`intelligence/`、`plugin/`、`tool/`、`setup/`）在层之上：`src/knowledge.ts` 用 side-effect import（run-ledger、capsules/store、change-log-store）保持历史加载图，纯 barrel 消费者（Web echo 路由、CLI）无需感知 port 接线。port 注册表全部是 `Symbol.for` 进程级（对齐 `agent/global-state.ts`），Next 多 bundle 副本共享一次安装；未接线时抛出含接线指引的错误，不静默返回空。
+
+`server/automations/{types,store,events}.ts` 是 compat re-export shell：冻结测试（automations / ledger 测试）与 `store-two-process-driver.mjs`（import `dist/server/automations/store.js`）依赖原路径；生产代码的真身在 `agent/automations/`。注意 `store.two-process.test.ts` 的 dist 新鲜度探针只看 `src/server/automations` 的 mtime——改 `agent/automations/` 实现后需要 `pnpm --filter @geminilight/mindos build`（或触碰 shell）再跑该测试。
+
+npm 导出面：`./agent/*` wildcard 已删除，agent 深导入只保留按真实 importer 推导的显式 subpath（目录：bridges/capsules/ledger/mindos-pi/permission/prompt/runtime/stream/subagent/tool/turn 及既有 adapters 细分；文件：`./agent/agent-run-context`、`./agent/global-state`、`./agent/mode`）；redaction 的公开路径是 `./foundation/security/redaction`（client-safe leaf，供 `'use client'` 组件使用）。`tests/runtime-product-kernel-contract.test.ts` 锁定 exports key 全集。
+
 #### 插件安装原语与 runtime extension 安装（2026-09-11）
 
 spec：`wiki/specs/spec-plugin-primitives.md`（审计 P2-5 / P2-6 + #326 layering 收尾）。
@@ -235,12 +254,12 @@ Runtime extension 安装链（`POST /api/agent-runtimes/extensions/preflight|ins
 
 | 数据集 | 数据库 | 模块 | 说明 |
 | --- | --- | --- | --- |
-| 内容变更日志 | `.mindos/db/change_log_1.sqlite` | `server/handlers/change-log-store.ts` | 唯一实现；Web `lib/core/content-changes.ts` 与 `knowledge/audit` 只做委托。list/summary/facets 是 SQL，保留最新 500 条 |
+| 内容变更日志 | `.mindos/db/change_log_1.sqlite` | `server/handlers/change-log-store.ts` | 唯一实现；Web `lib/core/content-changes.ts` 直接委托，`knowledge/audit` facade 经 `ContentChangeLogStore` port 委托（store 模块加载时自注册，spec-knowledge-layering-and-export-surface）。list/summary/facets 是 SQL，保留最新 500 条 |
 | Agent run ledger | `.mindos/db/agent_runs_1.sqlite` | `agent/ledger/run-ledger*.ts` | run 行 + timeline/debug 事件同表（`visibility` 列）；事件行只存事件 payload，`record` 读时从 `agent_runs` JOIN 补回（生命周期 / permission 事件保留写入时快照，旧行内嵌 record 原样可读）；本进程打开的 run 记录按进程缓存，token delta 逐条通知进程内订阅者、按 ≤250 ms / 2 KB 合并成一行落库（非 delta 写、生命周期写、进程内读之前 flush）；跨进程即时可见（debug delta 最多晚 250 ms）；孤儿 run 由 `owner_pid/owner_start_ts` 在读时投影为 failed，不改写行；每 run 每类事件保留 1000 条，run 保留 500 条。spec：`wiki/specs/spec-ledger-write-cost.md` |
 | Agent artifact 指针 | 同上（`agent_artifacts` 表，migration v2） | `agent/ledger/artifact-ledger{,-db}.ts` | 指针索引卡（path / uri / runId / toolCallId），不存 blob；索引 `(run_id, created_at)` / `(created_at DESC)` / `(updated_at DESC)`，列表按 `updated_at DESC`；按 `created_at` 保留最新 1000；旧 `agent-artifact-ledger.<pid>-<startTs>.jsonl` 首次使用时一次性导入 |
 | 跨进程 pending prompts | `.mindos/db/agent_pending_prompts_1.sqlite` | `agent/bridges/pending-prompt-store.ts` | permission / question 提示的跨进程镜像：bridge enqueue/finish 时 upsert/resolve 行（owner_pid/start_ts 标进程），任意进程可对开放行提交决定——单条 `UPDATE … WHERE resolved_at IS NULL` 保证 first-writer-wins，持有者进程 500 ms tail 把决定灌回原 promise 并标 consumed；`meta.version+writer` 供宿主 tail 发 `run.pending-actions.changed`；resolved/expired 行 1 h 后按写入摊销 prune。`GET /api/agent/pending-actions` = 本进程 Map ∪ 存储开放行（owner 存活）∪ automation approvals，经 `server/projections/pending-actions.ts`（纯模块，Web/Mobile 共用同一派生）输出带 `actions[].key`。spec：`wiki/specs/spec-cross-process-run-events.md` |
 | Run capsule 索引 | `.mindos/db/capsules_1.sqlite` | `agent/capsules/capsule-index.ts` | 0600 JSON 文件仍是事实来源；索引只记 id → 路径 + 少量字段，按月目录 mtime 判断是否重扫，行 stale 时按文件 stat 刷新，删库可重建 |
-| 进程协调 lease | `.mindos/db/state_1.sqlite` | `foundation/storage/leases.ts` | `leases(kind, key, owner, lease_until, acquired_at)`；获取 = 单条 `INSERT … ON CONFLICT DO UPDATE WHERE lease_until <= now`（`BEGIN IMMEDIATE`），释放 / 续约按 owner 匹配，按时间过期所以被 kill 的进程不留永久锁。首个用户是 `server/automations/store.ts` 的 `state.json` 写锁（`kind:'automations'`，TTL 30 s，等待 5→50 ms 退避、总预算 1 s）；`state.json` 本体仍是文件。spec：`wiki/specs/spec-automations-lease-store.md` |
+| 进程协调 lease | `.mindos/db/state_1.sqlite` | `foundation/storage/leases.ts` | `leases(kind, key, owner, lease_until, acquired_at)`；获取 = 单条 `INSERT … ON CONFLICT DO UPDATE WHERE lease_until <= now`（`BEGIN IMMEDIATE`），释放 / 续约按 owner 匹配，按时间过期所以被 kill 的进程不留永久锁。首个用户是 `agent/automations/store.ts`（原 `server/automations/store.ts`，已随 automations 核心下沉到 agent 层）的 `state.json` 写锁（`kind:'automations'`，TTL 30 s，等待 5→50 ms 退避、总预算 1 s）；`state.json` 本体仍是文件。spec：`wiki/specs/spec-automations-lease-store.md` |
 
 共用底座 `foundation/storage/sqlite.ts`：`openMindosDatabase({ file, migrations })` 负责 WAL / `synchronous=NORMAL` / `busy_timeout=5000` / `foreign_keys=ON`、`_migrations` 表内的幂等迁移、按解析路径缓存的进程内句柄，以及 `openMindosDatabaseIfExists`（纯读不建库）。`node:sqlite` 通过 `process.getBuiltinModule` 加载，避免 vite / webpack 把 `node:sqlite` 当成普通包解析。文件名带 schema 代际后缀（`_1`），破坏性变更换新文件并从旧文件导入。
 

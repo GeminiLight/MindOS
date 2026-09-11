@@ -2,7 +2,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { vi, beforeEach, afterEach } from 'vitest';
-import { setMindRootResolverForTests } from '@geminilight/mindos/foundation';
+import { resetMindRootCacheForTests, setMindRootResolverForTests } from '@geminilight/mindos/foundation';
 
 // --- Git env isolation ---
 // Git hooks (pre-push etc.) export GIT_DIR / GIT_WORK_TREE / GIT_INDEX_FILE…
@@ -159,11 +159,21 @@ vi.mock('@/lib/settings', () => ({
 // The mind-root resolver now lives in the core package (lib/mind-root is a
 // shim), so a vi.mock of the web module path would not reach core-internal
 // callers like the agent run ledger. The core test seam covers every caller.
-setMindRootResolverForTests(() => state.root);
+// The override lives on a process-global registry that intentionally survives
+// vi.resetModules() (duplicated module instances must share one resolver), so
+// it must not swallow tests that steer the mind root through MIND_ROOT: env
+// wins, matching the pre-registry behaviour where resetModules dropped the
+// override and the env fallback applied.
+setMindRootResolverForTests(() => process.env.MIND_ROOT || state.root);
 
 beforeEach(() => {
   state.root = fs.mkdtempSync(path.join(os.tmpdir(), 'mindos-app-test-'));
   testMindRoot = state.root;
+  // The resolver closure reads state.root dynamically, but consumers memoize
+  // the resolved root (run ledger: 2 s TTL keyed on the resolver generation).
+  // Bump the generation so every test deterministically re-resolves to its own
+  // fresh root instead of inheriting the previous test's memo.
+  resetMindRootCacheForTests();
   localStorage.clear();
   sessionStorage.clear();
 });

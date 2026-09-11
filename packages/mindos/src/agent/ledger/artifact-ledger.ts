@@ -5,7 +5,7 @@ import {
   deleteProcessGlobal,
   getProcessGlobal,
 } from '../global-state.js';
-import { redactSensitiveObject, redactSensitiveText } from '../redaction.js';
+import { redactSensitiveObject, redactSensitiveText } from '../../foundation/security/redaction.js';
 import type { AcpContentBlock, AcpToolCallFull } from '../runtime/acp-types.js';
 import {
   ARTIFACT_TRIM_SLACK,

@@ -154,9 +154,29 @@ describe('product npm publish contract', () => {
       types: './dist/agent.d.ts',
       import: './dist/agent.js',
     });
-    expect(pkg.exports?.['./agent/*']).toEqual({
-      types: './dist/agent/*.d.ts',
-      import: './dist/agent/*.js',
+    // The `./agent/*` wildcard is gone (spec-knowledge-layering-and-export-
+    // surface): the published surface is the explicit subpath list below,
+    // derived from the actual importers in web/desktop/mobile/tests.
+    expect(pkg.exports?.['./agent/*']).toBeUndefined();
+    expect(pkg.exports?.['./agent/agent-run-context']).toEqual({
+      types: './dist/agent/agent-run-context.d.ts',
+      import: './dist/agent/agent-run-context.js',
+    });
+    expect(pkg.exports?.['./agent/global-state']).toEqual({
+      types: './dist/agent/global-state.d.ts',
+      import: './dist/agent/global-state.js',
+    });
+    expect(pkg.exports?.['./agent/mode']).toEqual({
+      types: './dist/agent/mode.d.ts',
+      import: './dist/agent/mode.js',
+    });
+    expect(pkg.exports?.['./agent/capsules']).toEqual({
+      types: './dist/agent/capsules/index.d.ts',
+      import: './dist/agent/capsules/index.js',
+    });
+    expect(pkg.exports?.['./agent/capsules/*']).toEqual({
+      types: './dist/agent/capsules/*.d.ts',
+      import: './dist/agent/capsules/*.js',
     });
     expect(pkg.exports?.['./agent/prompt']).toEqual({
       types: './dist/agent/prompt/index.d.ts',
@@ -195,7 +215,6 @@ describe('product npm publish contract', () => {
       'agent-run-context',
       'result-reducer',
       'global-state',
-      'redaction',
       'run-ledger',
       'run-timeline-events',
       'run-cancellation',

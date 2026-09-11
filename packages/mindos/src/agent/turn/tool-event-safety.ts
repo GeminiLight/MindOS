@@ -1,4 +1,4 @@
-import { redactSensitiveObject, redactSensitiveText } from './redaction.js';
+import { redactSensitiveObject, redactSensitiveText } from '../../foundation/security/redaction.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);

@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { effectiveMindRoot } from '../../foundation/mind-root/index.js';
-import { listAgentRuns } from '../../agent/ledger/run-ledger.js';
+import { listKnowledgeAgentRuns } from '../agent-run-data.js';
 import { listRetrievalReceipts } from '../../retrieval/receipt.js';
 import { hashText, runSchema, type Inquiry, type InquiryRun } from './model.js';
 import { fail } from './storage.js';
@@ -17,7 +17,7 @@ export function inquiryRuns(root: string, q: Inquiry): InquiryRun[] {
   const result = new Map<string, InquiryRun>(
     q.runs.map((r) => [r.runId, { ...r, source: 'saved' }]),
   );
-  for (const run of listAgentRuns({ limit: 1000 })) {
+  for (const run of listKnowledgeAgentRuns({ limit: 1000 })) {
     // A saved terminal snapshot is immutable, even after the live ledger is edited or pruned.
     if (result.has(run.id)) continue;
     const ids = [

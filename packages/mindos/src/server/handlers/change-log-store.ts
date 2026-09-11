@@ -14,6 +14,7 @@ import type {
   ContentChangeSource,
   ContentChangeSummary,
 } from '../../knowledge/audit/index.js';
+import { installContentChangeLogStore } from '../../knowledge/audit/index.js';
 import { emitStudioAutomationEvent, recordStudioAutomationEventSourceFailure } from '../automations/events.js';
 import { readJsonlEvents, readJsonlMeta } from './jsonl-log.js';
 
@@ -570,3 +571,15 @@ export function markContentChangesSeenInLog(mindRoot: string): void {
   if (!db) return;
   writeState(db, STATE_LAST_SEEN_AT, nowIso());
 }
+
+// Wire the knowledge-layer content-change facade to this store at module load
+// (spec-knowledge-layering-and-export-surface). The facade used to import this
+// module statically (knowledge → server, mutual with the type imports above);
+// the port keeps the arrow pointing one way while every process that can reach
+// the store keeps the identical behaviour.
+installContentChangeLogStore({
+  appendContentChangeToLog,
+  listContentChangesFromLog,
+  markContentChangesSeenInLog,
+  getContentChangeSummaryFromLog,
+});

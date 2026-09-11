@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { redactSensitiveText } from '../../agent/redaction.js';
+import { redactSensitiveText } from '../../foundation/security/redaction.js';
 import { requestStudioAutomationPermission, StudioAutomationApprovalRequiredError } from './approvals.js';
 import { notifyStudioAutomationApprovalViaFeishu } from './feishu-approval.js';
 import { mutateStudioAutomationState, readStudioAutomationState } from './store.js';

@@ -5,7 +5,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { resolveExistingSafe } from '../../foundation/security/index.js';
 import type { MindosDatabase } from '../../foundation/storage/sqlite.js';
-import { redactSensitiveText } from '../redaction.js';
+import { installKnowledgeAgentRunCapsuleReader } from '../../knowledge/agent-run-data.js';
+import { redactSensitiveText } from '../../foundation/security/redaction.js';
 import {
   deleteCapsuleRow,
   forgetDir,
@@ -965,3 +966,9 @@ function redactForProjection(value: string): string {
     .replace(/\bsk-[A-Za-z0-9_-]{8,}\b/g, '[redacted]')
     .replaceAll('[redacted]', '[REDACTED]');
 }
+
+// Knowledge-layer capsule port (spec-knowledge-layering-and-export-surface):
+// `knowledge/context-feedback` reads capsules through
+// `knowledge/agent-run-data.ts`; loading the capsule store installs the
+// implementation. Agent → knowledge is the legal direction.
+installKnowledgeAgentRunCapsuleReader((mindRoot, id) => getAgentRunCapsule(mindRoot, id));

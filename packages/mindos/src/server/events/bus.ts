@@ -239,3 +239,16 @@ export function getMindosServerEventBus(): MindosServerEventBus {
 export function resetMindosServerEventBusForTest(): void {
   deleteProcessGlobal(SERVER_EVENT_BUS_KEY);
 }
+
+/**
+ * Default sink for the ACP session registry's `acp.session.changed` events
+ * (`protocols/acp/session-registry.ts`). The registry sits below the server
+ * layer, so it reads a process-global emitter instead of importing this bus;
+ * registering the forwarder at module load keeps the previous static-import
+ * behaviour for every host that loads the bus (spec-knowledge-layering-and-
+ * export-surface). `??=` so an explicit earlier registration wins.
+ */
+(globalThis as unknown as Record<symbol, unknown>)[Symbol.for('mindos.acpSessionChangedEmitter')] ??=
+  (event: MindosServerEvent) => {
+    getMindosServerEventBus().emit(event);
+  };

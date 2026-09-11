@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import { getLearningLoop, learningMethods, prepareLearningMethodTrial, LearningError } from '../learning/index.js';
 import { effectiveMindRoot } from '../../foundation/mind-root/index.js';
-import { listAgentRuns } from '../../agent/ledger/run-ledger.js';
+import { listKnowledgeAgentRuns } from '../agent-run-data.js';
 import { listRetrievalReceipts } from '../../retrieval/receipt.js';
 import { methodMatchInput, transferMethodSchema, helpRunSchema, type TransferHelpRun } from './support-model.js';
 import type { TransferRecord } from './model.js';
@@ -48,7 +48,7 @@ export function transferHelpRuns(root: string, record: TransferRecord): Transfer
   if (!record.helpPreparation || fs.realpathSync(root) !== fs.realpathSync(effectiveMindRoot())) return [...saved.values()];
   const prep = record.helpPreparation; const method = record.method;
   const receipts = listRetrievalReceipts(root, { limit: 500, ...(method ? { assetId: method.assetId, outcome: 'selected' as const } : {}) });
-  for (const run of listAgentRuns({ limit: 1000 })) {
+  for (const run of listKnowledgeAgentRuns({ limit: 1000 })) {
     const ids = [run.metadata?.retrievalReceiptId, ...(Array.isArray(run.metadata?.retrievalReceiptIds) ? run.metadata.retrievalReceiptIds : [])];
     const receipt = receipts.find(item => ids.includes(item.id) && item.queryHash === prep.queryHash && item.startedAt >= prep.preparedAt
       && (!method || item.selections.some(selection => selection.assetId === method.assetId && selection.contentHash === method.contentHash && selection.assetVersion === method.assetVersion && !selection.truncated)));

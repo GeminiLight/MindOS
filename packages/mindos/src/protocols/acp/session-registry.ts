@@ -11,7 +11,6 @@ import {
   DEFAULT_ACP_RPC_TIMEOUTS,
   type AcpRpcTimeouts,
 } from './session-rpc.js';
-import { getMindosServerEventBus } from '../../server/events/bus.js';
 
 export const sessions = new Map<string, AcpSession>();
 export const sessionConnections = new Map<string, AcpConnection>();
@@ -39,12 +38,17 @@ type AcpSessionChangedEvent = {
 };
 
 /**
- * Injectable for tests; defaults to the process-wide server event bus so
+ * Injectable for tests; the production default is a process-global emitter that
+ * `server/events/bus.ts` registers at module load (`Symbol.for` registry, same
+ * reasoning as `agent/global-state.ts`), forwarding to the server event bus so
  * `useRuntimeSessionProjection` refreshes on session state changes instead of
- * only at turn boundaries. Emission must never break the session lifecycle, so
- * every failure is swallowed.
+ * only at turn boundaries. The registry itself lives below the server layer and
+ * must not import it (spec-knowledge-layering-and-export-surface). Emission
+ * must never break the session lifecycle, so every failure is swallowed.
  */
 let sessionChangedEmitter: ((event: AcpSessionChangedEvent) => void) | undefined;
+
+const SESSION_CHANGED_EMITTER_KEY = Symbol.for('mindos.acpSessionChangedEmitter');
 
 export function setAcpSessionChangedEmitterForTest(
   emitter: ((event: AcpSessionChangedEvent) => void) | undefined,
@@ -52,11 +56,16 @@ export function setAcpSessionChangedEmitterForTest(
   sessionChangedEmitter = emitter;
 }
 
+function globalSessionChangedEmitter(): ((event: AcpSessionChangedEvent) => void) | undefined {
+  const emitter = (globalThis as unknown as Record<symbol, unknown>)[SESSION_CHANGED_EMITTER_KEY];
+  return typeof emitter === 'function' ? (emitter as (event: AcpSessionChangedEvent) => void) : undefined;
+}
+
 function emitAcpSessionChanged(sessionId: string, agentId: string, state: AcpSessionChangedState): void {
   try {
     const event: AcpSessionChangedEvent = { type: 'acp.session.changed', agentId, sessionId, state };
-    if (sessionChangedEmitter) sessionChangedEmitter(event);
-    else getMindosServerEventBus().emit(event);
+    const emitter = sessionChangedEmitter ?? globalSessionChangedEmitter();
+    if (emitter) emitter(event);
   } catch {
     // Observers must not break session bookkeeping.
   }

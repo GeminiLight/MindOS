@@ -9,7 +9,7 @@ import {
   type PendingAskUserQuestionAction,
   type PendingRuntimePermissionAction,
 } from '@geminilight/mindos/server/projections/pending-actions';
-import { redactSensitiveText } from '@geminilight/mindos/agent/redaction';
+import { redactSensitiveText } from '@geminilight/mindos/foundation/security/redaction';
 import { usePendingAgentActions } from '@/hooks/usePendingAgentActions';
 
 /**

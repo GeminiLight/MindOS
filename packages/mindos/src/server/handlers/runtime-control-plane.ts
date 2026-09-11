@@ -18,6 +18,7 @@ import {
   type LeaseKey,
 } from '../../foundation/storage/leases.js';
 import { redactSensitiveText } from '../../foundation/security/redaction.js';
+import { installAutomationFailureAuditWriter } from '../../agent/automations/events.js';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
 
 export const MINDOS_RUNTIME_CONTROL_PLANE_FILE = '.mindos/runtime-control-plane.json';
@@ -828,3 +829,17 @@ function isMessage(value: unknown): value is RuntimeControlPlaneMailboxMessage {
 function isTask(value: unknown): value is RuntimeControlPlaneTask {
   return isRecord(value) && hasKeys(value, ['id', 'title', 'status', 'priority', 'createdAt', 'updatedAt']);
 }
+
+/**
+ * Wire the agent-layer automation event core to the control-plane store:
+ * `recordStudioAutomationEventSourceFailure` records its durable audit through
+ * this writer (spec-knowledge-layering-and-export-surface). Installed at module
+ * load so every process that can read the control plane can also audit
+ * automation event-source failures, matching the previous static-import
+ * behaviour; the registry is process-global, so one install covers every
+ * module copy in the host.
+ */
+installAutomationFailureAuditWriter(({ mindRoot, failure, now }) => {
+  const result = applyRuntimeControlPlaneMutation(mindRoot, { action: 'record-failure', failure }, now);
+  return 'error' in result ? { error: result.error } : {};
+});

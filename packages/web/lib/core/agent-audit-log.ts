@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { resolveExistingSafe } from './security';
-import { redactSensitiveObject, redactSensitiveText } from '@geminilight/mindos/agent/redaction';
+import { redactSensitiveObject, redactSensitiveText } from '@geminilight/mindos/foundation/security/redaction';
 import {
   appendJsonlEvents,
   ensureJsonlStore,

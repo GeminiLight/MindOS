@@ -7,7 +7,7 @@ import path from 'path';
 import os from 'os';
 import type { IMPlatform, IMActivity, IMActivityStore, IMActivityType, IMActivityStatus } from './types';
 import { maskForLog } from './format';
-import { redactSensitiveText } from '@geminilight/mindos/agent/redaction';
+import { redactSensitiveText } from '@geminilight/mindos/foundation/security/redaction';
 
 const ACTIVITY_DIR = path.join(os.homedir(), '.mindos');
 const ACTIVITY_PATH = path.join(ACTIVITY_DIR, 'im-activity.json');

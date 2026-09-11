@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { redactSensitiveObject, redactSensitiveText } from '../redaction.js';
+import { redactSensitiveObject, redactSensitiveText } from '../../foundation/security/redaction.js';
 import { safePluginIdentifierIssue } from '../../foundation/plugins/safe-id.js';
 import { parseAcpAgentOverrides } from './acp-overrides.js';
 import type { AcpAgentAdapterMetadata } from './adapter-metadata.js';

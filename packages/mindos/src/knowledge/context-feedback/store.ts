@@ -10,7 +10,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import path from 'node:path';
-import { getAgentRunCapsule } from '../../agent/capsules/store.js';
+import { getKnowledgeAgentRunCapsule } from '../agent-run-data.js';
 import { redactSensitiveText } from '../../foundation/security/redaction.js';
 import { resolveExistingSafe } from '../../foundation/security/index.js';
 import { getRetrievalReceipt } from '../../retrieval/receipt.js';
@@ -232,7 +232,7 @@ export function buildEchoPromotionCandidateFromCapsule(
   mindRoot: string,
   input: CapsuleEchoPromotionInput,
 ): EchoPromotionCandidate {
-  const capsule = getAgentRunCapsule(mindRoot, requireSafeId(input.capsuleId, 'capsule id'));
+  const capsule = getKnowledgeAgentRunCapsule(mindRoot, requireSafeId(input.capsuleId, 'capsule id'));
   if (!capsule) throw new Error(`Agent run capsule not found: ${input.capsuleId}`);
   const evidence = Array.isArray(input.evidence) ? input.evidence.slice(0, 100) : [];
   if (evidence.length === 0) throw new Error('Capsule promotion requires message evidence.');

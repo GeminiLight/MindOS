@@ -84,3 +84,42 @@ export function createAgentTurnSseResponse(
     headers: MINDOS_SSE_HEADERS,
   });
 }
+
+/**
+ * Prepend one visible `status` SSE frame (e.g. the reasoning-effort fallback
+ * notice produced by `agent/turn/request.ts` normalisation) to a lane's SSE
+ * response so the client sees it before any lane output. Non-SSE responses
+ * (JSON error replies) and empty notices pass through untouched.
+ */
+export function prependMindosSseStatusEvent(response: Response, message: string | undefined): Response {
+  if (!message || !response.body) return response;
+  if (!(response.headers.get('content-type') ?? '').includes('text/event-stream')) return response;
+  const prefix = new TextEncoder().encode(encodeMindosSseEvent({ type: 'status', message, visible: true }));
+  const original = response.body;
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(prefix);
+      const reader = original.getReader();
+      void (async () => {
+        try {
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            controller.enqueue(value);
+          }
+          controller.close();
+        } catch (error) {
+          try { controller.error(error); } catch { /* already errored/closed */ }
+        }
+      })();
+    },
+    cancel(reason) {
+      return original.cancel(reason);
+    },
+  });
+  return new Response(stream, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  });
+}

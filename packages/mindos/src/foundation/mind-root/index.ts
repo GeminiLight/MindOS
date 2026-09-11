@@ -28,28 +28,49 @@ let _cache: ConfigCache | null = null;
 
 /**
  * Test seam: vitest suites (web and core) point the whole process at a temp
- * mind root without touching ~/.mindos/config.json or env. A plain module
- * variable is enough — production never registers a resolver, so duplicated
- * module instances in a bundler build all fall through to the same
- * config/env/default chain.
+ * mind root without touching ~/.mindos/config.json or env.
+ *
+ * The override + generation live on a process-global `Symbol.for` registry
+ * (same reasoning as `agent/global-state.ts` and `server/events/bus.ts`):
+ * bundler artifacts (e.g. the `dist/protocols/acp` bundle) inline their own
+ * copy of this module, and since the knowledge agent-run-data port can be
+ * served by ANY loaded copy (spec-knowledge-layering-and-export-surface), a
+ * resolver registered through one copy must be visible to all of them —
+ * otherwise a bundled `listAgentRuns` silently reads the default mind root
+ * while the host process points at a different one. Production still never
+ * registers a resolver; sharing only removes the duplicated-instance hazard.
  */
-let _resolverOverride: (() => string) | null = null;
+type MindRootResolverState = {
+  resolverOverride: (() => string) | null;
+  /**
+   * Bumped whenever the resolver override or the config cache is reset, so
+   * callers that memoize `effectiveMindRoot()` (the run ledger calls it twice
+   * per streamed token) can invalidate without paying a `statSync` per check.
+   */
+  generation: number;
+};
 
-/**
- * Bumped whenever the resolver override or the config cache is reset, so
- * callers that memoize `effectiveMindRoot()` (the run ledger calls it twice
- * per streamed token) can invalidate without paying a `statSync` per check.
- */
-let _resolverGeneration = 0;
+const RESOLVER_STATE_KEY = Symbol.for('mindos.foundationMindRootResolverState');
+
+function resolverState(): MindRootResolverState {
+  const globals = globalThis as unknown as Record<symbol, MindRootResolverState | undefined>;
+  let entry = globals[RESOLVER_STATE_KEY];
+  if (!entry) {
+    entry = { resolverOverride: null, generation: 0 };
+    globals[RESOLVER_STATE_KEY] = entry;
+  }
+  return entry;
+}
 
 export function setMindRootResolverForTests(resolver: (() => string) | null): void {
-  _resolverOverride = resolver;
-  _resolverGeneration += 1;
+  const state = resolverState();
+  state.resolverOverride = resolver;
+  state.generation += 1;
 }
 
 /** Monotonic counter identifying the current resolver configuration. */
 export function mindRootResolverGeneration(): number {
-  return _resolverGeneration;
+  return resolverState().generation;
 }
 
 function readConfiguredMindRoot(configPath: string): string | null {
@@ -65,7 +86,8 @@ function readConfiguredMindRoot(configPath: string): string | null {
 }
 
 export function effectiveMindRoot(): string {
-  if (_resolverOverride) return _resolverOverride();
+  const override = resolverState().resolverOverride;
+  if (override) return override();
 
   // homedir is resolved per call (cheap) so tests / env changes are honored.
   const home = os.homedir();
@@ -99,5 +121,5 @@ export function effectiveMindRoot(): string {
 /** Clear the config cache (e.g. after a same-size, same-mtime rewrite in tests). */
 export function resetMindRootCacheForTests(): void {
   _cache = null;
-  _resolverGeneration += 1;
+  resolverState().generation += 1;
 }

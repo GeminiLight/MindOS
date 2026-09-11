@@ -12,15 +12,43 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { AgentRuntimeDescriptor } from '../runtime/registry.js';
-import type {
-  AgentCapabilitiesServices,
-  AgentCapabilityInput,
-} from '../../server/handlers/agent-capabilities.js';
 import {
   MINDOS_READONLY_KB_TOOL_NAMES,
   MINDOS_KNOWLEDGE_WRITE_TOOL_NAMES,
 } from '../mindos-pi/permission/index.js';
 import type { MindosAgentTool } from './kb-tools.js';
+
+/**
+ * Capability-source contract owned by the registry (the port declarer) so the
+ * agent layer never imports server types; `server/handlers/agent-capabilities.ts`
+ * imports and re-exports them for the HTTP surface
+ * (spec-knowledge-layering-and-export-surface).
+ */
+export type AgentCapabilityInput = {
+  id?: unknown;
+  kind?: unknown;
+  name?: unknown;
+  description?: unknown;
+  source?: unknown;
+  status?: unknown;
+  permissionRequired?: unknown;
+  inputKinds?: unknown;
+  outputKinds?: unknown;
+  supportsStreaming?: unknown;
+  supportsCancel?: unknown;
+  supportsBackgroundRuns?: unknown;
+  supportsApprovals?: unknown;
+  supportsUserInput?: unknown;
+  defaultTimeoutMs?: unknown;
+  metadata?: unknown;
+};
+
+export type AgentCapabilitySourceKey = 'kb' | 'subagents' | 'acp' | 'native' | 'mcp' | 'a2a';
+
+export type AgentCapabilitiesServices = Partial<Record<
+  AgentCapabilitySourceKey,
+  () => AgentCapabilityInput[] | Promise<AgentCapabilityInput[]>
+>>;
 
 type PiSubagentModule = {
   name: string;

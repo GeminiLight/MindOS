@@ -51,7 +51,7 @@ import {
   resolveSessionContext,
   SessionContextResolutionError,
 } from '@/lib/session-context-server';
-import { omitEnvKeys } from './turn-sse';
+import { omitEnvKeys, prependMindosSseStatusEvent } from './turn-sse';
 import {
   getLastUserContent,
   getLastUserImages,
@@ -200,11 +200,13 @@ export async function handleAgentSessionTurnRouteRequest(
     ? { ok: true as const, body: agentRunCapsuleRecoveryPlanToTurnBody(recoveryPlan, sessionId) }
     : normalizeAgentSessionTurnBody(rawBody, sessionId);
   if (!body.ok) return apiError(ErrorCodes.INVALID_REQUEST, body.message, 400);
+  const effortNotice = 'effortNotice' in body ? body.effortNotice : undefined;
 
   return runAgentTurnRequestBody(body.body, {
     headers: req.headers,
     signal: req.signal,
     request: req,
+    ...(effortNotice ? { effortNotice } : {}),
     ...(recoveryPlan ? {
       capsuleRecovery: {
         planId: recoveryPlan.id,
@@ -394,6 +396,12 @@ export async function runAgentTurnRequestBody(
     selectedAcpAgent,
   });
 
+  // Surface the reasoning-effort fallback notice (session-turn normalisation)
+  // as one visible SSE `status` frame ahead of the lane's own output.
+  const finishLane = (lane: Promise<Response>): Promise<Response> => lane.then(
+    (response) => prependMindosSseStatusEvent(response, requestContext.effortNotice),
+  );
+
   const capsuleSeed = (retrievalMetadata: Record<string, unknown>): AgentTurnCapsuleSeed => {
     const runtime = runtimeLane.kind === 'native'
       ? { kind: runtimeLane.runtimeKind, id: verifiedNativeRuntime!.id, name: verifiedNativeRuntime!.name }
@@ -575,23 +583,23 @@ export async function runAgentTurnRequestBody(
     if (runtimeLane.kind === 'native') {
       const recoveryConflict = claimRecoveryPlan();
       if (recoveryConflict) return recoveryConflict;
-      return runtimeLane.runTurn({
+      return finishLane(runtimeLane.runTurn({
         ...externalTurnBase,
         nativePermissionMode,
         nativeRuntimeOptions,
         nativeRuntimeEnv,
         requestContext,
-      });
+      }));
     }
 
     const recoveryConflict = claimRecoveryPlan();
     if (recoveryConflict) return recoveryConflict;
-    return runtimeLane.runTurn({
+    return finishLane(runtimeLane.runTurn({
       ...externalTurnBase,
       acpRuntimeOptions,
       acpRuntimeEnvOverlay,
       runtimeBinding: selectedAcpAgent ? body.runtimeBinding ?? null : null,
-    });
+    }));
   }
 
   let agentInitialization: MindosAgentInitializationContext | undefined;
@@ -738,7 +746,7 @@ export async function runAgentTurnRequestBody(
   const sessionContextMetadata = sessionContextRunMetadata(sessionContextSignature, includeSessionContext);
   const recoveryConflict = claimRecoveryPlan();
   if (recoveryConflict) return recoveryConflict;
-  return runtimeLane.runTurn({
+  return finishLane(runtimeLane.runTurn({
     mindosUiMessages,
     systemPrompt,
     turnPrompt,
@@ -769,5 +777,5 @@ export async function runAgentTurnRequestBody(
     stepLimit,
     t,
     capsule: capsuleSeed(recall.metadata),
-  });
+  }));
 }

@@ -1,5 +1,6 @@
 import { effectiveMindRoot, mindRootResolverGeneration } from '../../foundation/mind-root/index.js';
 import { closeMindosDatabase, type MindosDatabase } from '../../foundation/storage/sqlite.js';
+import { installKnowledgeAgentRunLister } from '../../knowledge/agent-run-data.js';
 import { getCurrentAgentRunContext } from '../agent-run-context.js';
 import {
   AGENT_RUN_LEDGER_SHARD_KEY,
@@ -8,7 +9,7 @@ import {
   deleteProcessGlobal,
   getProcessGlobal,
 } from '../global-state.js';
-import { emitStudioAutomationEvent, recordStudioAutomationEventSourceFailure } from '../../server/automations/events.js';
+import { emitStudioAutomationEvent, recordStudioAutomationEventSourceFailure } from '../automations/events.js';
 import {
   EVENT_TRIM_SLACK,
   MAX_EVENTS,
@@ -786,3 +787,9 @@ export function reloadAgentRunsFromDiskForTest(): void {
   if (state?.db) closeMindosDatabase(state.db.file);
   deleteProcessGlobal(AGENT_RUN_LEDGER_STORE_KEY);
 }
+
+// Knowledge-layer run-data port (spec-knowledge-layering-and-export-surface):
+// knowledge modules read the ledger through `knowledge/agent-run-data.ts`;
+// loading the ledger is what makes run data available, so the ledger installs
+// the implementation. Agent → knowledge is the legal direction.
+installKnowledgeAgentRunLister((options) => listAgentRuns(options));

@@ -12,7 +12,7 @@ import { handleMcpInstallSkillPost, type MindosMcpInstallSkillRequest } from '..
 import { handleMcpRestartPost } from '../handlers/mcp-restart.js';
 import { handleMcpStatus, handleMcpTokenReveal, type MindosMcpStatusServices, type MindosMcpStatusSettings } from '../handlers/mcp-status.js';
 import { handleMcpDirectToolsPost, handleMcpToolsGet, type MindosMcpDirectToolsRequest } from '../handlers/mcp-tools.js';
-import { createDefaultSkillAgentRegistry } from '../mcp-agent-registry.js';
+import { createDefaultSkillAgentRegistry } from '../../agent/config/registry.js';
 import { defineRoutes } from '../route-table.js';
 import type { MindosRuntimeSettings } from '../runtime.js';
 import type { MindosHttpServices } from '../services.js';

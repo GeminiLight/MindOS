@@ -184,13 +184,33 @@
       "types": "./dist/agent/tool/*.d.ts",
       "import": "./dist/agent/tool/*.js"
     },
-    "./agent/*": {
-      "types": "./dist/agent/*.d.ts",
-      "import": "./dist/agent/*.js"
+    "./agent/capsules": {
+      "types": "./dist/agent/capsules/index.d.ts",
+      "import": "./dist/agent/capsules/index.js"
+    },
+    "./agent/capsules/*": {
+      "types": "./dist/agent/capsules/*.d.ts",
+      "import": "./dist/agent/capsules/*.js"
+    },
+    "./agent/agent-run-context": {
+      "types": "./dist/agent/agent-run-context.d.ts",
+      "import": "./dist/agent/agent-run-context.js"
+    },
+    "./agent/global-state": {
+      "types": "./dist/agent/global-state.d.ts",
+      "import": "./dist/agent/global-state.js"
+    },
+    "./agent/mode": {
+      "types": "./dist/agent/mode.d.ts",
+      "import": "./dist/agent/mode.js"
     },
     "./foundation": {
       "types": "./dist/foundation.d.ts",
       "import": "./dist/foundation.js"
+    },
+    "./foundation/security/redaction": {
+      "types": "./dist/foundation/security/redaction.d.ts",
+      "import": "./dist/foundation/security/redaction.js"
     },
     "./knowledge": {
       "types": "./dist/knowledge.d.ts",

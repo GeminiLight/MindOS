@@ -11,7 +11,7 @@ import type { ToolCallPart } from '@/lib/types';
 import type { LucideIcon } from 'lucide-react';
 import AskUserQuestionBlock from './AskUserQuestionBlock';
 import { requestPendingAgentActionsRefresh } from '@/hooks/usePendingAgentActions';
-import { redactSensitiveObject, redactSensitiveText } from '@geminilight/mindos/agent/redaction';
+import { redactSensitiveObject, redactSensitiveText } from '@geminilight/mindos/foundation/security/redaction';
 
 const DESTRUCTIVE_TOOLS = new Set(['delete_file', 'move_file', 'rename_file', 'write_file']);
 

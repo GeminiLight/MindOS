@@ -1,5 +1,19 @@
 import { json, type MindosServerResponse } from '../response.js';
 import { redactSensitiveObject, redactSensitiveText } from '../../foundation/security/redaction.js';
+import type {
+  AgentCapabilitiesServices,
+  AgentCapabilityInput,
+  AgentCapabilitySourceKey,
+} from '../../agent/tool/capability-registry.js';
+
+// The capability-source contract is owned by the registry that declares the
+// port (agent layer); re-exported here so the HTTP surface and its existing
+// importers keep one path (spec-knowledge-layering-and-export-surface).
+export type {
+  AgentCapabilitiesServices,
+  AgentCapabilityInput,
+  AgentCapabilitySourceKey,
+};
 
 export type AgentCapabilityKind =
   | 'kb-tool'
@@ -21,25 +35,6 @@ export type AgentCapabilitySource =
 export type AgentCapabilityStatus = 'available' | 'missing' | 'disabled' | 'cached' | 'error';
 export type AgentCapabilityPermissionRequired = 'read' | 'ask' | 'auto' | 'full';
 
-export type AgentCapabilityInput = {
-  id?: unknown;
-  kind?: unknown;
-  name?: unknown;
-  description?: unknown;
-  source?: unknown;
-  status?: unknown;
-  permissionRequired?: unknown;
-  inputKinds?: unknown;
-  outputKinds?: unknown;
-  supportsStreaming?: unknown;
-  supportsCancel?: unknown;
-  supportsBackgroundRuns?: unknown;
-  supportsApprovals?: unknown;
-  supportsUserInput?: unknown;
-  defaultTimeoutMs?: unknown;
-  metadata?: unknown;
-};
-
 export type AgentCapability = {
   id: string;
   kind: AgentCapabilityKind;
@@ -59,8 +54,6 @@ export type AgentCapability = {
   metadata?: Record<string, unknown>;
 };
 
-export type AgentCapabilitySourceKey = 'kb' | 'subagents' | 'acp' | 'native' | 'mcp' | 'a2a';
-
 export type AgentCapabilitySourceStatus = {
   id: AgentCapabilitySourceKey;
   status: 'ok' | 'error';
@@ -73,11 +66,6 @@ export type AgentCapabilitiesPayload = {
   capabilities: AgentCapability[];
   sources: AgentCapabilitySourceStatus[];
 };
-
-export type AgentCapabilitiesServices = Partial<Record<
-  AgentCapabilitySourceKey,
-  () => AgentCapabilityInput[] | Promise<AgentCapabilityInput[]>
->>;
 
 const SOURCE_ORDER = ['kb', 'subagents', 'acp', 'native', 'mcp', 'a2a'] as const satisfies readonly AgentCapabilitySourceKey[];
 const KIND_SET = new Set<AgentCapabilityKind>([

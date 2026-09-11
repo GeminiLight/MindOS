@@ -1,4 +1,4 @@
-import { redactSensitiveObject, redactSensitiveText } from '../redaction.js';
+import { redactSensitiveObject, redactSensitiveText } from '../../foundation/security/redaction.js';
 import type {
   AgentRuntimeAdapterContract,
   AgentRuntimeDescriptor,

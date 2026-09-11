@@ -11,6 +11,10 @@ import {
   listAgentAuditEvents
 } from './index';
 import { closeAllMindosDatabases } from '../../foundation/storage/sqlite.js';
+// Wires the knowledge/audit content-change facade to the SQLite store through
+// the ContentChangeLogStore port (spec-knowledge-layering-and-export-surface);
+// the barrel does the same for production consumers.
+import '../../server/handlers/change-log-store.js';
 import { LocalFileSystem } from '../storage/local.js';
 import type { IFileSystem, Result, FileEntry } from '../storage/index.js';
 import { readStudioAutomationState } from '../../server/automations/store.js';
