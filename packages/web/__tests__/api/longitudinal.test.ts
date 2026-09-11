@@ -153,3 +153,52 @@ it("rejects cross-origin requests, forged participant state and owner-bearer acc
     ).status,
   ).toBe(401);
 });
+it("serves researcher progress, blind packets and keys to the owner session only, keeping allocation out of packets", async () => {
+  const { s, inv, ctx } = seed();
+  const session = await POST(request(s.id, "POST", { token: inv.token }), ctx);
+  const cookie = "mindos-long-" + s.id + "=" + inv.token;
+  let view = (await session.json()).view;
+  for (const [action, extra] of [
+    ["consent", {}],
+    ["answer", { answer: "First independent judgment" }],
+  ] as const) {
+    const r = await PATCH(
+      request(s.id, "PATCH", { action, version: view.version, requestId: action, ...extra }, cookie),
+      ctx,
+    );
+    expect(r.status).toBe(200);
+    view = (await r.json()).view;
+  }
+  expect(view.stage).toBe("coaching");
+  expect(view.previousAnswer).toBe("First independent judgment");
+  expect(view.help).toMatchObject({ maxAttempts: 4, maxSucceeded: 2 });
+  const owner = (query: string) =>
+    admin(new NextRequest("http://localhost/api/echo/longitudinal" + query, { headers: { Cookie: "mindos-session=valid" } }));
+  const detail = await owner("?id=" + s.id);
+  expect(detail.status).toBe(200);
+  const body = await detail.json();
+  expect(body.summary).toMatchObject({ invited: 1, consented: 1, active: 1, pendingReviews: 0 });
+  expect(body.progress[0]).toMatchObject({ status: "answering", stage: "coaching", round: 0 });
+  expect(body.accessReady).toBe(true);
+  const packet = await owner("?id=" + s.id + "&packet=review");
+  expect(packet.status).toBe(200);
+  const packetText = JSON.stringify(await packet.json());
+  expect(packetText).toContain("First independent judgment");
+  expect(packetText).not.toMatch(/participant-|strategy|frozen|next-round|PRIVATE METHOD/);
+  const key = await owner("?id=" + s.id + "&packet=key");
+  expect(JSON.stringify(await key.json())).toMatch(/participant-[a-f0-9]{24}/);
+  expect((await owner("?id=" + s.id + "&packet=other")).status).toBe(400);
+  expect((await owner("?packet=review")).status).toBe(400);
+  expect((await owner("?id=" + s.id + "&extra=1")).status).toBe(400);
+  expect(
+    (
+      await admin(
+        new NextRequest("http://localhost/api/echo/longitudinal?id=" + s.id + "&packet=key", {
+          headers: { Cookie: cookie },
+        }),
+      )
+    ).status,
+  ).toBe(401);
+  const list = await owner("");
+  expect((await list.json()).studies[0]).toMatchObject({ participants: 1, consented: 1, pendingReviews: 0, rounds: 2 });
+});

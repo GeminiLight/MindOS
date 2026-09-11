@@ -1,7 +1,7 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
-import type { StudyAdminView, StudyProtocol, StudySummary } from '@geminilight/mindos/knowledge';
+import type { StudyAdminView, StudyProgress, StudyProtocol, StudySummary } from '@geminilight/mindos/knowledge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { NarrowPageShell } from '@/components/shared/ContentPageShell';
 import { useLocale } from '@/lib/stores/locale-store';
@@ -11,11 +11,14 @@ import { StudyFields, StudyTextField, studyControl, studyNote } from './StudyFie
 import { StudyInvitations } from './StudyInvitations';
 import { StudyReviewers } from './StudyReviewers';
 import { StudyReview } from './StudyReview';
+import ResearchHub from './ResearchHub';
+import { StudyProgressPanel } from './StudyProgressPanel';
 
-type Payload = { study?: StudyAdminView; studies?: StudySummary[]; unavailableCount?: number; code?: string };
-export function ResearchWorkspace({ locale }: { locale: StudyLocale }) {
+type Payload = { study?: StudyAdminView; studies?: StudySummary[]; unavailableCount?: number; code?: string; progress?: StudyProgress };
+export function ResearchWorkspace({ locale, hub }: { locale: StudyLocale; hub?: (studies: StudySummary[] | null) => ReactNode }) {
   const p = studyCopy[locale];
   const [study, setStudy] = useState<StudyAdminView | null>(null); const [draft, setDraft] = useState<StudyProtocol | null>(null);
+  const [progress, setProgress] = useState<StudyProgress | null>(null);
   const [studies, setStudies] = useState<StudySummary[]>([]); const [unavailable, setUnavailable] = useState(0);
   const [step, setStep] = useState(0); const [focusPath, setFocusPath] = useState('');
   const [busy, setBusy] = useState(false); const [loaded, setLoaded] = useState(false); const [error, setError] = useState('');
@@ -54,15 +57,15 @@ export function ResearchWorkspace({ locale }: { locale: StudyLocale }) {
     } catch { if (!controller.signal.aborted) setError('storage'); return null; }
     finally { if (request.current === controller) request.current = null; if (!controller.signal.aborted) setBusy(false); }
   }
-  function accept(value: StudyAdminView) {
-    pendingCreation.current = null;
+  function accept(value: StudyAdminView, nextProgress?: StudyProgress) {
+    pendingCreation.current = null; setProgress(nextProgress ?? null);
     setStudy(value); setDraft(structuredClone(value.protocol)); setReviewedBy(''); setReviewNote(''); setConfirmed(false);
     const url = new URL(window.location.href); url.searchParams.set('study', value.id); window.history.replaceState({}, '', url);
   }
   async function load(id?: string) {
     const data = await send(id ? '?id=' + encodeURIComponent(id) : '');
     if (!data) return;
-    if (data.study) { accept(data.study); setStep(0); }
+    if (data.study) { accept(data.study, data.progress); setStep(0); }
     else { setStudies(data.studies ?? []); setUnavailable(data.unavailableCount ?? 0); setStudy(null); setDraft(null); const url = new URL(window.location.href); url.searchParams.delete('study'); window.history.replaceState({}, '', url); }
     setLoaded(true);
   }
@@ -88,7 +91,7 @@ export function ResearchWorkspace({ locale }: { locale: StudyLocale }) {
   async function freeze() {
     if (!study || !canFreeze || frozen) return;
     const data = await send('', { id: study.id, version: study.version, action: 'freeze', reviewedBy, reviewNote, confirmed }, 'PATCH');
-    if (data?.study) accept(data.study);
+    if (data?.study) accept(data.study, data.progress);
   }
   function goStep(index: number) { if (!busy && form.current?.reportValidity()) { setStep(index); setFocusPath(''); } }
   function goToField(field: StudyField) { setStep(field.step); setFocusPath(field.path); }
@@ -106,6 +109,8 @@ export function ResearchWorkspace({ locale }: { locale: StudyLocale }) {
       {!study && new URLSearchParams(typeof window === 'undefined' ? '' : window.location.search).has('study') ? <Button variant="ghost" className="min-h-11" disabled={busy} onClick={() => void load()}>{p.all}</Button> : null}
     </div> : null}
     {!study || !draft ? <section className="space-y-5" aria-busy={busy}>
+      {hub ? hub(loaded ? studies : null) : null}
+      {hub ? <h2 id="four-stage-drafts" className="scroll-mt-6 border-t border-border pt-6 font-display text-xl">{p.draftsTitle}</h2> : null}
       {busy ? <p role="status" className={studyNote}>{p.loading}</p> : null}
       {loaded && !studies.length ? <div className="space-y-2 border-t border-border py-6"><h2 className="font-display text-xl">{p.empty}</h2><p className={studyNote}>{p.emptyHint}</p></div> : null}
       {loaded ? <Button className="min-h-11" disabled={busy} onClick={() => void create()}>{p.create}</Button> : null}
@@ -138,6 +143,7 @@ export function ResearchWorkspace({ locale }: { locale: StudyLocale }) {
           </div> : null}
         </fieldset>
       </form>
+      {frozen && progress ? <StudyProgressPanel progress={progress} locale={locale} /> : null}
       {frozen && study.protocolHash ? <StudyInvitations key={study.id} studyId={study.id} protocolHash={study.protocolHash} delayDays={study.protocol.delayDays} locale={locale}/> : null}
       {frozen && study.protocolHash ? <StudyReviewers key={study.id + '-reviewers'} studyId={study.id} protocolHash={study.protocolHash} locale={locale} /> : null}
       {!frozen ? <footer className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 border-t border-border bg-background py-4">
@@ -150,4 +156,7 @@ export function ResearchWorkspace({ locale }: { locale: StudyLocale }) {
     </section>}
   </NarrowPageShell>;
 }
-export default function ResearchPage() { const { locale } = useLocale(); return <ResearchWorkspace locale={locale === 'zh' ? 'zh' : 'en'} />; }
+export default function ResearchPage() {
+  const { locale } = useLocale(); const studyLocale = locale === 'zh' ? 'zh' : 'en';
+  return <ResearchWorkspace locale={studyLocale} hub={studies => <ResearchHub locale={studyLocale} fourStageCount={studies ? studies.length : null} />} />;
+}

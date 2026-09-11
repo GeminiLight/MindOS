@@ -5,22 +5,35 @@ import {
   createLongitudinal,
   issueLongitudinalAccess,
   listLongitudinal,
-  exportLongitudinal,
+  adminLongitudinal,
+  exportLongitudinalReviewPacket,
+  exportLongitudinalReviewKey,
   reviewLongitudinalMethod,
 } from "@geminilight/mindos/knowledge";
 import { getMindRoot } from "@/lib/fs";
 import { ownerBoundary, body, json, failure } from "@/lib/research-http";
 import { studyDeploymentBoundary } from "@/lib/study-access-http";
 import { currentComparisonRuntime } from "@/lib/method-comparison-runtime";
+const allowedQuery = new Set(["id", "packet"]);
 export async function GET(req: NextRequest) {
   try {
     const denied = await ownerBoundary(req);
     if (denied) return denied;
-    const id = req.nextUrl.searchParams.get("id");
+    const params = req.nextUrl.searchParams;
+    if ([...params.keys()].some((key) => !allowedQuery.has(key)))
+      return json({ code: "invalid" }, 400);
+    const id = params.get("id");
+    const packet = params.get("packet");
+    if (packet && !id) return json({ code: "invalid" }, 400);
+    if (packet === "review")
+      return json(exportLongitudinalReviewPacket(getMindRoot(), id!));
+    if (packet === "key")
+      return json(exportLongitudinalReviewKey(getMindRoot(), id!));
+    if (packet) return json({ code: "invalid" }, 400);
     return json(
       id
         ? {
-            study: exportLongitudinal(getMindRoot(), id),
+            ...adminLongitudinal(getMindRoot(), id),
             accessReady: !studyDeploymentBoundary(req),
           }
         : {
@@ -64,7 +77,10 @@ export async function PATCH(req: NextRequest) {
     }
     if (action === "review") {
       reviewLongitudinalMethod(getMindRoot(), id, input);
-      return json({ study: exportLongitudinal(getMindRoot(), id) });
+      return json({
+        ...adminLongitudinal(getMindRoot(), id),
+        accessReady: !studyDeploymentBoundary(req),
+      });
     }
     return json({ code: "invalid" }, 400);
   } catch (e) {

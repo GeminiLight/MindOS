@@ -8,6 +8,7 @@ import {
   isPartiallySupportedObsidianApi,
   isUnsupportedObsidianApi,
 } from './capability-matrix';
+import { getObsidianApiSurface } from './api-surface';
 
 export type CompatibilityLevel = 'compatible' | 'partial' | 'blocked';
 
@@ -22,6 +23,8 @@ export interface PluginCompatibilityReport {
   nodeModules: string[];
   supportedModules?: string[];
   unsupportedModules: string[];
+  /** Third-party packages the host never provides (bundler leftovers like `ajv/dist/*`); not a runtime capability gap. */
+  bundledModules?: string[];
   platformRequirements?: PluginPlatformRequirements;
   supportedApis: string[];
   partialApis: string[];
@@ -324,6 +327,21 @@ function collectObsidianNamespaceAliases(code: string): string[] {
   return unique(aliases);
 }
 
+let obsidianApiExportNamesCache: ReadonlySet<string> | null = null;
+/**
+ * Bundled plugin code reuses short alias names for local arrays (`const t =
+ * require('obsidian')` plus `t.push(...)` in another scope), so alias member
+ * access only counts as API usage when the official obsidian.d.ts snapshot
+ * declares the export. Undeclared members (`push`, `length`, `default`) are
+ * analysis noise, not missing host capability.
+ */
+function getObsidianApiExportNames(): ReadonlySet<string> {
+  if (obsidianApiExportNamesCache === null) {
+    obsidianApiExportNamesCache = new Set(getObsidianApiSurface().exports.map((entry) => entry.name));
+  }
+  return obsidianApiExportNamesCache;
+}
+
 function collectObsidianImports(code: string): string[] {
   const apis: string[] = [];
 
@@ -435,9 +453,10 @@ function collectObsidianImports(code: string): string[] {
 
   for (const alias of collectObsidianNamespaceAliases(code)) {
     const escapedAlias = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const declaredExports = getObsidianApiExportNames();
     const namespaceMatches = code.matchAll(new RegExp(`\\b${escapedAlias}\\.([A-Za-z_$][\\w$]*)`, 'g'));
     for (const match of namespaceMatches) {
-      if (match[1]) {
+      if (match[1] && declaredExports.has(match[1])) {
         apis.push(match[1]);
       }
     }
@@ -499,9 +518,20 @@ function collectSupportedModules(moduleImports: string[]): string[] {
   return unique(moduleImports.filter((moduleName) => SUPPORTED_RUNTIME_MODULES.has(moduleName)));
 }
 
-function collectUnsupportedModules(moduleImports: string[], supportedModules: string[]): string[] {
-  const supported = new Set(supportedModules);
-  return unique(moduleImports.filter((moduleName) => !supported.has(moduleName)));
+/**
+ * Bare third-party package specifiers the host never provides (e.g. `ajv/dist/runtime/equal`
+ * left in the bundle by esbuild/rollup). Obsidian does not resolve them either, so they are
+ * plugin-owned dependencies rather than a host capability gap and must not block loading.
+ * Relative specifiers are excluded; they stay in blockers as bundler leftovers per contract.
+ */
+function collectBundledModules(moduleImports: string[]): string[] {
+  return unique(moduleImports.filter((moduleName) =>
+    !isRelativeModule(moduleName) && classifyRuntimeModuleTier(moduleName) === 'unknown'));
+}
+
+function collectUnsupportedModules(moduleImports: string[], supportedModules: string[], bundledModules: string[]): string[] {
+  const excluded = new Set([...supportedModules, ...bundledModules]);
+  return unique(moduleImports.filter((moduleName) => !excluded.has(moduleName)));
 }
 
 function collectDynamicModuleBlockers(code: string): string[] {
@@ -521,7 +551,8 @@ export function analyzePluginCompatibility(code: string, manifest?: { isDesktopO
   const moduleImports = collectModuleImports(code);
   const nodeModules = collectNodeModules(moduleImports);
   const supportedModules = collectSupportedModules(moduleImports);
-  const unsupportedModules = collectUnsupportedModules(moduleImports, supportedModules);
+  const bundledModules = collectBundledModules(moduleImports);
+  const unsupportedModules = collectUnsupportedModules(moduleImports, supportedModules, bundledModules);
   const platformRequirements: PluginPlatformRequirements = {
     desktop: manifest?.isDesktopOnly === true,
     reasons: manifest?.isDesktopOnly === true
@@ -543,6 +574,7 @@ export function analyzePluginCompatibility(code: string, manifest?: { isDesktopO
     moduleImports,
     nodeModules,
     supportedModules,
+    bundledModules,
     unsupportedModules,
     platformRequirements,
     supportedApis: unique(supportedApis),

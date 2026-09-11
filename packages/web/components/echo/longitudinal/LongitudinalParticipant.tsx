@@ -1,61 +1,75 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import type { LongitudinalView } from "@geminilight/mindos/knowledge";
+import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useEchoDraft, clearEchoDrafts } from "../use-echo-draft";
-import { StudyTextField } from "../research/StudyFields";
-export default function LongitudinalParticipant({
-  id,
-  zh,
-}: {
-  id: string;
-  zh: boolean;
-}) {
-  const [view, setView] = useState<LongitudinalView | null>(null),
-    [busy, setBusy] = useState(false),
-    [error, setError] = useState(false),
-    [erase, setErase] = useState(false);
-  const base = "/api/study/longitudinal/" + id,
-    t = (en: string, cn: string) => (zh ? cn : en);
+import { NarrowPageShell } from "@/components/shared/ContentPageShell";
+import { cn } from "@/lib/utils";
+import { useEchoDraft, clearEchoDrafts, EchoDraftNotice } from "../use-echo-draft";
+import { StudyTextField, studyNote } from "../research/StudyFields";
+import { longitudinalCopy, type LongitudinalCopy } from "./longitudinal-copy";
+
+type ErrorCode = keyof LongitudinalCopy["participant"]["errors"];
+const stageOrder = ["before", "coaching", "after"] as const;
+const check = "mt-1 size-5 shrink-0 accent-[var(--amber)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+const summary = "min-h-11 cursor-pointer rounded py-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+function StageSteps({ current, labels, name }: { current: number; labels: readonly string[]; name: string }) {
+  return (
+    <ol className="grid grid-cols-3 gap-2" aria-label={name}>
+      {labels.map((label, index) => (
+        <li key={label} aria-current={index === current ? "step" : undefined}
+          className={cn("border-t-2 pt-2 text-xs leading-5 sm:text-sm", index === current ? "border-[var(--amber)] text-foreground" : index < current ? "border-[var(--amber)]/40 text-muted-foreground" : "border-border text-muted-foreground")}>
+          <span className="mr-1.5 font-mono text-xs">{index < current ? <Check size={12} className="inline" aria-hidden /> : "0" + (index + 1)}</span>{label}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+export default function LongitudinalParticipant({ id, zh }: { id: string; zh: boolean }) {
+  const p = longitudinalCopy[zh ? "zh" : "en"].participant;
+  const format = (value: string) => new Date(value).toLocaleString(zh ? "zh-CN" : "en-US");
+  const [view, setView] = useState<LongitudinalView | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [helping, setHelping] = useState(false);
+  const [error, setError] = useState<ErrorCode | "">("");
+  const [consented, setConsented] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
+  const [erase, setErase] = useState(false);
+  const [withdrawConfirmed, setWithdrawConfirmed] = useState(false);
+  const [lastAction, setLastAction] = useState("");
+  const base = "/api/study/longitudinal/" + id;
   const [draft, setDraft] = useEchoDraft(
     `${id}:${view?.id ?? "none"}:${view?.round ?? 0}:${view?.stage ?? view?.status ?? "none"}`,
     { answer: "", question: "", method: "", evidence: "" },
   );
-  const lock = useRef(false),
-    pending = useRef<{ key: string; body: unknown } | null>(null);
+  const lock = useRef(false);
+  const pending = useRef<{ key: string; body: unknown } | null>(null);
+  const invitation = useRef<string | null>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const stateKey = view ? `${view.status}:${view.round}:${view.stage ?? ""}` : "";
+  useEffect(() => { if (stateKey) heading.current?.focus(); }, [stateKey]);
+  useEffect(() => { setConfirmed(false); }, [stateKey]);
+
   async function call(url: string, method = "GET", body?: unknown) {
     if (lock.current) return;
-    lock.current = true;
-    setBusy(true);
-    setError(false);
+    lock.current = true; setBusy(true); setError("");
     try {
       const res = await fetch(url, {
-        method,
-        cache: "no-store",
-        signal: AbortSignal.timeout(method === "PATCH" ? 100000 : 20000),
-        ...(body
-          ? {
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(body),
-            }
-          : {}),
+        method, cache: "no-store", credentials: "same-origin",
+        signal: AbortSignal.timeout(method === "PATCH" ? 130000 : 20000),
+        ...(body ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {}),
       });
-      const data = await res.json();
-      if (!res.ok) throw Error();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setError((data.code in p.errors ? data.code : "storage") as ErrorCode); return; }
       setView(data.view);
       return data.view as LongitudinalView;
-    } catch {
-      setError(true);
-    } finally {
-      lock.current = false;
-      setBusy(false);
-    }
+    } catch { setError("storage"); }
+    finally { lock.current = false; setBusy(false); setHelping(false); }
   }
-  const invitation = useRef<string | null>(null);
   async function resume() {
-    const next = invitation.current
-      ? await call(base + "/session", "POST", { token: invitation.current })
-      : await call(base);
+    const next = invitation.current ? await call(base + "/session", "POST", { token: invitation.current }) : await call(base);
     if (next) invitation.current = null;
   }
   useEffect(() => {
@@ -65,287 +79,162 @@ export default function LongitudinalParticipant({
       invitation.current = token;
       void resume();
     } else void call(base);
-  }, [id]);
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
   async function send(action: string, extra: Record<string, unknown> = {}) {
     if (!view || busy) return;
-    const key = JSON.stringify({ action, ...extra });
-    if (pending.current?.key !== key)
-      pending.current = {
-        key,
-        body: {
-          action,
-          ...extra,
-          version: view.version,
-          requestId: crypto.randomUUID(),
-        },
-      };
+    const key = JSON.stringify({ action, ...extra, round: view.round, stage: view.stage });
+    if (pending.current?.key !== key) pending.current = { key, body: { action, ...extra, version: view.version, requestId: crypto.randomUUID() } };
+    if (action === "help") setHelping(true);
     const next = await call(base, "PATCH", pending.current.body);
     if (next) {
-      pending.current = null;
+      pending.current = null; setLastAction(action);
       if (action === "help") setDraft({ ...draft, question: "" });
       else setDraft({ answer: "", question: "", method: "", evidence: "" });
       if (action === "withdraw") clearEchoDrafts(id + ":");
     }
   }
+
+  const stageIndex = view?.stageIndex ?? (view?.stage ? stageOrder.indexOf(view.stage) : 0);
+  const help = view?.help;
+  const helpPending = !!view?.runs.some((run) => run.status === "pending");
+  const helpExhausted = !!help && (help.attempts >= help.maxAttempts || help.succeeded >= help.maxSucceeded);
+  const canWithdraw = !!view && view.status !== "withdrawn" && view.status !== "consent";
+
   return (
-    <main className="mx-auto max-w-2xl space-y-5 px-4 py-8">
-      <h1 className="font-display text-2xl">
-        {view?.title ?? t("Study participation", "研究参与")}
-      </h1>
+    <NarrowPageShell as="main" aria-labelledby="longitudinal-title" className="min-h-[calc(100dvh-var(--app-titlebar-h))] space-y-7">
+      <header className="space-y-3">
+        <p className={studyNote}>MindOS</p>
+        <h1 id="longitudinal-title" ref={heading} tabIndex={-1} className="rounded font-display text-3xl break-words focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          {view?.title ?? p.title}
+        </h1>
+        {view && view.status !== "consent" && view.status !== "withdrawn" ? <p className={studyNote}>{p.roundOf(view.round + 1, view.roundCount)}</p> : null}
+      </header>
+      {busy ? <p role="status" className={studyNote}>{helping ? p.asking : null}</p> : null}
       {error ? (
-        <p role="alert" className="text-sm text-error">
-          {t(
-            "Could not complete the request. Input is preserved. Retry or check saved progress.",
-            "请求未完成，输入已保留。可重试或核对已保存进度。",
-          )}
-        </p>
+        <div role="alert" className="space-y-3 rounded-lg border border-error p-4">
+          <p className="text-sm leading-7">{p.errors[error]}</p>
+          <Button variant="outline" className="min-h-11" disabled={busy} onClick={() => void resume()}>{p.check}</Button>
+        </div>
       ) : null}
-      <Button
-        className="min-h-11 h-auto whitespace-normal"
-        variant="outline"
-        disabled={busy}
-        onClick={resume}
-      >
-        {t("Check saved progress", "核对已保存进度")}
-      </Button>
-      {!view ? (
-        <p className="text-sm">
-          {t(
-            "Open your private participant invitation to begin.",
-            "请使用你的私有参与链接进入。",
-          )}
-        </p>
-      ) : (
-        <>
-          <p className="text-sm text-muted-foreground">
-            {t("Round", "轮次")} {view.round + 1}/{view.roundCount}
-          </p>
-          {view.status === "consent" ? (
-            <>
-              <p className="whitespace-pre-wrap text-sm leading-6">
-                {view.consent}
-              </p>
-              <p className="whitespace-pre-wrap text-sm leading-6">
-                {view.withdrawal}
-              </p>
-              <Button
-                className="min-h-11 h-auto whitespace-normal"
-                disabled={busy}
-                onClick={() => send("consent")}
-              >
-                {t("I agree and begin", "我同意并开始")}
-              </Button>
-            </>
-          ) : null}
-          {view.status === "answering" ? (
-            <>
-              <h2 className="font-display text-xl">
-                {view.stage === "before"
-                  ? t("Independent judgment", "独立判断")
-                  : view.stage === "coaching"
-                    ? t("Work with Agent help", "与 Agent 协作")
-                    : t("Independent transfer", "独立迁移")}
-              </h2>
-              <p className="whitespace-pre-wrap leading-7">{view.task}</p>
-              {view.stage === "coaching" ? (
-                <div className="space-y-4">
-                  <details>
-                    <summary className="min-h-11 cursor-pointer py-3 text-sm">
-                      {t("Method used for this round", "本轮使用的方法")}
-                    </summary>
-                    <p className="whitespace-pre-wrap text-sm">{view.method}</p>
-                  </details>
-                  {view.runs.map((run) => (
-                    <div
-                      key={run.id}
-                      className="space-y-2 rounded-lg border border-border p-4"
-                    >
-                      <p className="text-sm whitespace-pre-wrap">
-                        {run.question}
-                      </p>
-                      <p className="text-sm whitespace-pre-wrap leading-6">
-                        {run.output ??
-                          (run.status === "pending"
-                            ? t("Working…", "正在处理…")
-                            : t(
-                                "No complete reply. You can ask again or continue without help.",
-                                "未获得完整回复，可以再次提问或继续作答。",
-                              ))}
-                      </p>
-                    </div>
-                  ))}
-                  <StudyTextField
-                    name="help-question"
-                    label={t("Question for the Agent", "向 Agent 提问")}
-                    value={draft.question}
-                    max={2000}
-                    multiline
-                    onChange={(question) => setDraft({ ...draft, question })}
-                  />
-                  <Button
-                    className="min-h-11 h-auto whitespace-normal"
-                    disabled={
-                      busy ||
-                      !draft.question.trim() ||
-                      view.runs.length >= 4 ||
-                      view.runs.filter((x) => x.status === "succeeded")
-                        .length >= 2
-                    }
-                    variant="outline"
-                    onClick={() => send("help", { question: draft.question })}
-                  >
-                    {t("Ask for help", "请求帮助")}
-                  </Button>
-                </div>
+      {!view ? <p className="text-sm leading-7">{p.missingLink}</p> : null}
+
+      {view?.status === "consent" ? (
+        <section className="space-y-5">
+          <p className="whitespace-pre-wrap break-words leading-7">{view.consent}</p>
+          <p className={studyNote + " whitespace-pre-wrap break-words"}>{view.withdrawal}</p>
+          <label className="flex min-h-11 cursor-pointer items-start gap-3 py-2 text-sm leading-6">
+            <input type="checkbox" name="consent" className={check} checked={consented} disabled={busy} onChange={(e) => setConsented(e.target.checked)} />
+            <span>{p.consentCheck}</span>
+          </label>
+          <Button className="min-h-11" disabled={busy || !consented} onClick={() => void send("consent")}>{p.begin}</Button>
+        </section>
+      ) : null}
+
+      {view?.status === "answering" && view.stage ? (
+        <section className="space-y-6">
+          <StageSteps current={stageIndex} labels={p.stages} name={p.roundOf(view.round + 1, view.roundCount)} />
+          <div className="space-y-2">
+            <h2 className="font-display text-xl">{p.stages[stageIndex]}</h2>
+            <p className={studyNote}>{p.stageHints[stageIndex]}</p>
+          </div>
+          {lastAction === "answer" ? <p role="status" className={studyNote}>{p.locked}</p> : null}
+          <div className="space-y-2">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{p.task}</p>
+            <p className="whitespace-pre-wrap break-words rounded-lg bg-muted/25 p-4 leading-7">{view.task}</p>
+          </div>
+          {view.stage === "coaching" ? (
+            <section className="space-y-4 border-y border-border py-5" aria-label={p.help}>
+              {view.previousAnswer ? (
+                <details><summary className={summary}>{p.previousAnswer}</summary><p className="whitespace-pre-wrap break-words pb-2 text-sm leading-6">{view.previousAnswer}</p></details>
               ) : null}
-              <StudyTextField
-                name="independent-answer"
-                label={t("Your answer", "你的作答")}
-                value={draft.answer}
-                max={4000}
-                multiline
-                onChange={(answer) => setDraft({ ...draft, answer })}
-              />
-              <p className="text-xs text-muted-foreground">
-                {t(
-                  "Unsubmitted input stays on this device for 7 days. Submitting locks this answer.",
-                  "未提交输入在本机保留 7 天。提交后本阶段作答将被锁定。",
-                )}
-              </p>
-              <Button
-                className="min-h-11 h-auto whitespace-normal"
-                disabled={busy || !draft.answer.trim()}
-                onClick={() => send("answer", { answer: draft.answer })}
-              >
-                {t("Submit and continue", "提交并继续")}
-              </Button>
-            </>
-          ) : null}
-          {view.status === "revision" ? (
-            <>
-              <h2 className="font-display text-xl">
-                {t("Reflect on the method", "回看本轮方法")}
-              </h2>
-              {view.updateAllowed ? (
-                <>
-                  <StudyTextField
-                    name="revised-method"
-                    label={t("Revised method", "修订后的方法")}
-                    value={draft.method}
-                    max={4000}
-                    multiline
-                    onChange={(method) => setDraft({ ...draft, method })}
-                  />
-                  <StudyTextField
-                    name="revision-evidence"
-                    label={t(
-                      "Evidence and reason for the change",
-                      "修改依据与理由",
-                    )}
-                    value={draft.evidence}
-                    max={4000}
-                    multiline
-                    onChange={(evidence) => setDraft({ ...draft, evidence })}
-                  />
-                  <Button
-                    className="min-h-11 h-auto whitespace-normal"
-                    disabled={
-                      busy || !draft.method.trim() || !draft.evidence.trim()
-                    }
-                    onClick={() =>
-                      send("revise", {
-                        method: draft.method,
-                        evidence: draft.evidence,
-                      })
-                    }
-                  >
-                    {t("Submit for review", "提交审核")}
-                  </Button>
-                </>
+              {view.method ? (
+                <details><summary className={summary}>{p.method}</summary><p className="whitespace-pre-wrap break-words pb-2 text-sm leading-6">{view.method}</p></details>
+              ) : null}
+              <h3 className="font-display text-lg">{p.help}</h3>
+              <p className={studyNote}>{p.helpNote}</p>
+              {help ? <p className={studyNote} aria-live="polite">{p.helpBudget(help.succeeded, help.maxSucceeded, help.attempts, help.maxAttempts)}</p> : null}
+              {view.runs.map((run, index) => (
+                <article key={run.id} className="space-y-2 border-l-2 border-border pl-4">
+                  <p className="whitespace-pre-wrap break-words text-sm leading-6">{index + 1}. {run.question}</p>
+                  {run.output ? <p className="whitespace-pre-wrap break-words leading-7">{run.output}</p>
+                    : <p role="status" className={studyNote}>{p.runState[run.status === "pending" ? "pending" : run.status === "interrupted" ? "interrupted" : "failed"]}</p>}
+                </article>
+              ))}
+              {helpExhausted ? <p className={studyNote}>{p.helpExhausted}</p> : helpPending ? (
+                <div className="space-y-3"><p className={studyNote}>{p.helpPending}</p><Button variant="outline" className="min-h-11" disabled={busy} onClick={() => void resume()}>{p.check}</Button></div>
               ) : (
-                <p className="text-sm">
-                  {t(
-                    "This round has no revision window under the frozen protocol.",
-                    "冻结协议规定，本轮不开放修订。",
-                  )}
-                </p>
+                <>
+                  <StudyTextField name="help-question" label={p.question} value={draft.question} max={2000} multiline onChange={(question) => setDraft({ ...draft, question })} />
+                  <Button variant="outline" className="min-h-11 h-auto whitespace-normal" disabled={busy || !draft.question.trim()} onClick={() => void send("help", { question: draft.question })}>{p.ask}</Button>
+                </>
               )}
-              <Button
-                className="min-h-11 h-auto whitespace-normal"
-                variant="outline"
-                disabled={busy}
-                onClick={() => send("keep")}
-              >
-                {t("Keep the current method", "保留当前方法")}
-              </Button>
-            </>
+            </section>
           ) : null}
-          {view.status === "review" ? (
-            <p role="status">
-              {t(
-                "Your revision is saved and awaiting review.",
-                "修订已保存，等待审核。",
-              )}
-            </p>
-          ) : null}
-          {view.status === "waiting" ? (
-            <p role="status">
-              {t("The next round opens at", "下一轮开放时间")}{" "}
-              {new Date(view.dueAt!).toLocaleString(zh ? "zh-CN" : "en-US")}
-            </p>
-          ) : null}
-          {view.status === "ready" ? (
-            <Button
-              className="min-h-11 h-auto whitespace-normal"
-              disabled={busy}
-              onClick={() => send("continue")}
-            >
-              {t("Start next round", "开始下一轮")}
-            </Button>
-          ) : null}
-          {view.status === "complete" ? (
-            <p role="status">
-              {t(
-                "All rounds are complete. Thank you.",
-                "所有轮次已完成，谢谢。",
-              )}
-            </p>
-          ) : null}
-          {view.status === "withdrawn" ? (
-            <p role="status">{t("You have withdrawn.", "你已退出研究。")}</p>
-          ) : (
-            <details className="border-t border-border pt-4">
-              <summary className="min-h-11 cursor-pointer py-3 text-sm">
-                {t("Withdraw from this study", "退出本研究")}
-              </summary>
-              <p className="whitespace-pre-wrap text-sm">{view.withdrawal}</p>
-              <label className="flex min-h-11 items-center gap-3 text-sm">
-                <input
-                  type="checkbox"
-                  className="size-5 shrink-0 accent-[var(--amber)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  checked={erase}
-                  onChange={(e) => setErase(e.target.checked)}
-                />
-                {t(
-                  "Also erase my answers, methods and replies",
-                  "同时删除我的作答、方法与回复",
-                )}
+          <form onSubmit={(e) => { e.preventDefault(); if (!busy && confirmed && draft.answer.trim() && !helpPending) void send("answer", { answer: draft.answer }); }}>
+            <fieldset disabled={busy || helpPending} className="space-y-4">
+              <StudyTextField name="independent-answer" label={p.answer} value={draft.answer} max={4000} multiline onChange={(answer) => setDraft({ ...draft, answer })} />
+              <EchoDraftNotice />
+              <label className="flex min-h-11 cursor-pointer items-start gap-3 py-2 text-sm leading-6">
+                <input type="checkbox" name="confirmAnswer" className={check} checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} />
+                <span>{p.confirm}</span>
               </label>
-              <Button
-                className="min-h-11 h-auto whitespace-normal"
-                variant="outline"
-                disabled={busy}
-                onClick={() => {
-                  if (confirm(t("Withdraw now?", "确认退出？")))
-                    void send("withdraw", { erase });
-                }}
-              >
-                {t("Confirm withdrawal", "确认退出")}
-              </Button>
-            </details>
+              <Button type="submit" className="min-h-11 h-auto whitespace-normal" disabled={busy || helpPending || !confirmed || !draft.answer.trim()}>{p.submit}</Button>
+            </fieldset>
+          </form>
+        </section>
+      ) : null}
+
+      {view?.status === "revision" ? (
+        <section className="space-y-5">
+          <h2 className="font-display text-xl">{p.reflect}</h2>
+          <p className={studyNote}>{p.reflectHint}</p>
+          {view.method ? <div className="space-y-2"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{p.currentMethod}</p><p className="whitespace-pre-wrap break-words rounded-lg bg-muted/25 p-4 text-sm leading-6">{view.method}</p></div> : null}
+          {view.updateAllowed ? (
+            <form onSubmit={(e) => { e.preventDefault(); if (!busy && draft.method.trim() && draft.evidence.trim()) void send("revise", { method: draft.method, evidence: draft.evidence }); }}>
+              <fieldset disabled={busy} className="space-y-4">
+                <StudyTextField name="revised-method" label={p.revisedMethod} value={draft.method} max={4000} multiline onChange={(method) => setDraft({ ...draft, method })} />
+                <StudyTextField name="revision-evidence" label={p.revisionEvidence} value={draft.evidence} max={4000} multiline onChange={(evidence) => setDraft({ ...draft, evidence })} />
+                <EchoDraftNotice />
+                <div className="flex flex-wrap gap-3">
+                  <Button type="submit" className="min-h-11 h-auto whitespace-normal" disabled={busy || !draft.method.trim() || !draft.evidence.trim()}>{p.submitRevision}</Button>
+                  <Button type="button" variant="outline" className="min-h-11 h-auto whitespace-normal" disabled={busy} onClick={() => void send("keep")}>{p.keep}</Button>
+                </div>
+              </fieldset>
+            </form>
+          ) : (
+            <><p className="text-sm leading-6">{p.noWindow}</p><Button variant="outline" className="min-h-11 h-auto whitespace-normal" disabled={busy} onClick={() => void send("keep")}>{p.keep}</Button></>
           )}
-        </>
-      )}
-    </main>
+        </section>
+      ) : null}
+
+      {view?.status === "review" || view?.status === "waiting" || view?.status === "ready" ? (
+        <section className="space-y-4">
+          {view.status === "review" ? <p role="status" className="leading-7">{p.review}</p> : null}
+          {view.status === "waiting" ? <p role="status" className="leading-7">{p.waiting} <time dateTime={view.dueAt}>{format(view.dueAt!)}</time></p> : null}
+          {view.status === "ready" ? <p role="status" className="leading-7">{p.ready}</p> : null}
+          {view.revision && view.revision.decision !== "pending" ? <p className="text-sm leading-6">{p.decision[view.revision.decision]}{view.revision.reason ? ` ${view.revision.reason}` : ""}</p> : null}
+          {view.revision ? <details><summary className={summary}>{p.yourRevision}</summary><p className="whitespace-pre-wrap break-words pb-2 text-sm leading-6">{view.revision.method}</p><p className={studyNote + " whitespace-pre-wrap break-words pb-2"}>{view.revision.evidence}</p></details> : null}
+          <div className="flex flex-wrap gap-3">
+            {view.status === "ready" ? <Button className="min-h-11" disabled={busy} onClick={() => void send("continue")}>{p.next}</Button> : null}
+            <Button variant="outline" className="min-h-11" disabled={busy} onClick={() => void resume()}>{p.check}</Button>
+          </div>
+        </section>
+      ) : null}
+
+      {view?.status === "complete" ? <section className="space-y-2"><h2 className="font-display text-xl">{p.complete}</h2><p className={studyNote}>{p.completeNote}</p></section> : null}
+      {view?.status === "withdrawn" ? <p role="status" className="leading-7">{p.withdrawn}</p> : null}
+
+      {canWithdraw ? (
+        <details className="border-t border-border pt-4">
+          <summary className={summary}>{p.withdraw}</summary>
+          <div className="space-y-3 pb-2">
+            <p className={studyNote + " whitespace-pre-wrap break-words"}>{view!.withdrawal}</p>
+            <label className="flex min-h-11 cursor-pointer items-start gap-3 py-2 text-sm leading-6"><input type="checkbox" name="erase" className={check} checked={erase} disabled={busy} onChange={(e) => { setErase(e.target.checked); setWithdrawConfirmed(false); }} /><span>{p.erase}</span></label>
+            <label className="flex min-h-11 cursor-pointer items-start gap-3 py-2 text-sm leading-6"><input type="checkbox" name="confirmWithdrawal" className={check} checked={withdrawConfirmed} disabled={busy} onChange={(e) => setWithdrawConfirmed(e.target.checked)} /><span>{p.withdrawConfirm}</span></label>
+            <Button variant="outline" className="min-h-11 h-auto whitespace-normal" disabled={busy || !withdrawConfirmed} onClick={() => void send("withdraw", { erase })}>{p.confirmWithdraw}</Button>
+          </div>
+        </details>
+      ) : null}
+    </NarrowPageShell>
   );
 }

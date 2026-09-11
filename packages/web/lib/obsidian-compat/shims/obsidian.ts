@@ -17,7 +17,9 @@ import { getActiveObsidianRuntimeHost } from '../runtime';
 import { normalizeObsidianTag, parseFrontMatterTagValues } from './tags';
 import type { CachedMetadata, RequestUrlParam, RequestUrlResponse, RequestUrlResponsePromise, SecretStorage, TFile, WorkspaceLeaf } from '../types';
 import { moment } from './moment';
-import { getFrontMatterInfo } from './frontmatter';
+import { getFrontMatterInfo, parseFrontMatterEntry, parseFrontMatterStringArray } from './frontmatter';
+import { editorEditorField, editorInfoField, editorLivePreviewField } from './editor-fields';
+import { resolveSubpath } from './subpath';
 import { debounce } from '../debounce';
 export { debounce } from '../debounce';
 
@@ -1111,6 +1113,12 @@ export function createObsidianModule() {
     Scope,
     parseFrontMatterAliases,
     parseFrontMatterTags,
+    parseFrontMatterEntry,
+    parseFrontMatterStringArray,
+    resolveSubpath,
+    editorInfoField,
+    editorEditorField,
+    editorLivePreviewField,
     getAllTags,
     getLanguage,
     apiVersion,

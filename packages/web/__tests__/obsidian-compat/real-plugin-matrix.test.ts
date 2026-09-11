@@ -122,6 +122,33 @@ describe('Obsidian real plugin matrix', () => {
     expect(matrix.failures).toEqual([{ id: 'oversized-plugin', stage: 'preflight', error: 'main.js is too large' }]);
   });
 
+  it('carries bundled third-party modules without treating them as a host capability gap', () => {
+    const matrix = buildObsidianRealPluginMatrix({
+      generatedAt: '2026-06-24T00:00:00.000Z',
+      targetSet: 'test-p0',
+      sourcePolicy: 'test-source-policy',
+      sources: testSources(),
+      plugins: [
+        matrixItem({
+          id: 'bundled-plugin',
+          name: 'Bundled Plugin',
+          supportKind: 'limited',
+          compatibilityLevel: 'partial',
+          bundledModules: ['ajv/dist/runtime/equal', 'lodash'],
+          gate: gateReport({ status: 'limited' }),
+          smoke: { outcome: 'loaded', stage: 'load', runtime: runtimeSummary({ commands: 0 }) },
+          downloads: 5,
+        }),
+      ],
+    });
+
+    const row = matrix.plugins[0];
+    expect(row.compatibility.bundledModules).toEqual(['ajv/dist/runtime/equal', 'lodash']);
+    expect(row.compatibility.unsupportedModules).toEqual([]);
+    expect(row.compatibility.blockers).toEqual([]);
+    expect(row.surfacePolicies).toEqual([]);
+  });
+
   it('renders a stable Markdown report with blockers, failures, and table columns', () => {
     const matrix = buildObsidianRealPluginMatrix({
       generatedAt: '2026-06-24T00:00:00.000Z',
@@ -189,6 +216,7 @@ function matrixItem(options: {
   obsidianApis?: string[];
   unsupportedApis?: string[];
   unsupportedModules?: string[];
+  bundledModules?: string[];
 }): ObsidianRealPluginMatrixInputItem {
   return {
     target: {
@@ -215,6 +243,7 @@ function matrixItem(options: {
       obsidianApis: options.obsidianApis,
       unsupportedApis: options.unsupportedApis,
       unsupportedModules: options.unsupportedModules,
+      bundledModules: options.bundledModules,
     }),
     capabilityGate: options.gate,
     smoke: options.smoke,
@@ -230,11 +259,13 @@ function preflight(options: {
   obsidianApis?: string[];
   unsupportedApis?: string[];
   unsupportedModules?: string[];
+  bundledModules?: string[];
 }): ObsidianCommunityPluginPreflight {
   const blocked = options.compatibilityLevel === 'blocked';
   const obsidianApis = options.obsidianApis ?? [];
   const unsupportedApis = options.unsupportedApis ?? [];
   const unsupportedModules = options.unsupportedModules ?? [];
+  const bundledModules = options.bundledModules ?? [];
   const coverage = buildObsidianCapabilityCoverage({
     obsidianApis,
     moduleImports: [],
@@ -290,6 +321,7 @@ function preflight(options: {
         nodeModules: [],
         supportedModules: [],
         unsupportedModules,
+        bundledModules,
         supportedApis: [],
         partialApis: [],
         unsupportedApis,

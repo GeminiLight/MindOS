@@ -144,6 +144,8 @@ export interface ObsidianRealPluginMatrixRow {
     unsupportedApiList: string[];
     blockers: string[];
     unsupportedModules: string[];
+    /** Third-party bundler leftovers the host never provides; not a capability gap. */
+    bundledModules?: string[];
     runtimeTier: PluginRuntimeTierRequirement;
   };
   capabilityGate: {
@@ -421,6 +423,7 @@ function toMatrixRow(input: ObsidianRealPluginMatrixInputItem): ObsidianRealPlug
       unsupportedApiList: [...report.unsupportedApis],
       blockers: report.blockers,
       unsupportedModules: report.unsupportedModules,
+      bundledModules: report.bundledModules ?? [],
       runtimeTier: report.runtimeTier ?? classifyPluginRuntimeTier(report),
     },
     capabilityGate: {

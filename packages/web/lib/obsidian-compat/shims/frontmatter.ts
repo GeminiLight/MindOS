@@ -28,3 +28,51 @@ export function getFrontMatterInfo(content: string): FrontMatterInfo {
     contentStart: closing.index + closing[0].length,
   };
 }
+
+/**
+ * Look up a frontmatter entry by exact key or by the first key matching a
+ * RegExp, in declaration order. Global regexes are treated as stateless: the
+ * `lastIndex` cursor is reset before each key test so repeated calls stay
+ * deterministic.
+ */
+export function parseFrontMatterEntry(
+  frontmatter: Record<string, unknown> | null | undefined,
+  key: string | RegExp,
+): unknown {
+  if (!frontmatter) return null;
+  if (typeof key === 'string') {
+    if (!Object.prototype.hasOwnProperty.call(frontmatter, key)) return null;
+    const value = frontmatter[key];
+    return value === undefined ? null : value;
+  }
+  if (key instanceof RegExp) {
+    for (const name of Object.keys(frontmatter)) {
+      key.lastIndex = 0;
+      if (key.test(name)) {
+        const value = frontmatter[name];
+        return value === undefined ? null : value;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Read a frontmatter entry as a string array: array values are stringified
+ * entry by entry, a plain string wraps once (no comma splitting), and any
+ * other value reads as null — mirroring `parseFrontMatterAliases`.
+ */
+export function parseFrontMatterStringArray(
+  frontmatter: Record<string, unknown> | null | undefined,
+  key: string | RegExp,
+): string[] | null {
+  const value = parseFrontMatterEntry(frontmatter, key);
+  if (value === null || value === undefined) return null;
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item));
+  }
+  if (typeof value === 'string') {
+    return [value];
+  }
+  return null;
+}

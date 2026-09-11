@@ -439,12 +439,11 @@ describe('compatibility report', () => {
     expect(getCompatibilityLevel(report)).toBe('blocked');
   });
 
-  it('blocks every non-Obsidian literal module import the runtime cannot resolve', () => {
+  it('blocks relative module imports the runtime cannot resolve', () => {
     const report = analyzePluginCompatibility(`
       import preset from './preset.json';
       const { Plugin } = require('obsidian');
       const helper = require('./helper');
-      const lodash = require('lodash');
       async function loadChunk() {
         return import('./chunk.js');
       }
@@ -455,19 +454,78 @@ describe('compatibility report', () => {
       './chunk.js',
       './helper',
       './preset.json',
-      'lodash',
     ]));
     expect(report.unsupportedModules).toEqual(expect.arrayContaining([
       './chunk.js',
       './helper',
       './preset.json',
-      'lodash',
     ]));
     expect(report.nodeModules).toEqual([]);
     expect(report.blockers).toEqual(expect.arrayContaining([
       expect.stringContaining('unsupported runtime module: ./helper'),
-      expect.stringContaining('unsupported runtime module: lodash'),
     ]));
     expect(getCompatibilityLevel(report)).toBe('blocked');
+  });
+
+  it('classifies third-party bundler leftovers as bundled modules instead of host capability gaps', () => {
+    const report = analyzePluginCompatibility(`
+      const { Plugin } = require('obsidian');
+      const equal = require('ajv/dist/runtime/equal');
+      const formats = require('ajv-formats/dist/formats');
+      const lodash = require('lodash');
+      module.exports = class BundledPlugin extends Plugin {}
+    `);
+
+    expect(report.bundledModules).toEqual(expect.arrayContaining([
+      'ajv/dist/runtime/equal',
+      'ajv-formats/dist/formats',
+      'lodash',
+    ]));
+    expect(report.unsupportedModules).toEqual([]);
+    expect(report.blockers).toEqual([]);
+    expect(report.runtimeTier?.unknownModules).toEqual([]);
+    expect(getCompatibilityLevel(report)).toBe('compatible');
+  });
+
+  it('still routes host-provided and native modules through unsupportedModules', () => {
+    const report = analyzePluginCompatibility(`
+      const { Plugin } = require('obsidian');
+      const fs = require('fs');
+      const cmView = require('@codemirror/view');
+      const remote = require('electron');
+      module.exports = class RoutedPlugin extends Plugin {}
+    `);
+
+    expect(report.unsupportedModules).toEqual(expect.arrayContaining(['fs', '@codemirror/view', 'electron']));
+    expect(report.bundledModules).toEqual([]);
+    expect(report.runtimeTier?.required).toBe('native');
+  });
+
+  it('keeps namespace alias member access limited to exports declared by obsidian.d.ts', () => {
+    const report = analyzePluginCompatibility(`
+      const t = require('obsidian');
+      const collected = [];
+      function scoped() {
+        const t = [];
+        t.push('item');
+        t.length;
+        return t;
+      }
+      module.exports = class AliasPlugin extends t.Plugin {
+        async onload() {
+          new t.Notice('loaded');
+          t.SettingTab;
+          t.default;
+          collected.push(scoped());
+        }
+      }
+    `);
+
+    expect(report.obsidianApis).toEqual(expect.arrayContaining(['Plugin', 'Notice', 'SettingTab']));
+    expect(report.obsidianApis).not.toContain('push');
+    expect(report.obsidianApis).not.toContain('length');
+    expect(report.obsidianApis).not.toContain('default');
+    expect(report.unsupportedApis).toContain('SettingTab');
+    expect(report.unsupportedApis).not.toContain('push');
   });
 });

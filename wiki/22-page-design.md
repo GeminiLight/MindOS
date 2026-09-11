@@ -105,6 +105,9 @@ Drawer (triggered by ☰):
 | `/help` | 帮助 | `app/help/page.tsx` | Activity Bar 底部 `?` 入口 |
 | `/echo` | 回响入口 | `app/echo/page.tsx` | Echo 主页，导航到各 segment |
 | `/echo/[segment]` | 回响内容页 | `app/echo/[segment]/page.tsx` | 与你有关 / 未完待续 / 每日回响 / 历史的你 / 心向生长；见 `spec-echo-content-pages.md` |
+| `/echo/research` | 研究入口 | `components/echo/research/ResearchWorkspace.tsx` + `ResearchHub.tsx` | 两种研究设计、就绪检查、试跑清单与四阶段草稿；见 `spec-echo-study-pilot-readiness.md` |
+| `/echo/research/longitudinal` | 多轮研究工作区 | `components/echo/longitudinal/LongitudinalWorkspace.tsx` | 协议表单、研究看板、盲评工作包导出（owner 会话） |
+| `/study/longitudinal/[id]` | 多轮研究参与页 | `components/echo/longitudinal/LongitudinalParticipant.tsx` | 无知识库 shell；邀请 fragment 换 HttpOnly cookie |
 | `/agents` | 智能体总览 | `app/agents/page.tsx` | 总览 / Assistant / Agent / Skills & MCP / 频道五组 IA；旧 MCP / Skills / Network / Sessions / Activity query 仍作为兼容入口 |
 | `/agents/[agentKey]` | 智能体详情 | `app/agents/[agentKey]/page.tsx` | Skill 管理 + MCP 状态 + Runtime 诊断 |
 | `/studio` | Studio / 工作台总览 | `app/studio/page.tsx` | 工作台总览；汇总 Project、Apps、Automation、Context 四个工作面 |

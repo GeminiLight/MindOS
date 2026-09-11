@@ -20,6 +20,7 @@ import {
   mutate,
 } from "./storage.js";
 import {
+  HELP_LIMITS,
   protocolSchema,
   requestId,
   commandSchema,
@@ -302,8 +303,9 @@ export function beginLongitudinalHelp(
     }
     if (
       p.version !== c.data.version ||
-      round.runs.length >= 4 ||
-      round.runs.filter((x) => x.status === "succeeded").length >= 2 ||
+      round.runs.length >= HELP_LIMITS.maxAttempts ||
+      round.runs.filter((x) => x.status === "succeeded").length >=
+        HELP_LIMITS.maxSucceeded ||
       round.runs.some(
         (x) => x.status === "pending" && Date.parse(x.deadline) > now.getTime(),
       )
@@ -418,21 +420,202 @@ export function exportLongitudinal(root: string, id: string) {
     ),
   };
 }
-export function listLongitudinal(root: string) {
-  const studies: { id: string; title: string; participants: number }[] = [];
+function participantProgress(
+  r: LongitudinalRecord,
+  p: LongitudinalParticipant,
+  now: Date,
+) {
+  const view = participantView(r, p, now);
+  const runs = p.rounds.flatMap((x) => x.runs);
+  const moments = [
+    p.consentAt,
+    p.withdrawnAt,
+    ...p.rounds.flatMap((x) => [
+      x.startedAt,
+      x.keptAt,
+      x.revision?.submittedAt,
+      x.revision?.reviewedAt,
+      ...x.answers.map((a) => a.at),
+      ...x.runs.map((run) => run.completedAt ?? run.startedAt),
+    ]),
+  ].filter((v): v is string => !!v);
+  return {
+    id: p.id,
+    strategy: p.strategy,
+    status: view.status,
+    round: view.round,
+    roundCount: view.roundCount,
+    stage: view.stage,
+    dueAt: p.rounds.at(-1)?.dueAt,
+    expiresAt: p.expiresAt,
+    consentAt: p.consentAt,
+    withdrawnAt: p.withdrawnAt,
+    erased: !!p.erasedAt,
+    answers: p.rounds.reduce((n, x) => n + x.answers.length, 0),
+    revisionPending:
+      !p.withdrawnAt &&
+      p.rounds.some((x) => x.revision?.decision === "pending"),
+    helpSucceeded: runs.filter((x) => x.status === "succeeded").length,
+    helpFailed: runs.filter((x) => x.status === "failed").length,
+    helpPending: runs.filter(
+      (x) => x.status === "pending" && Date.parse(x.deadline) > now.getTime(),
+    ).length,
+    lastActivityAt: moments.sort().at(-1),
+  };
+}
+export type LongitudinalProgress = ReturnType<typeof participantProgress>;
+function summarize(r: LongitudinalRecord, progress: LongitudinalProgress[]) {
+  const count = (fn: (p: LongitudinalProgress) => boolean) =>
+    progress.filter(fn).length;
+  return {
+    invited: r.participants.length,
+    capacity: r.protocol.capacity,
+    consented: count((p) => !!p.consentAt),
+    active: count(
+      (p) => !!p.consentAt && !p.withdrawnAt && p.status !== "complete",
+    ),
+    complete: count((p) => p.status === "complete"),
+    withdrawn: count((p) => !!p.withdrawnAt),
+    pendingReviews: count((p) => p.revisionPending),
+    failedRuns: progress.reduce((n, p) => n + p.helpFailed, 0),
+    pendingRuns: progress.reduce((n, p) => n + p.helpPending, 0),
+  };
+}
+/** Researcher projection: the export plus per-participant status. Never served to participants. */
+export function adminLongitudinal(root: string, id: string, now = new Date()) {
+  const r = load(root, id);
+  const progress = r.participants.map((p) => participantProgress(r, p, now));
+  return {
+    study: exportLongitudinal(root, id),
+    progress,
+    summary: summarize(r, progress),
+  };
+}
+export type LongitudinalAdminView = ReturnType<typeof adminLongitudinal>;
+function packetEntries(r: LongitudinalRecord) {
+  const entries = [];
+  for (const p of r.participants) {
+    if (p.erasedAt) continue;
+    for (const [n, round] of p.rounds.entries())
+      for (const a of round.answers)
+        entries.push({
+          // Salted ordering hides enrollment order, which alternates strategies.
+          sort: createHmac("sha256", r.salt)
+            .update(`review-packet:v1:${p.id}:${n}:${a.stage}`)
+            .digest("hex"),
+          participantId: p.id,
+          strategy: p.strategy,
+          round: n + 1,
+          stage: a.stage,
+          task: r.protocol.rounds[n]![a.stage],
+          answer: a.answer,
+          reference: r.protocol.rounds[n]!.reference,
+          submittedAt: a.at,
+          methodFromRound: round.methodFromRound,
+          methodHash: round.methodHash,
+          withdrawn: !!p.withdrawnAt,
+        });
+  }
+  entries.sort((a, b) => a.sort.localeCompare(b.sort));
+  return entries.map((e, i) => ({
+    ...e,
+    code: "W" + String(i + 1).padStart(3, "0"),
+  }));
+}
+/** Numbered work items for independent scoring: task, answer and reference only. No identity, group or method text. */
+export function exportLongitudinalReviewPacket(root: string, id: string) {
+  const r = load(root, id);
+  return {
+    schemaVersion: 2 as const,
+    kind: "review-packet" as const,
+    studyId: r.id,
+    protocolHash: r.protocolHash,
+    title: r.protocol.title,
+    rubric: r.protocol.rubric,
+    roundCount: r.protocol.rounds.length,
+    generatedAt: new Date().toISOString(),
+    items: packetEntries(r).map((e) => ({
+      code: e.code,
+      round: e.round,
+      stage: e.stage,
+      task: e.task,
+      answer: e.answer,
+      reference: e.reference,
+    })),
+  };
+}
+export type LongitudinalReviewPacket = ReturnType<
+  typeof exportLongitudinalReviewPacket
+>;
+/** Researcher-only mapping from packet codes back to participants, groups and method versions. */
+export function exportLongitudinalReviewKey(root: string, id: string) {
+  const r = load(root, id);
+  return {
+    schemaVersion: 2 as const,
+    kind: "review-key" as const,
+    studyId: r.id,
+    protocolHash: r.protocolHash,
+    generatedAt: new Date().toISOString(),
+    items: packetEntries(r).map((e) => ({
+      code: e.code,
+      participantId: e.participantId,
+      strategy: e.strategy,
+      round: e.round,
+      stage: e.stage,
+      submittedAt: e.submittedAt,
+      methodFromRound: e.methodFromRound,
+      methodHash: e.methodHash,
+      withdrawn: e.withdrawn,
+    })),
+  };
+}
+export function listLongitudinal(root: string, now = new Date()) {
+  const studies: {
+    id: string;
+    title: string;
+    participants: number;
+    capacity: number;
+    consented: number;
+    active: number;
+    complete: number;
+    withdrawn: number;
+    pendingReviews: number;
+    rounds: number;
+    createdAt: string;
+    updatedAt: string;
+  }[] = [];
   let unavailableCount = 0;
   for (const n of privateRecordNames(root)) {
     if (!/^cohort-[a-f0-9]{24}\.json$/.test(n)) continue;
     try {
       const r = load(root, n.slice(0, -5));
+      const summary = summarize(
+        r,
+        r.participants.map((p) => participantProgress(r, p, now)),
+      );
       studies.push({
         id: r.id,
         title: r.protocol.title,
-        participants: r.participants.length,
+        participants: summary.invited,
+        capacity: summary.capacity,
+        consented: summary.consented,
+        active: summary.active,
+        complete: summary.complete,
+        withdrawn: summary.withdrawn,
+        pendingReviews: summary.pendingReviews,
+        rounds: r.protocol.rounds.length,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
       });
     } catch {
       unavailableCount++;
     }
   }
+  studies.sort(
+    (a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.id.localeCompare(b.id),
+  );
   return { studies, unavailableCount };
 }
+export type LongitudinalSummary = ReturnType<
+  typeof listLongitudinal
+>["studies"][number];

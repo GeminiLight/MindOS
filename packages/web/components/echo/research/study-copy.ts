@@ -1,6 +1,6 @@
 export const studyCopy = {
   en: {
-    title: 'Research preparation', lead: 'Prepare a question, comparison conditions and the evidence you will assess.',
+    title: 'Research', lead: 'Prepare a question, comparison conditions and the evidence you will assess. Choose a design, check readiness, then invite people you have consented in person.', draftsTitle: 'Four-stage study drafts',
     limit: 'For local preparation. Participant access supports workflow pilots; isolated chat can be enabled in a new protocol; independent reviewers use separate work packets. Validate materials and actual model execution before a study.',
     back: 'Human growth', all: 'All study drafts', create: 'New study draft', empty: 'No study materials yet', emptyHint: 'Start with the question. You can save incomplete materials and return later.',
     loading: 'Loading saved materials…', busy: 'Saving…', save: 'Save draft', saved: 'Saved locally', reviewPending: 'Review notes are saved when materials are frozen', reviewRecord: 'Freeze review record', copy: 'Copy materials to a new draft', copySuffix: ' — Copy', dirty: 'Unsaved changes',
@@ -17,7 +17,7 @@ export const studyCopy = {
     errors: { storage: 'Saving was not confirmed. Your text is still here; keep this page open and retry.', conflict: 'The saved version changed. Your text is still here. Reload the saved version only when you are ready to discard these edits.', invalid: 'Check the field lengths and number ranges, then try again.', 'not-found': 'This study is unavailable. Return to the study list.', unauthorized: 'Your session expired. Sign in again; keep this draft open until it is saved.', forbidden: 'Open research preparation from this MindOS instance to continue.' },
   },
   zh: {
-    title: '研究准备', lead: '先明确问题、比较条件，以及准备用什么证据判断结果。',
+    title: '研究', lead: '先明确问题、比较条件，以及准备用什么证据判断结果。选择研究设计，核对就绪状态，再邀请已当面同意的参与者。', draftsTitle: '四阶段研究草稿',
     limit: '用于本机准备材料。参与者入口支持流程试跑，新协议可启用独立聊天帮助，独立评审使用单独的工作包。正式研究前仍需验证材料和真实模型执行。',
     back: '人的成长', all: '全部研究草稿', create: '新建研究草稿', empty: '还没有研究材料', emptyHint: '从想检验的问题开始。没填完也能保存，之后再继续。',
     loading: '正在读取已保存的材料…', busy: '正在保存…', save: '保存草稿', saved: '已保存到本机', reviewPending: '核对说明将在冻结材料时保存', reviewRecord: '冻结核对记录', copy: '复制材料为新草稿', copySuffix: ' — 副本', dirty: '有未保存的修改',

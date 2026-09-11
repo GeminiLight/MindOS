@@ -1,14 +1,14 @@
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 import { NextRequest } from 'next/server';
-import { createStudy, getStudy, listStudies, getStudyReadiness, updateStudyDraft, freezeStudy, LearningError } from '@geminilight/mindos/knowledge';
+import { createStudy, getStudy, listStudies, getStudyReadiness, getStudyProgress, updateStudyDraft, freezeStudy, LearningError } from '@geminilight/mindos/knowledge';
 import { json, ownerBoundary, failure, body } from '@/lib/research-http';
 import { getMindRoot } from '@/lib/fs';
 
 function project(id: string) {
   const root = getMindRoot(); const study = getStudy(root, id);
   if (!study) throw new LearningError('not-found', 'Study not found.');
-  return { study, ...getStudyReadiness(root, id) };
+  return { study, ...getStudyReadiness(root, id), ...(study.status === 'frozen' ? { progress: getStudyProgress(root, id) } : {}) };
 }
 export async function GET(req: NextRequest) {
   try {

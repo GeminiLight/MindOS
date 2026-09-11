@@ -219,3 +219,16 @@ it('lists recoverable study summaries without returning materials and counts unr
   expect(list.unavailableCount).toBe(1);
   expect(JSON.stringify(list)).not.toMatch(/PRIVATE PROMPT|SECRET KEY|instructions|expectedRuntime|salt|allocation/);
 });
+
+import { getStudyProgress } from './index.js';
+it('summarizes researcher progress per participant without exposing answers or scoring keys', () => {
+  const study = frozen(); const one = enroll(study); const two = enroll(study, 'participant-two');
+  const opened = change(study.id, one, { action: 'open' }); change(study.id, opened, answer);
+  change(study.id, two, { action: 'withdraw', eraseData: true });
+  const progress = getStudyProgress(root, study.id, now);
+  expect(progress.summary).toEqual({ enrolled: 2, capacity: 8, active: 1, waiting: 0, complete: 0, withdrawn: 1, ratings: 0, failedRuns: 0 });
+  expect(progress.participants[0]).toMatchObject({ ordinal: 0, completedStages: 1, nextPhase: 'coaching', answered: 1, missing: 0, helpSucceeded: 0 });
+  expect(progress.participants[1]).toMatchObject({ ordinal: 1, status: 'withdrawn', erased: true });
+  expect(JSON.stringify(progress)).not.toMatch(/Synthetic answer|SECRET|PRIVATE|enrollmentHash/);
+  expect(() => getStudyProgress(root, 'study-' + '0'.repeat(24), now)).toThrow();
+});

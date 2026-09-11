@@ -53,3 +53,21 @@ it('bounds a stalled upload and cancels its stream without creating study data',
     expect((await pending).status).toBe(400); expect(cancelled).toBe(true);
   } finally { vi.useRealTimers(); }
 });
+import { createStudy, freezeStudy, issueStudyInvitation, readStudyAccess, useStudyAccess } from '@geminilight/mindos/knowledge';
+import { studyFields, changeDraft } from '@/components/echo/research/study-draft';
+import { testMindRoot } from '../setup';
+it('adds researcher progress to frozen studies only, without exposing answers or references', async () => {
+  let protocol = blankStudyProtocol('en');
+  for (const field of studyFields(protocol, 'en')) protocol = changeDraft(protocol, field.path, 'PRIVATE ' + field.path);
+  const draft = createStudy(testMindRoot, { requestId: 'progress-api', protocol });
+  expect((await (await GET(new NextRequest('http://localhost/api/echo/research?id=' + draft.id))).json()).progress).toBeUndefined();
+  const frozen = freezeStudy(testMindRoot, draft.id, { version: draft.version, confirmed: true, reviewedBy: 'owner', reviewNote: 'QA' });
+  const invitation = issueStudyInvitation(testMindRoot, frozen.id, { requestId: 'progress-invite', protocolHash: frozen.protocolHash, expiresAt: new Date(Date.now() + 86400000).toISOString() });
+  useStudyAccess(testMindRoot, frozen.id, invitation.token, { action: 'join', protocolHash: frozen.protocolHash, consentAccepted: true });
+  const joined = readStudyAccess(testMindRoot, frozen.id, invitation.token);
+  expect(joined.kind).toBe('participant');
+  const body = await (await GET(new NextRequest('http://localhost/api/echo/research?id=' + frozen.id))).json();
+  expect(body.progress.summary).toMatchObject({ enrolled: 1, capacity: 20, active: 1, complete: 0, withdrawn: 0 });
+  expect(body.progress.participants[0]).toMatchObject({ ordinal: 0, completedStages: 0, status: 'ready' });
+  expect(JSON.stringify(body.progress)).not.toContain('PRIVATE tasks');
+});

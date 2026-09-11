@@ -267,3 +267,89 @@ it("validates frozen reasoning-inclusive budgets without weakening old records",
  for(const maxOutputTokens of [1024,2048,4096]) expect(comparisonRuntime.safeParse({...r,maxOutputTokens}).success).toBe(true);
  for(const maxOutputTokens of [0,4097,1024.5,NaN]) expect(comparisonRuntime.safeParse({...r,maxOutputTokens}).success).toBe(false);
 });
+
+import {
+  adminLongitudinal,
+  exportLongitudinalReviewPacket,
+  exportLongitudinalReviewKey,
+} from "./index.js";
+it("shows the participant's own earlier answer and the help budget only during the assisted stage", () => {
+  const { s, token } = setup();
+  cmd(s.id, token, "consent");
+  let v = readLongitudinal(root, s.id, token);
+  expect(v.stage).toBe("before");
+  expect(v.previousAnswer).toBeUndefined();
+  expect(v.help).toBeUndefined();
+  v = cmd(s.id, token, "answer", { answer: "My first judgment" });
+  expect(v.stage).toBe("coaching");
+  expect(v.previousAnswer).toBe("My first judgment");
+  expect(v.help).toEqual({ attempts: 0, maxAttempts: 4, succeeded: 0, maxSucceeded: 2 });
+  const run = beginLongitudinalHelp(root, s.id, token, { version: v.version, requestId: "h1", question: "Why?" });
+  finishLongitudinalHelp(root, s.id, run.runId, { status: "failed", failure: "provider" });
+  v = readLongitudinal(root, s.id, token);
+  expect(v.help).toEqual({ attempts: 1, maxAttempts: 4, succeeded: 0, maxSucceeded: 2 });
+  expect(v.runs[0]).toMatchObject({ status: "failed", failure: "provider" });
+  v = cmd(s.id, token, "answer", { answer: "Joint answer" });
+  expect(v.stage).toBe("after");
+  expect(v.previousAnswer).toBeUndefined();
+  expect(v.help).toBeUndefined();
+  expect(v.method).toBeUndefined();
+  expect(JSON.stringify(v)).not.toMatch(/My first judgment|Why\?/);
+  v = cmd(s.id, token, "answer", { answer: "Transfer answer" });
+  expect(v.status).toBe("revision");
+  expect(v.method).toBe("Check evidence");
+});
+it("builds a blind review packet with stable codes and no allocation, method text or participant identity", () => {
+  const { s, token } = setup();
+  const other = issueLongitudinalAccess(root, s.id, { requestId: "other" });
+  round(s.id, token);
+  round(s.id, other.token);
+  const packet = exportLongitudinalReviewPacket(root, s.id);
+  expect(packet.items).toHaveLength(6);
+  expect(new Set(packet.items.map((i) => i.code)).size).toBe(6);
+  expect(packet.items.every((i) => /^W\d{3}$/.test(i.code))).toBe(true);
+  const text = JSON.stringify(packet);
+  expect(text).not.toMatch(/participant-|frozen|next-round|Check evidence|tokenHash|methodHash|salt|strategy/);
+  expect(text).toContain("SECRET RUBRIC 0");
+  expect(text).toContain("Independent answer");
+  expect(packet.rubric).toBe("Quality and limitations");
+  expect(exportLongitudinalReviewPacket(root, s.id).items.map((i) => i.code + i.answer)).toEqual(
+    packet.items.map((i) => i.code + i.answer),
+  );
+  const key = exportLongitudinalReviewKey(root, s.id);
+  expect(key.items).toHaveLength(6);
+  expect(key.items.every((k) => packet.items.some((p) => p.code === k.code))).toBe(true);
+  expect(key.items.map((k) => k.strategy).sort()).toEqual([
+    "frozen", "frozen", "frozen", "next-round", "next-round", "next-round",
+  ]);
+  const byCode = new Map(packet.items.map((i) => [i.code, i]));
+  for (const k of key.items) expect(byCode.get(k.code)).toMatchObject({ round: k.round, stage: k.stage });
+});
+it("keeps erased answers out of packets and summarizes researcher progress without leaking to participants", () => {
+  const { s, token } = setup();
+  const other = issueLongitudinalAccess(root, s.id, { requestId: "other" });
+  round(s.id, token);
+  cmd(s.id, other.token, "consent");
+  cmd(s.id, other.token, "answer", { answer: "Erase me" });
+  cmd(s.id, other.token, "withdraw", { erase: true });
+  const v = cmd(s.id, token, "revise", { method: "Check randomization", evidence: "Boundary" });
+  expect(JSON.stringify(exportLongitudinalReviewPacket(root, s.id))).not.toContain("Erase me");
+  expect(exportLongitudinalReviewKey(root, s.id).items).toHaveLength(3);
+  const admin = adminLongitudinal(root, s.id);
+  expect(admin.summary).toEqual({
+    invited: 2, capacity: 2, consented: 2, active: 1, complete: 0, withdrawn: 1, pendingReviews: 1, failedRuns: 0, pendingRuns: 0,
+  });
+  const me = admin.progress.find((p) => p.id === v.id)!;
+  expect(me).toMatchObject({ status: "review", round: 0, revisionPending: true });
+  expect(admin.progress.find((p) => p.id !== v.id)).toMatchObject({ status: "withdrawn", erased: true });
+  expect(admin.study.protocol.rubric).toBe("Quality and limitations");
+  const list = listLongitudinal(root).studies[0]!;
+  expect(list).toMatchObject({ participants: 2, capacity: 2, pendingReviews: 1, withdrawn: 1, complete: 0, rounds: 2 });
+  expect(typeof list.updatedAt).toBe("string");
+});
+it("refuses packets and admin views for unknown studies without creating files", () => {
+  expect(() => exportLongitudinalReviewPacket(root, "cohort-" + "0".repeat(24))).toThrow();
+  expect(() => adminLongitudinal(root, "cohort-" + "0".repeat(24))).toThrow();
+  expect(() => exportLongitudinalReviewKey(root, "not-a-study")).toThrow();
+  expect(listLongitudinal(root).studies).toHaveLength(0);
+});

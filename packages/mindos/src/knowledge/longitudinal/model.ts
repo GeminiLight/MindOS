@@ -37,6 +37,8 @@ export const protocolSchema = z
     "The final round has no subsequent method update.",
   );
 export type LongitudinalProtocol = z.infer<typeof protocolSchema>;
+/** Frozen per-round help budget: successful replies and total attempts, including failures. */
+export const HELP_LIMITS = { maxAttempts: 4, maxSucceeded: 2 } as const;
 export const helpRequestSchema = z
   .object({
     runtime: comparisonRuntime,
@@ -195,6 +197,15 @@ export const commandSchema = z.discriminatedUnion("action", [
     })
     .strict(),
 ]);
+export type ParticipantStatus =
+  | "consent"
+  | "answering"
+  | "revision"
+  | "review"
+  | "waiting"
+  | "ready"
+  | "complete"
+  | "withdrawn";
 export function participantView(
   r: LongitudinalRecord,
   p: LongitudinalParticipant,
@@ -210,7 +221,7 @@ export function participantView(
   const stage = round
     ? (["before", "coaching", "after"] as const)[round.answers.length]
     : undefined;
-  const status = p.withdrawnAt
+  const status: ParticipantStatus = p.withdrawnAt
     ? "withdrawn"
     : !p.consentAt
       ? "consent"
@@ -225,6 +236,7 @@ export function participantView(
                 ? "waiting"
                 : "ready"
               : "revision";
+  const assisted = status === "answering" && stage === "coaching" && !!round;
   return {
     id: p.id,
     studyId: r.id,
@@ -236,30 +248,38 @@ export function participantView(
     round: index,
     roundCount: r.protocol.rounds.length,
     stage: status === "answering" ? stage : undefined,
+    stageIndex: status === "answering" && round ? round.answers.length : undefined,
     task: status === "answering" && stage ? task?.[stage] : undefined,
+    // The participant's own locked judgment from this round; never another person's text.
+    previousAnswer: assisted ? round!.answers[0]?.answer : undefined,
+    help: assisted
+      ? {
+          attempts: round!.runs.length,
+          maxAttempts: HELP_LIMITS.maxAttempts,
+          succeeded: round!.runs.filter((x) => x.status === "succeeded").length,
+          maxSucceeded: HELP_LIMITS.maxSucceeded,
+        }
+      : undefined,
     updateAllowed: status === "revision" ? task?.updateAllowed : undefined,
     dueAt: status === "waiting" ? round?.dueAt : undefined,
-    method:
-      stage === "coaching" && status === "answering"
-        ? round?.method
-        : undefined,
+    // Shown while working with help and again when deciding whether to revise it.
+    method: assisted || status === "revision" ? round?.method : undefined,
     revision:
       status === "review" || status === "ready" || status === "waiting"
         ? round?.revision
         : undefined,
-    runs:
-      stage === "coaching" && status === "answering"
-        ? round!.runs.map((x) => ({
-            id: x.id,
-            question: x.question,
-            status:
-              x.status === "pending" && Date.parse(x.deadline) <= now.getTime()
-                ? "interrupted"
-                : x.status,
-            output: x.output,
-            failure: x.failure,
-          }))
-        : [],
+    runs: assisted
+      ? round!.runs.map((x) => ({
+          id: x.id,
+          question: x.question,
+          status:
+            x.status === "pending" && Date.parse(x.deadline) <= now.getTime()
+              ? "interrupted"
+              : x.status,
+          output: x.output,
+          failure: x.failure,
+        }))
+      : [],
   };
 }
 export type LongitudinalView = ReturnType<typeof participantView>;

@@ -1,7 +1,7 @@
 import { randomBytes, randomInt } from 'node:crypto';
 import { z } from 'zod';
 import { privateRecordNames, withPrivateRecordLock } from '../private-records.js';
-import { codeSchema, studyAdminView, studyDraftProtocolSchema, studyProtocolSchema, type StudyRecord } from './model.js';
+import { codeSchema, studyAdminView, studyDraftProtocolSchema, studyParticipantView, studyProtocolSchema, type StudyRecord } from './model.js';
 import { checkStudyTime, hashStudyValue, mutateStudy, readStudy, requireStudy, studyError, studyEvent, writeStudy } from './storage.js';
 export { enrollStudy, getStudyParticipant, updateStudyParticipant } from './participants.js';
 export { exportStudyForReview, getStudyReviewerWorkspace, rateStudyAnswer, exportStudyData } from './review.js';
@@ -64,6 +64,32 @@ export function getStudyReadiness(root: string, id: string) {
   const parsed = studyProtocolSchema.safeParse(record.protocol);
   return { missing: parsed.success ? [] : parsed.error.issues.map(issue => issue.path.join('.')) };
 }
+/** Researcher-only progress: stage counts and help outcomes per participant, never answer text or scoring keys. */
+export function getStudyProgress(root: string, id: string, now = new Date()) {
+  checkStudyTime(now);
+  const record = requireStudy(root, id);
+  const participants = record.participants.map(p => {
+    const view = studyParticipantView(record, p, now); const runs = p.coachingRuns ?? [];
+    return {
+      id: p.id, ordinal: p.ordinal, conditionId: p.conditionId, status: view.status, nextPhase: view.nextPhase, completedStages: view.completedStages,
+      dueAt: p.dueAt, withdrawnAt: p.withdrawnAt, erased: !!p.erasedAt,
+      answered: p.responses.filter(r => r.outcome === 'answered').length, missing: p.responses.filter(r => r.outcome !== 'answered').length,
+      helpSucceeded: runs.filter(r => r.status === 'succeeded').length, helpFailed: runs.filter(r => r.status === 'failed').length,
+      rated: record.ratings.filter(r => p.responses.some(x => x.itemId === r.itemId)).length, updatedAt: p.updatedAt,
+    };
+  });
+  const count = (fn: (p: (typeof participants)[number]) => boolean) => participants.filter(fn).length;
+  return {
+    participants,
+    summary: {
+      enrolled: participants.length, capacity: record.protocol.capacity,
+      active: count(p => !p.withdrawnAt && p.status !== 'complete'), waiting: count(p => p.status === 'waiting'),
+      complete: count(p => p.status === 'complete'), withdrawn: count(p => !!p.withdrawnAt),
+      ratings: record.ratings.length, failedRuns: participants.reduce((n, p) => n + p.helpFailed, 0),
+    },
+  };
+}
+export type StudyProgress = ReturnType<typeof getStudyProgress>;
 export type StudySummary = Pick<ReturnType<typeof studyAdminView>, 'id' | 'version' | 'status' | 'createdAt' | 'updatedAt' | 'enrolledCount'> & { title: string };
 export function listStudies(root: string): { studies: StudySummary[]; unavailableCount: number } {
   const studies: StudySummary[] = []; let unavailableCount = 0;
