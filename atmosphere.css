@@ -1,0 +1,154 @@
+/* The shared-mind scene inherits the selected light or dark page theme. */
+.home-page .site-header,.hero-band {
+  --background: var(--hero-background);
+  --foreground: var(--hero-foreground);
+  --muted-foreground: var(--hero-muted);
+  --border: var(--hero-border);
+  --card: var(--hero-surface);
+  --muted: var(--hero-surface);
+  --amber: var(--hero-amber);
+  --amber-text: var(--hero-amber);
+  --amber-action: var(--hero-action);
+  --ring: var(--hero-amber);
+  background: var(--background);
+  color: var(--foreground);
+  color-scheme: inherit;
+}
+.home-page .site-header { border-bottom-color: var(--hero-line); }
+.hero-band { position: relative; isolation: isolate; overflow: clip; }
+.hero-band::before { content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(ellipse at 80% 30%, var(--hero-glow), transparent 49%),
+    linear-gradient(var(--hero-line) 1px, transparent 1px), linear-gradient(90deg, var(--hero-line) 1px, transparent 1px);
+  background-size: auto, 96px 96px, 96px 96px;
+  mask-image: linear-gradient(to right, transparent 28%, var(--hero-background));
+}
+.hero { position: relative; grid-template-columns: 1fr 1.12fr; gap: 8px; padding-top: 80px; padding-bottom: 65px; }
+.hero-copy { position: relative; z-index: 10; }
+.hero-eyebrow { width: fit-content; border: 1px solid var(--hero-border); border-radius: var(--radius-md); padding: 8px 12px; background: var(--hero-glass); font-size: 10px; letter-spacing: .15em; }
+.status-dot { box-shadow: 0 0 12px var(--hero-glow); }
+.hero h1 { font-size: clamp(62px, 5.6vw, 82px); line-height: 1.06; letter-spacing: -.04em; }
+.hero h1 .hero-accent { color: var(--hero-amber); text-shadow: 0 0 44px var(--hero-glow); }
+html[lang="zh-Hans"] .hero h1 { font-size: clamp(54px, 4.9vw, 70px); line-height: 1.19; letter-spacing: -.025em; }
+.hero-definition { margin-top: 28px; }
+.hero-intro { max-width: 455px; }
+.hero-actions .button-primary { box-shadow: 0 0 0 1px var(--hero-line), 0 9px 40px var(--hero-glow); }
+.button { transition: background-color .15s, border-color .15s, transform .2s, box-shadow .2s; }
+.button-primary:hover { transform: translateY(-2px); }
+.button svg { transition: transform .2s; }
+.button:hover svg { transform: translateX(3px); }
+.hero-band .agent-strip { position: relative; border-top-color: var(--hero-line); border-bottom: 0; padding-block: 25px; }
+.hero-band .agent-logos a { color: var(--hero-muted); transition: color .15s, transform .2s; }
+.hero-band .agent-logos a:hover { color: var(--hero-foreground); transform: translateY(-2px); }
+.hero-band .agent-logos img { background: transparent; border-radius: var(--radius); padding: 3px; }
+:root[data-theme="dark"] .hero-band .agent-logos img { background: var(--hero-foreground); }
+.constellation { --scene-x: 0deg; --scene-y: 0deg; position: relative; min-width: 0; height: 520px; perspective: 1100px; }
+.scene-caption { position: absolute; top: 9px; left: 14%; display: flex; align-items: center; gap: 10px; color: var(--hero-muted); font-size: 11px; letter-spacing: .06em; }
+.constellation-stage { position: absolute; inset: 0 -7%; transform: rotateX(var(--scene-y)) rotateY(var(--scene-x)); transition: transform .25s ease-out; transform-style: preserve-3d; }
+.constellation-art { width: 100%; height: 100%; overflow: visible; }
+.mesh-grid { stroke: var(--hero-line); stroke-width: .6; stroke-dasharray: 2 5; }
+.mesh-filament { stroke: var(--hero-filament); stroke-width: .7; }
+.mesh-bloom { stroke: var(--hero-filament); stroke-width: 18; opacity: .24; }
+.mesh-node { fill: var(--hero-core); filter: drop-shadow(0 0 5px var(--hero-amber)); }
+.core-stop { stop-color: var(--hero-amber); stop-opacity: .3; }
+.core-stop:last-child { stop-opacity: 0; }
+.mesh-core-ring { fill: var(--hero-background); stroke: var(--hero-amber); stroke-width: .7; }
+.mesh-core-spark { fill: var(--hero-core); }
+.scene-label { position: absolute; top: 41%; text-align: center; transform: translate(-50%,-50%); }
+.scene-human { left: 23%; top: 49%; }
+.scene-agent { left: 78%; top: 34%; }
+.scene-role { display: block; font-size: 9px; letter-spacing: .2em; color: var(--hero-muted); margin-bottom: 8px; }
+.scene-label strong { font-size: 25px; font-weight: 500; letter-spacing: -.03em; }
+.scene-center-label { position: absolute; top: 59%; width: 100%; text-align: center; font-size: 10px; letter-spacing: .08em; color: var(--hero-muted); }
+.context-chip { position: absolute; display: flex; align-items: center; gap: 10px; font-size: 11px; padding: 10px 13px;
+  border: 1px solid var(--hero-border); border-radius: var(--radius-md); background: var(--hero-glass); backdrop-filter: blur(14px);
+  box-shadow: 0 12px 34px var(--hero-background); }
+.context-chip > span:last-child { margin-left: 12px; color: var(--hero-amber); }
+.chip-dot { width: 5px; height: 5px; background: var(--hero-amber); box-shadow: 0 0 10px var(--hero-amber); border-radius: 50%; }
+.chip-intent { top: 15%; left: 15%; }
+.chip-memory { right: 7%; bottom: 17%; }
+.constellation figcaption { position: absolute; bottom: 3px; left: 8%; right: 0; text-align: center; color: var(--hero-muted); font-size: 12px; }
+.screen-frame { position: relative; box-shadow: 0 20px 65px color-mix(in srgb, var(--foreground) 10%, transparent); }
+.screen-meta { background: linear-gradient(110deg, var(--popover), var(--card)); }
+.screen-tabs button[aria-selected="true"],.phase-tabs button[aria-selected="true"] { box-shadow: inset 0 -2px var(--amber-text), 0 1px 3px var(--border); }
+.evolution-band { background: radial-gradient(ellipse at 90% 70%, var(--amber-subtle), transparent 60%), var(--card); }
+.journal { border-color: color-mix(in srgb, var(--amber-text) 35%, var(--border)); }
+.principle-grid article { transition: border-color .2s; }
+.principle-grid article:hover { border-color: var(--amber-text); }
+/* Feedback stays short; no content relies on an entrance animation to become visible. */
+.site-header { transition: box-shadow .2s; }
+.site-header[data-scrolled="true"] { box-shadow: 0 6px 24px color-mix(in srgb, var(--foreground) 8%, transparent); }
+.site-header::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 2px;
+  background: var(--amber-text); transform: scaleX(var(--reading-progress, 0)); transform-origin: left; pointer-events: none; }
+#site-nav a { position: relative; transition: color .16s; }
+#site-nav a::after { content: ''; position: absolute; height: 1px; left: 0; right: 0; bottom: 7px;
+  background: currentColor; transform: scaleX(0); transform-origin: left; transition: transform .2s; }
+#site-nav a:hover::after,#site-nav a:focus-visible::after,#site-nav a[aria-current="location"]::after { transform: scaleX(1); }
+#site-nav a[aria-current="location"] { color: var(--amber-text); }
+.tab-list.has-indicator { position: relative; isolation: isolate; }
+.tab-indicator { position: absolute; top: 4px; bottom: 4px; left: 0; width: 0; pointer-events: none;
+  border-radius: var(--radius-md); background: var(--popover); box-shadow: inset 0 -2px var(--amber-text), 0 1px 3px var(--border); transform-origin: left; }
+.tab-list.has-indicator button { position: relative; transition: color .16s; }
+.tab-list.has-indicator button[aria-selected="true"] { background: transparent; box-shadow: none; }
+.tab-list button:active { color: var(--amber-text); }
+.screen-image-link { cursor: zoom-in; }
+.icon-button { transition: background-color .16s, transform .16s; }
+.icon-button:active { transform: scale(.94); }
+.theme-button svg { transition: transform .24s; }
+.theme-button[aria-pressed="true"] svg { transform: rotate(45deg); }
+.mesh-core-spark { transform-box: fill-box; transform-origin: center; }
+.mesh-bloom { transition: opacity .25s; }
+.platform-row { border-radius: var(--radius); transition: background-color .16s; }
+.platform-links a { min-height: 44px; }
+.platform-links a:hover { text-decoration: underline; }
+@media (hover: hover) {
+  .constellation:hover .mesh-bloom { opacity: .38; }
+  .platform-row:hover { background: var(--card); }
+}
+@media (max-width: 1100px) {
+  .hero { grid-template-columns: 1fr 1fr; }
+  .hero h1 { font-size: 64px; }
+  html[lang="zh-Hans"] .hero h1 { font-size: 56px; }
+  .constellation { height: 450px; }
+  .scene-caption { left: 8%; top: 5%; }
+  .scene-label strong { font-size: 22px; }
+  .context-chip { font-size: 10px; padding: 8px 10px; }
+  .chip-intent { top: 18%; left: 8%; }
+  .chip-memory { bottom: 18%; right: 0; }
+  .constellation figcaption { left: 0; font-size: 11px; }
+}
+@media (max-width: 800px) {
+  .hero { padding-top: 48px; }
+  .hero h1 { font-size: 48px; }
+  html[lang="zh-Hans"] .hero h1 { font-size: 44px; }
+  .constellation { height: 390px; }
+  .constellation-stage { inset-inline: -6%; }
+  .scene-label strong { font-size: 19px; }
+  .scene-role { font-size: 8px; margin-bottom: 4px; }
+  .context-chip { font-size: 9px; gap: 6px; }
+  .context-chip > span:last-child { margin-left: 3px; }
+  .chip-intent { top: 20%; }
+  .chip-memory { bottom: 20%; }
+  .scene-center-label { top: 58%; font-size: 9px; }
+}
+@media (max-width: 600px) {
+  .hero { grid-template-columns: 1fr; gap: 20px; padding-top: 38px; padding-bottom: 24px; }
+  .hero h1 { font-size: clamp(43px, 12vw, 64px); }
+  html[lang="zh-Hans"] .hero h1 { font-size: clamp(42px, 11.5vw, 60px); }
+  .hero-eyebrow { font-size: 9px; margin-bottom: 22px; }
+  .hero-intro { max-width: 450px; }
+  .constellation { height: 335px; width: 100%; }
+  .constellation-stage { inset: 0 -3%; }
+  .scene-caption { top: 0; left: 0; font-size: 10px; }
+  .chip-intent { top: 13%; left: 9%; }
+  .chip-memory { bottom: 14%; right: 4%; }
+  .scene-human { top: 49%; }
+  .scene-agent { top: 34%; }
+  .scene-center-label { top: 61%; }
+  .constellation figcaption { bottom: 0; font-size: 10px; }
+  .hero-band::before { mask-image: linear-gradient(transparent 30%, var(--hero-background)); background-size: auto, 64px 64px, 64px 64px; }
+  .hero-band .agent-strip { padding-block: 20px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .constellation-stage { transform: none; }
+  .button-primary:hover,.button:hover svg,.hero-band .agent-logos a:hover { transform: none; }
+}

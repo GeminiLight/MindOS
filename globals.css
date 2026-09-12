@@ -1,0 +1,97 @@
+/* Website tokens mirror wiki/21-design-principle.md; product app tokens stay unchanged. */
+:root {
+  color-scheme: light;
+  --background: #f8f6f1;
+  --foreground: #1c1a17;
+  --card: #f2efe9;
+  --popover: #fdfbf7;
+  --muted: #e8e4db;
+  --muted-foreground: #685f52;
+  --border: #d8d2c7;
+  --amber: #c8873a;
+  --amber-action: #95551b;
+  --amber-text: #82531f;
+  --amber-subtle: #f0e7d8;
+  --amber-foreground: #ffffff;
+  --ring: #95551b;
+  --success: #234b2c;
+  --error: #762c2c;
+  --shadow: 0 12px 40px rgba(28,26,23,.07);
+  --overlay: rgba(10,9,6,.8);
+  --font-sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-serif: Lora, Georgia, 'Songti SC', serif;
+  --font-mono: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+  --radius: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  /* Text and artwork both follow the page theme; mesh color is decorative. */
+  --hero-background: #f8f6f1;
+  --hero-foreground: #1c1a17;
+  --hero-muted: #685f52;
+  --hero-border: #d8d2c7;
+  --hero-surface: #f2efe9;
+  --hero-amber: #82531f;
+  --hero-filament: #ad742e;
+  --hero-action: #95551b;
+  --hero-core: #82531f;
+  --hero-glow: rgba(200, 135, 58, .12);
+  --hero-line: rgba(131, 93, 45, .10);
+  --hero-glass: rgba(253, 251, 247, .88);
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #131210;
+  --foreground: #e8e4dc;
+  --card: #1c1a17;
+  --popover: #211f1a;
+  --muted: #2e2b22;
+  --muted-foreground: #b0a797;
+  --border: #494339;
+  --amber: #d4954a;
+  --amber-action: #a46328;
+  --amber-text: #e0a85e;
+  --amber-subtle: #33291d;
+  --ring: #e0a85e;
+  --success: #a0c4a4;
+  --error: #eeaaa4;
+  --shadow: none;
+  --hero-background: #101110;
+  --hero-foreground: #f4f0e8;
+  --hero-muted: #b9b5a9;
+  --hero-border: #3d3930;
+  --hero-surface: #1d1d19;
+  --hero-amber: #efb86d;
+  --hero-filament: #efb86d;
+  --hero-action: #a46328;
+  --hero-core: #ffe4b3;
+  --hero-glow: rgba(213, 143, 58, .16);
+  --hero-line: rgba(239, 184, 109, .13);
+  --hero-glass: rgba(30, 29, 24, .84);
+}
+/* Aliases for Tailwind consumers; this static site uses the semantic variables directly. */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-amber: var(--amber);
+  --color-amber-action: var(--amber-action);
+  --color-amber-text: var(--amber-text);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-error: var(--error);
+  --color-hero-background: var(--hero-background);
+  --color-hero-foreground: var(--hero-foreground);
+  --color-hero-muted: var(--hero-muted);
+  --color-hero-border: var(--hero-border);
+  --color-hero-surface: var(--hero-surface);
+  --color-hero-amber: var(--hero-amber);
+  --color-hero-filament: var(--hero-filament);
+  --color-hero-action: var(--hero-action);
+  --color-hero-core: var(--hero-core);
+  --color-hero-glow: var(--hero-glow);
+  --color-hero-line: var(--hero-line);
+  --color-hero-glass: var(--hero-glass);
+}
