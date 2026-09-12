@@ -47,13 +47,21 @@ Font files are latin subsets from Google Fonts, with SIL OFL licenses in `landin
 
 This is a website-only change: no runtime/package version bump, product release, agent settings change, or knowledge data migration. Production can only be claimed updated after main integration and the existing sync workflow succeed; then verify the live Chinese page, metadata, robots, and download endpoints. No Search Console, real-user CWV, real screen reader, or physical device measurements were made.
 
-## Delivery record — 2026-09-12
+## Integration and production verification — 2026-09-12
 
-The candidate is pushed to `origin/codex/website-coevolution` with draft PR https://github.com/GeminiLight/mindos-dev/pull/340. Earlier GitHub fetch/push attempts timed out; connectivity recovered, fetch succeeded, and the branch contains current main `371e59cfeef4868192bc66571d31168c7de0c7b5`. No main integration, production deployment, or public sync was performed.
+PR https://github.com/GeminiLight/mindos-dev/pull/340 was merged into main at `b80ad36a5e4b87049ccd4f4cc035939beaedbb2c`. The root main worktree fast-forwarded without modifying unrelated local work. [Sync run 34683123541](https://github.com/GeminiLight/mindos-dev/actions/runs/34683123541) succeeded; the public product source commit is `02e0da3deb13094b6b6bcbf42fd8db13bd909f56`. GitHub Pages reports `built` for landing commit `d3e85eafb2a99aabc523aace688e0e7c5ff150e2`.
+
+Post-merge validation from the main worktree: `pnpm exec vitest run tests/landing-website.test.ts tests/workflow-migration-contract.test.ts` passed 27 tests; `pnpm exec playwright test -c tests/e2e/landing.config.ts` passed 26 tests. The existing preview serves the identical merged landing source. The previously timing-out CLI sync case also passed individually in the main build environment (`pnpm exec vitest run tests/unit/cli-sync.test.ts -t 'records remote deletion conflicts'`). This resolves the outstanding individual case; it does not claim a new full workspace release run.
+
+Production browser verification at https://mindos.you confirmed all six pages return 200 with the new copy and canonical URLs. Chinese homepage light/dark switching, the co-evolution selection, and zero page errors were verified. All four R2 installer mirror HEAD requests returned 200. Screenshots: `/tmp/mindos-website-production-light.png` and `/tmp/mindos-website-production-dark.png`. Generic Python HTTP requests received 403 while Chromium received 200; no crawler-access or search-indexing improvement is inferred from the successful browser checks. Real-user CWV, search traffic, and AI citation changes remain unmeasured.
+
+## Historical candidate delivery — 2026-09-12
+
+At the initial handoff, the candidate was pushed to `origin/codex/website-coevolution` with draft PR https://github.com/GeminiLight/mindos-dev/pull/340. Earlier GitHub fetch/push attempts timed out; connectivity recovered, fetch succeeded, and the branch contains current main `371e59cfeef4868192bc66571d31168c7de0c7b5`. At that stage, no main integration, production deployment, or public sync had been performed; the completed integration is recorded above.
 
 The 9 website contracts and 20 browser tests pass. Supplemental WebKit/Firefox checks and 320px overflow checks pass. Generated-page consistency and JavaScript syntax checks pass. The broader `pnpm run test:quick` is **not fully green**: after connecting existing package dependencies, all 40 contract files / 240 tests passed; the unit run had missing local build output and timeouts. Building the unchanged uninstall-safety artifact and rerunning the three failed files serially passed 113/114 tests. One unchanged CLI sync test (`records remote deletion conflicts…`) still timed out at its original 5-second limit when run alone. No test threshold or product code was changed. Full workspace release validation was not run for this static website change.
 
-Evidence: `/tmp/mindos-website-quick-check.log`, `/tmp/mindos-website-quick-retry.log`, `/tmp/mindos-website-sync-retry.log`. Integration should rerun the outstanding CLI check in its normal build environment, then fetch/reconcile current main and publish through the existing workflow.
+Evidence: `/tmp/mindos-website-quick-check.log`, `/tmp/mindos-website-quick-retry.log`, `/tmp/mindos-website-sync-retry.log`. The later integration rerun and publishing results are recorded above.
 
 ## Theme correction — 2026-09-12
 
