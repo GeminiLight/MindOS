@@ -1993,7 +1993,7 @@ describe('ChatContent ACP session binding', () => {
     });
   });
 
-  it('loads ACP runtime sessions for the active cwd and attaches exposed message history without starting a turn', async () => {
+  it('loads native OpenCode sessions across projects and attaches exposed message history without starting a turn', async () => {
     mockRuntimeDescriptors = [{
       id: 'opencode',
       name: 'OpenCode',
@@ -2019,16 +2019,16 @@ describe('ChatContent ACP session binding', () => {
     mockActiveSessionId = activeSession.id;
     const updatedAt = '2026-06-29T03:00:00.000Z';
     const fetchMock = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
-      if (String(url) === '/api/acp/session') {
+      if (String(url).startsWith('/api/agent-runtimes/external-sessions?')) {
         return {
           ok: true,
           json: async () => ({
             sessions: [{
-              sessionId: 'opencode-session-1',
+              id: 'opencode-session-1',
               title: 'OpenCode session',
               cwd: '/tmp/repo',
               updatedAt,
-              messages: [
+              turns: [
                 { role: 'user', content: 'previous acp prompt' },
                 { role: 'assistant', content: 'previous acp answer' },
               ],
@@ -2066,13 +2066,10 @@ describe('ChatContent ACP session binding', () => {
       await Promise.resolve();
     });
 
-    const acpSessionCall = fetchMock.mock.calls.find(([url]) => String(url) === '/api/acp/session');
+    const acpSessionCall = fetchMock.mock.calls.find(([url]) => String(url).startsWith('/api/agent-runtimes/external-sessions?'));
     expect(acpSessionCall).toBeTruthy();
-    expect(JSON.parse(String(acpSessionCall?.[1]?.body))).toMatchObject({
-      action: 'list_sessions',
-      agentId: 'opencode',
-      cwd: '/tmp/repo',
-    });
+    expect(String(acpSessionCall?.[0])).toContain('page=1');
+    expect(String(acpSessionCall?.[0])).not.toContain('cwd=');
     expect(host.querySelector('[data-testid="history-session-list"]')?.textContent).toContain('OpenCode session');
 
     const attach = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Attach OpenCode session') as HTMLButtonElement;

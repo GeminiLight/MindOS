@@ -1,92 +1,54 @@
-!include "getProcessInfo.nsh"
+!include "LogicLib.nsh"
 
-Var pid
-Var mindosRuntimeCleanupDone
-
-!macro mindosStopRuntimeChildren
-  !define MINDOS_RUNTIME_CLEANUP_ID ${__LINE__}
-  StrCmp $mindosRuntimeCleanupDone "1" mindos_runtime_cleanup_skip_${MINDOS_RUNTIME_CLEANUP_ID}
-  StrCpy $mindosRuntimeCleanupDone "1"
-  InitPluginsDir
-
-  Push $0
-  Push $1
-
-  StrCpy $0 "$PLUGINSDIR\mindos-runtime-cleanup.ps1"
-  FileOpen $1 "$0" w
-  IfErrors mindos_runtime_cleanup_restore_${MINDOS_RUNTIME_CLEANUP_ID}
-  FileWrite $1 '$$ErrorActionPreference = "SilentlyContinue"$\r$\n'
-  FileWrite $1 '$$patterns = @($\r$\n'
-  FileWrite $1 '  "\.mindos\runtime\",$\r$\n'
-  FileWrite $1 '  "mindos-runtime",$\r$\n'
-  FileWrite $1 '  "@geminilight\mindos",$\r$\n'
-  FileWrite $1 '  "\packages\web\.next\standalone\server.js",$\r$\n'
-  FileWrite $1 '  "\dist\protocols\mcp-server\index.cjs"$\r$\n'
-  FileWrite $1 ')$\r$\n'
-  FileWrite $1 'function Test-MindOSCommandLine([string]$$CommandLine) {$\r$\n'
-  FileWrite $1 '  if ([string]::IsNullOrWhiteSpace($$CommandLine)) { return $$false }$\r$\n'
-  FileWrite $1 '  foreach ($$pattern in $$patterns) {$\r$\n'
-  FileWrite $1 '    if ($$CommandLine.IndexOf($$pattern, [StringComparison]::OrdinalIgnoreCase) -ge 0) { return $$true }$\r$\n'
-  FileWrite $1 '  }$\r$\n'
-  FileWrite $1 '  return $$false$\r$\n'
-  FileWrite $1 '}$\r$\n'
-  FileWrite $1 `try { $$processes = Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" -ErrorAction Stop } catch { $$processes = Get-WmiObject Win32_Process -Filter "Name = 'node.exe'" }$\r$\n`
-  FileWrite $1 'foreach ($$proc in @($$processes)) {$\r$\n'
-  FileWrite $1 '  if ($$null -eq $$proc -or $$proc.ProcessId -eq $$PID) { continue }$\r$\n'
-  FileWrite $1 '  $$name = [string]$$proc.Name$\r$\n'
-  FileWrite $1 '  $$cmd = [string]$$proc.CommandLine$\r$\n'
-  FileWrite $1 '  $$isNode = $$name.Equals("node.exe", [StringComparison]::OrdinalIgnoreCase)$\r$\n'
-  FileWrite $1 '  if ($$isNode -and (Test-MindOSCommandLine $$cmd)) {$\r$\n'
-  FileWrite $1 '    & taskkill.exe /PID $$proc.ProcessId /T /F *> $$null$\r$\n'
-  FileWrite $1 '  }$\r$\n'
-  FileWrite $1 '}$\r$\n'
-  FileWrite $1 'Start-Sleep -Milliseconds 200$\r$\n'
-  FileClose $1
-
-  DetailPrint "Stopping MindOS runtime child processes..."
-  nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$0"'
-
-  mindos_runtime_cleanup_restore_${MINDOS_RUNTIME_CLEANUP_ID}:
-  Pop $1
-  Pop $0
-  mindos_runtime_cleanup_skip_${MINDOS_RUNTIME_CLEANUP_ID}:
-  !undef MINDOS_RUNTIME_CLEANUP_ID
-!macroend
-
-!macro mindosStopAppTree
-  DetailPrint `Stopping running "${PRODUCT_NAME}"...`
-  nsExec::ExecToLog '"$SYSDIR\taskkill.exe" /IM "${APP_EXECUTABLE_FILENAME}" /T /F'
-  Sleep 500
-  !insertmacro mindosStopRuntimeChildren
-!macroend
-
-!macro customInit
-  !insertmacro mindosStopRuntimeChildren
-!macroend
-
+; This hook runs only once the user commits to installing/removing the app.
+; Opening the wizard or cancelling it must not mutate a running installation.
 !macro customCheckAppRunning
-  !define MINDOS_CHECK_RUNNING_ID ${__LINE__}
-  ; Overriding this macro skips electron-builder's default block that declares
-  ; and probes $IsPowerShellAvailable; FIND_PROCESS / _CHECK_APP_RUNNING read it,
-  ; and electron-builder 26 compiles with -WX so the missing variable is fatal.
-  !insertmacro IS_POWERSHELL_AVAILABLE
-  !insertmacro mindosStopRuntimeChildren
-  !insertmacro FIND_PROCESS "${APP_EXECUTABLE_FILENAME}" $R0
-  ${if} $R0 == 0
+  InitPluginsDir
+  File /oname=$PLUGINSDIR\mindos-installer-safety.ps1 "${PROJECT_DIR}\build\installer-safety.ps1"
+  nsExec::ExecToStack /TIMEOUT=30000 '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\mindos-installer-safety.ps1" -Action Probe -InstallDir "$INSTDIR"'
+  Pop $R0
+  Pop $R1
+  ${if} $R0 == 10
     ${ifNot} ${isUpdated}
-      MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION "$(appRunning)" /SD IDOK IDOK mindos_stop_app_tree_${MINDOS_CHECK_RUNNING_ID}
-      Quit
+      MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION "$(appRunning)" /SD IDOK IDOK +2
+      Abort
     ${endif}
-    mindos_stop_app_tree_${MINDOS_CHECK_RUNNING_ID}:
-      !insertmacro mindosStopAppTree
+    nsExec::ExecToStack /TIMEOUT=30000 '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\mindos-installer-safety.ps1" -Action Stop -InstallDir "$INSTDIR"'
+    Pop $R0
+    Pop $R1
   ${endif}
-  !insertmacro _CHECK_APP_RUNNING
-  !undef MINDOS_CHECK_RUNNING_ID
+  ${if} $R0 != 0
+    MessageBox MB_OK|MB_ICONSTOP "MindOS could not safely close this installation. Close it and try again."
+    Abort
+  ${endif}
+
+  !ifndef BUILD_UNINSTALLER
+    ; An old NSIS uninstaller ignores --updated in its custom cleanup hook.
+    ; Protect its generated batch entry point BEFORE uninstallOldVersion runs.
+    nsExec::ExecToStack /TIMEOUT=30000 '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\mindos-installer-safety.ps1" -Action Protect -ProfileDir "$PROFILE"'
+    Pop $R0
+    Pop $R1
+    ${if} $R0 != 0
+      MessageBox MB_OK|MB_ICONSTOP "MindOS could not protect your existing data. Installation has stopped."
+      Abort
+    ${endif}
+  !endif
 !macroend
 
 !macro customUnInstall
-  IfFileExists "$PROFILE\.mindos\uninstall.bat" 0 done
-    DetailPrint "Running MindOS cleanup script..."
-    ExecWait '"$PROFILE\.mindos\uninstall.bat"'
-  done:
+  ${ifNot} ${isUpdated}
+    ; Silent and interactive uninstall both preserve data by default.
+    ; The generated script also requires --purge, protecting older installers.
+    ${ifNot} ${Silent}
+      MessageBox MB_YESNO|MB_DEFBUTTON2|MB_ICONQUESTION "Also remove MindOS settings, sessions and downloaded runtimes? Your knowledge-base files will be kept." /SD IDNO IDNO mindos_keep_data
+      IfFileExists "$PROFILE\.mindos\uninstall.bat" 0 mindos_keep_data
+      ClearErrors
+      ExecWait '"$SYSDIR\cmd.exe" /D /S /C ""$PROFILE\.mindos\uninstall.bat" --purge"' $R0
+      ${if} ${Errors}
+      ${orIf} $R0 != 0
+        MessageBox MB_OK|MB_ICONEXCLAMATION "Some MindOS data could not be removed. Your data has been kept where possible."
+      ${endif}
+    ${endif}
+  ${endif}
+  mindos_keep_data:
 !macroend

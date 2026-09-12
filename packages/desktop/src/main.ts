@@ -25,6 +25,7 @@ import { isSafeExternalUrl } from './open-external-guard';
 import { planUninstall } from './uninstall-plan';
 import { rewriteMcpClientConfigFile } from './mcp-config-rewrite';
 import { setupUpdater } from './updater';
+import { ensureInstallLocation } from './install-location';
 import { setupAppMenu } from './app-menu';
 import { ConnectionMonitor } from './connection-monitor';
 import { showConnectWindow, showModeSelectWindow, getActiveRemoteConnection, getLastSshConnection, setActiveRemoteConnection, loadPassword, clearActiveTunnel, adoptActiveTunnel } from './connect-window';
@@ -2179,6 +2180,11 @@ async function bootApp(): Promise<void> {
   // Show main + hide splash on each navigation (not just the first)
   let firstLoad = true;
   mainWindow.webContents.on('did-finish-load', () => {
+    if (process.env.MINDOS_DESKTOP_CI_LOG && currentMode === 'local') {
+      void mainWindow?.webContents.executeJavaScript('Boolean(window.mindos && document.body && document.body.innerText.trim())')
+        .then(ready => { if (ready) console.info('[MindOS] Desktop renderer ready'); })
+        .catch(error => console.error('[MindOS] Desktop renderer smoke failed:', error));
+    }
     if (firstLoad) {
       mainWindow?.show();
       closeSplash();
@@ -2208,6 +2214,14 @@ async function bootApp(): Promise<void> {
 app.whenReady().then(async () => {
   // Second instance: app.quit() is already queued — don't start servers or heal
   if (!hasSingleInstanceLock) return;
+
+  if (!await ensureInstallLocation({
+    platform: process.platform, packaged: app.isPackaged, exe: app.getPath('exe'),
+    locale: app.getLocale(), smoke: Boolean(process.env.MINDOS_DESKTOP_CI_LOG),
+    move: () => app.moveToApplicationsFolder(), quit: () => app.quit(),
+    prompt: async options => (await dialog.showMessageBox({ type: 'question', ...options })).response,
+    showError: async message => { await dialog.showMessageBox({ type: 'error', title: 'MindOS', message }); },
+  })) return;
 
   registerMindosConnectProtocol();
 

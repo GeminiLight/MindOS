@@ -1,0 +1,45 @@
+name: Warm CI dependency cache
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'scripts/ci/setup/action.yml'
+      - '.github/workflows/cache-ci-dependencies.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-dependency-cache-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  warm:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - id: setup
+        uses: ./scripts/ci/setup
+        timeout-minutes: 5
+        with:
+          lookup-only: 'true'
+      - name: Populate a missing store
+        if: steps.setup.outputs.cache-hit != 'true'
+        run: pnpm install --frozen-lockfile
+      - name: Remove unused store entries
+        if: steps.setup.outputs.cache-hit != 'true'
+        run: pnpm store prune
+      - name: Save the store once per platform and dependency fingerprint
+        if: steps.setup.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        continue-on-error: true
+        timeout-minutes: 3
+        with:
+          path: ${{ steps.setup.outputs.cache-path }}
+          key: ${{ steps.setup.outputs.cache-key }}

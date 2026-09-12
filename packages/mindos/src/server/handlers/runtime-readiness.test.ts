@@ -199,7 +199,7 @@ describe('runtime readiness projections', () => {
         expect.objectContaining({ useCase: 'artifact-governance', confidence: 'strong' }),
       ]),
       gaps: expect.arrayContaining([
-        expect.objectContaining({ id: 'durable-approval-queue', category: 'mindos-product', severity: 'warning' }),
+        expect.objectContaining({ id: 'approval-owner-recovery', category: 'mindos-product', severity: 'warning' }),
       ]),
     });
     expect(codex?.gaps.map((gap) => gap.id)).not.toContain('artifact-index');
@@ -227,7 +227,7 @@ describe('runtime readiness projections', () => {
         expect.objectContaining({ id: 'adapter-command-discovery', category: 'adapter-contract' }),
         expect.objectContaining({ id: 'adapter-output-contract', category: 'adapter-contract' }),
         expect.objectContaining({ id: 'adapter-artifact-contract', category: 'adapter-contract' }),
-        expect.objectContaining({ id: 'durable-approval-queue', category: 'mindos-product', severity: 'warning' }),
+        expect.objectContaining({ id: 'approval-owner-recovery', category: 'mindos-product', severity: 'warning' }),
       ]),
     });
     expect(acp?.gaps.map((gap) => gap.id)).not.toContain('adapter-approval-contract');

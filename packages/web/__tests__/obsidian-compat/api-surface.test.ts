@@ -322,3 +322,9 @@ describe('PluginLoader API surface diagnostics', () => {
     await expect(loader.loadPlugin('needs-child-process')).rejects.toThrow(/Unsupported module: child_process \(requires the Desktop native broker tier/);
   });
 });
+
+it('names the browser tier when a declared API is unavailable there', () => {
+  const module = createDiagnosticObsidianModule({}, () => {}, undefined, 'browser') as Record<string, any>;
+  expect(() => module.loadPdfJs()).toThrow(/browser runtime tier/);
+  expect('loadPdfJs' in module).toBe(false);
+});

@@ -3,6 +3,7 @@
 // Pure module (no node builtins) — safe for client components.
 export {
   buildLineDiff,
+  tryBuildLineDiff,
   collapseDiffContext,
   type DiffLine,
   type DiffLineType,

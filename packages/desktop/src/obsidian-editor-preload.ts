@@ -36,6 +36,11 @@ window.addEventListener('DOMContentLoaded', () => {
         } else if (data?.kind === 'captured' && typeof data.id === 'string' && typeof data.content === 'string' && data.content.length <= 2 * 1024 * 1024) {
           clearTimeout(timer); timer = undefined; latestDraft = data.content;
           ipcRenderer.send(CHANNEL, { kind: 'captured', id: data.id, content: data.content });
+        } else if (data?.kind === 'plugin-data' && typeof data.id === 'string' && /^[a-f0-9-]{36}$/.test(data.id)
+          && (data.operation === 'read' || data.operation === 'write')) {
+          const json = JSON.stringify(data.data);
+          if (data.operation === 'write' && (json === undefined || new TextEncoder().encode(json).length > 1024 * 1024)) return;
+          ipcRenderer.send(CHANNEL, { kind: 'plugin-data', id: data.id, operation: data.operation, ...(data.operation === 'write' ? { data: data.data } : {}) });
         } else if (data?.kind === 'loaded') { loaded = true; button.disabled = false; refresh.disabled = false; send('loaded'); }
         else if (data?.kind === 'heartbeat') send('heartbeat');
         else if (data?.kind === 'error') send('error', String(data.content).slice(0, 500));
@@ -43,6 +48,8 @@ window.addEventListener('DOMContentLoaded', () => {
       frame.addEventListener('load', () => frame.contentWindow!.postMessage({ kind: 'start', payload: { package: message.package, document: message.document, vault: message.vault } }, pluginOrigin), { once: true });
       frame.src = message.frameUrl;
       document.querySelector('#host')!.appendChild(frame);
+    } else if (message.kind === 'plugin-data-result') {
+      pluginFrame?.contentWindow?.postMessage({ kind: 'plugin-data-result', id: message.id, data: message.data, error: message.error }, pluginOrigin);
     } else if (message.kind === 'capture') {
       pluginFrame?.contentWindow?.postMessage({ kind: 'capture', id: message.id }, pluginOrigin);
     } else if (message.kind === 'vault' && !refresh.hidden) {

@@ -35,6 +35,38 @@ describe('subagent orchestrator', () => {
     resetAgentRunsForTest();
   });
 
+  it('limits ready tasks to the requested concurrency', async () => {
+    let active = 0;
+    let peak = 0;
+    await executeSubagentOrchestrationPlan({
+      concurrency: 2,
+      tasks: Array.from({ length: 8 }, (_, i) => ({ id: `task-${i}`, agent: 'worker', task: 'work' })),
+    }, async () => {
+      active += 1;
+      peak = Math.max(peak, active);
+      await new Promise(resolve => setTimeout(resolve, 1));
+      active -= 1;
+      return 'done';
+    });
+    expect(peak).toBe(2);
+  });
+
+  it('does not launch queued tasks after the owning run is canceled', async () => {
+    const owner = new AbortController(); const started: string[] = [];
+    const result = await executeSubagentOrchestrationPlan({ concurrency: 1, tasks: [
+      { id: 'first', agent: 'worker', task: 'work' }, { id: 'queued', agent: 'worker', task: 'work' },
+    ] }, async task => { started.push(task.id); owner.abort(); return 'done'; }, { signal: owner.signal });
+    expect(started).toEqual(['first']);
+    expect(result.tasks.find(task => task.taskId === 'queued')?.status).toBe('canceled');
+  });
+
+  it('rejects invalid concurrency before starting work', async () => {
+    let calls = 0;
+    await expect(executeSubagentOrchestrationPlan({ concurrency: 0, tasks: [{ id: 'a', agent: 'worker', task: 'work' }] }, () => { calls++; }))
+      .rejects.toThrow(/concurrency/i);
+    expect(calls).toBe(0);
+  });
+
   afterEach(() => {
     resetAgentRunsForTest();
     setMindRootResolverForTests(null);

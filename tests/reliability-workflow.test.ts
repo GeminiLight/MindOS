@@ -1,6 +1,7 @@
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { planChecks } from '../scripts/ci/change-plan.mjs';
 
 /**
  * The reliability workflow was authored on `codex/reliability-ci-followup-302` but
@@ -26,8 +27,8 @@ describe('reliability regression workflow', () => {
   it('runs the baseline on all desktop OS families without deployment credentials', () => {
     const source = readFileSync(INSTALLED, 'utf8');
     expect(source).toContain('pull_request:');
-    expect(source).toContain('os: [ubuntu-latest, macos-latest, windows-latest]');
-    expect(source).toContain("node-version: '22.19.0'");
+    expect(planChecks(['packages/mindos/src/index.ts']).matrix.os).toEqual(['ubuntu-latest', 'macos-latest', 'windows-latest']);
+    expect(readFileSync('scripts/ci/setup/action.yml', 'utf8')).toContain("node-version: '22.19.0'");
     expect(source).toContain('contents: read');
     expect(source).not.toMatch(/pull_request_target|secrets\./);
   });

@@ -436,6 +436,31 @@ describe('POST /api/obsidian/import', () => {
     expect(importObsidianPlugin).not.toHaveBeenCalled();
   });
 
+  it('allows an editor-module candidate through import without implying server enablement', async () => {
+    const id = 'generic-editor';
+    scanObsidianVaultPlugins.mockResolvedValue({
+      plugins: [{ id, manifest: { id, name: 'Editor', version: '1.0.0' }, sourceDir: '/tmp/unused',
+        compatibilityLevel: 'blocked', hasStyles: false, hasData: false,
+        compatibility: { obsidianApis: ['Plugin'], moduleImports: ['@codemirror/search'],
+          nodeModules: [], supportedApis: ['Plugin'], partialApis: [], unsupportedApis: [],
+          unsupportedModules: ['@codemirror/search'], blockers: ['Requires unsupported runtime module: @codemirror/search'] },
+        obsidianConfig: { enabledInObsidian: true, hotkeys: [], hotkeyCount: 0 } }],
+      skipped: [], vault: { pluginsDirFound: true, hasEnabledList: true, configDir: '.obsidian', pluginsRelativePath: '.obsidian/plugins' },
+    });
+    importObsidianPlugin.mockResolvedValue({ pluginId: id, targetDir: `/tmp/mindRoot/.mindos/plugins/${id}`,
+      copiedFiles: ['manifest.json', 'main.js', 'obsidian-import.json'], skippedExisting: false,
+      obsidianConfig: { enabledInObsidian: true, hotkeys: [], hotkeyCount: 0, sourceConfigDir: '.obsidian' } });
+    const response = await POST(new NextRequest('http://localhost/api/obsidian/import', {
+      method: 'POST', body: JSON.stringify({ vaultRoot: '~/vault', pluginId: id }),
+      headers: { 'content-type': 'application/json' },
+    }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ ok: true, plugin: {
+      compatibilityLevel: 'blocked', support: { kind: 'review', importable: true, defaultSelected: false, label: 'Desktop editor' },
+    }, nextStep: { message: expect.stringContaining('Desktop experimental editor') } });
+    expect(importObsidianPlugin).toHaveBeenCalledOnce();
+  });
+
   it('returns 404 when plugin is not found in the scanned vault', async () => {
     scanObsidianVaultPlugins.mockResolvedValue({ plugins: [], skipped: [], vault: { pluginsDirFound: true, hasEnabledList: false, configDir: '.obsidian', pluginsRelativePath: '.obsidian/plugins' } });
     const req = new NextRequest('http://localhost/api/obsidian/import', {

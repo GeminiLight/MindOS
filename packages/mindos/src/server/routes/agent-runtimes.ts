@@ -64,8 +64,13 @@ function createHttpCodexServices(services: MindosHttpServices) {
   };
 }
 
-/** Threads and forks default to the mind root so a UI never lists another project's Codex threads by accident. */
+/** Preserve project-scoped defaults unless the session browser explicitly requests all projects. */
 function withDefaultCwd(query: URLSearchParams, mindRoot: string): URLSearchParams {
+  if (query.get('scope') === 'all') {
+    const next = new URLSearchParams(query);
+    next.delete('cwd');
+    return next;
+  }
   if (query.has('cwd') || !mindRoot) return query;
   const next = new URLSearchParams(query);
   next.set('cwd', mindRoot);

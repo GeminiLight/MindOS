@@ -6,3 +6,4 @@ export * from './runtime.js';
 export * from './session.js';
 export * from './context-budget.js';
 export * from './thinking.js';
+export { createOpenAIProxyFetch } from './proxy-transport.js';

@@ -138,6 +138,8 @@ export interface ObsidianPluginStatus {
   loaded: boolean;
   compatibilityLevel: CompatibilityLevel;
   compatibility: {
+    moduleImports?: string[];
+    unsupportedModules?: string[];
     supportedApis: string[];
     partialApis: string[];
     unsupportedApis?: string[];

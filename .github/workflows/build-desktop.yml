@@ -17,6 +17,10 @@ on:
         type: boolean
         default: true
 
+concurrency:
+  group: desktop-release-${{ inputs.tag || github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: write
 
@@ -45,7 +49,7 @@ jobs:
             arch: x64
             node_platform: win32
             publish_channel: latest
-          - os: windows-latest
+          - os: windows-11-arm
             platform: win
             arch: arm64
             node_platform: win32
@@ -223,15 +227,15 @@ jobs:
             export CSC_IDENTITY_AUTO_DISCOVERY=false
           fi
 
-          # Windows: sign when secrets are configured. Missing secrets are allowed so
-          # Desktop releases are not blocked before the project has a code-signing cert.
+          # A public Windows installer must identify its publisher.
+          # Unsigned builds remain available only as non-publishing CI artifacts.
           if [ "${{ matrix.platform }}" = "win" ]; then
             if [ -n "$WINDOWS_CERTIFICATE_BASE64" ] && [ -n "$WINDOWS_CERTIFICATE_PASSWORD" ]; then
               export CSC_LINK="$WINDOWS_CERTIFICATE_BASE64"
               export CSC_KEY_PASSWORD="$WINDOWS_CERTIFICATE_PASSWORD"
             elif [ "${{ inputs.publish }}" = "true" ]; then
-              echo "::warning::Publishing unsigned Windows artifacts because WINDOWS_CERTIFICATE_BASE64/WINDOWS_CERTIFICATE_PASSWORD are not configured."
-              export CSC_IDENTITY_AUTO_DISCOVERY=false
+              echo "Publishing Windows releases requires WINDOWS_CERTIFICATE_BASE64 and WINDOWS_CERTIFICATE_PASSWORD"
+              exit 1
             else
               export CSC_IDENTITY_AUTO_DISCOVERY=false
             fi
@@ -253,25 +257,21 @@ jobs:
 
           cd packages/desktop && pnpm exec electron-builder --${{ matrix.platform }} --${{ matrix.arch }} --publish never "${EXTRA_ARGS[@]}"
 
+      - name: Test Windows installer data protection
+        if: matrix.platform == 'win'
+        shell: pwsh
+        run: ./packages/desktop/build/installer-safety.test.ps1
+
       - name: Smoke packaged app
-        # mac x64 runs under Rosetta on the arm64 runner (smoke-desktop-app.mjs
-        # detects the mismatch and prepends `arch -x86_64` instead of skipping).
-        # Rosetta cold starts are slow in CI, so mac x64 gets a longer timeout
-        # without weakening the native platform checks.
-        # Windows x64 first smokes the real packaged Electron app, then falls
-        # back to runtime-only smoke if CI cannot observe the GUI process.
-        # Windows ARM64 uses runtime-only smoke on the x64 runner.
+        # Both Windows targets run native Electron. Server-only checks cannot
+        # substitute for a renderer/preload that actually becomes ready.
         run: |
           if [ "${{ matrix.platform }}" = "mac" ] && [ "${{ matrix.arch }}" = "x64" ]; then
-            node scripts/smoke-desktop-app.mjs --skip-if-arch-mismatch --timeout 240000
-          elif [ "${{ matrix.platform }}" = "win" ] && [ "${{ matrix.arch }}" = "arm64" ]; then
-            node scripts/smoke-desktop-app.mjs --skip-if-arch-mismatch --timeout 90000 --windows-runtime-only
-          elif [ "${{ matrix.platform }}" = "win" ]; then
-            node scripts/smoke-desktop-app.mjs --skip-if-arch-mismatch --timeout 90000 --windows-runtime-fallback
+            node scripts/smoke-desktop-app.mjs --timeout 240000
           elif [ "${{ matrix.platform }}" = "linux" ]; then
-            xvfb-run -a node scripts/smoke-desktop-app.mjs --skip-if-arch-mismatch --timeout 90000
+            xvfb-run -a node scripts/smoke-desktop-app.mjs --timeout 90000
           else
-            node scripts/smoke-desktop-app.mjs --skip-if-arch-mismatch --timeout 90000
+            node scripts/smoke-desktop-app.mjs --timeout 90000
           fi
 
       - name: Verify Windows signatures
@@ -282,8 +282,7 @@ jobs:
           WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         run: |
           if (-not $env:WINDOWS_CERTIFICATE_BASE64 -or -not $env:WINDOWS_CERTIFICATE_PASSWORD) {
-            Write-Warning "Skipping Windows Authenticode verification because code-signing secrets are not configured; unsigned artifacts will be published."
-            exit 0
+            throw "Publishing Windows releases requires signing credentials."
           }
           $files = Get-ChildItem -Path packages/desktop/dist -Recurse -Include *.exe
           if ($files.Count -eq 0) {
@@ -381,6 +380,10 @@ jobs:
             echo "  ✅ Stapled: $(basename "$file")"
           done
 
+      - name: Refresh metadata after notarization
+        if: matrix.platform == 'mac'
+        run: node scripts/desktop-release-assets.mjs refresh-mac packages/desktop/dist
+
       # Upload artifacts (always, even if not publishing)
       - name: Upload artifacts
         if: always()
@@ -412,6 +415,15 @@ jobs:
           ref: ${{ inputs.tag != '' && inputs.tag || github.ref }}
           fetch-depth: 0
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install release validator dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
       - name: Get version
         id: version
         run: |
@@ -430,6 +442,115 @@ jobs:
         with:
           path: artifacts
           merge-multiple: true
+
+      # ── Finalize GitHub Release ──
+      - name: Finalize release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          DESIRED_TAG="${{ inputs.tag }}"
+          VERSION="${{ steps.version.outputs.version }}"
+          if [ -z "$DESIRED_TAG" ]; then
+            DESIRED_TAG="desktop-v${VERSION}"
+          fi
+          RELEASE_TITLE="MindOS Desktop v${VERSION}"
+          CORE_VERSION="$(node -p "require('./packages/mindos/package.json').version")"
+          PREVIOUS_TAG="$(gh api 'repos/GeminiLight/MindOS/releases?per_page=100' --paginate --jq ".[] | select((.tag_name | startswith(\"desktop-v\")) and .tag_name != \"${DESIRED_TAG}\") | .tag_name" | head -n 1 || true)"
+          if [ -n "$PREVIOUS_TAG" ]; then
+            CHANGELOG_URL="https://github.com/GeminiLight/MindOS/compare/${PREVIOUS_TAG}...${DESIRED_TAG}"
+          else
+            CHANGELOG_URL="https://github.com/GeminiLight/MindOS/releases"
+          fi
+
+          cat > /tmp/desktop-release-notes.md <<EOF
+          ## Downloads
+
+          | Platform | Device / CPU | Recommended file | Download |
+          |---|---|---|---|
+          | macOS | Apple Silicon (M1/M2/M3/M4) | \`MindOS-${VERSION}-arm64.dmg\` | [Download DMG](https://github.com/GeminiLight/MindOS/releases/download/${DESIRED_TAG}/MindOS-${VERSION}-arm64.dmg) |
+          | macOS | Intel | \`MindOS-${VERSION}.dmg\` | [Download DMG](https://github.com/GeminiLight/MindOS/releases/download/${DESIRED_TAG}/MindOS-${VERSION}.dmg) |
+          | Windows | x64 | \`MindOS-Setup-${VERSION}.exe\` | [Download EXE](https://github.com/GeminiLight/MindOS/releases/download/${DESIRED_TAG}/MindOS-Setup-${VERSION}.exe) |
+          | Windows | ARM64 | \`MindOS-Setup-${VERSION}-arm64.exe\` | [Download EXE](https://github.com/GeminiLight/MindOS/releases/download/${DESIRED_TAG}/MindOS-Setup-${VERSION}-arm64.exe) |
+          | Linux | x64 AppImage | \`MindOS-${VERSION}.AppImage\` | [Download AppImage](https://github.com/GeminiLight/MindOS/releases/download/${DESIRED_TAG}/MindOS-${VERSION}.AppImage) |
+          | Linux | Debian / Ubuntu x64 | \`mindos-desktop_${VERSION}_amd64.deb\` | [Download DEB](https://github.com/GeminiLight/MindOS/releases/download/${DESIRED_TAG}/mindos-desktop_${VERSION}_amd64.deb) |
+
+          ## What's included
+
+          | Component | Version |
+          |---|---|
+          | MindOS Desktop | v${VERSION} |
+          | Bundled MindOS Core | v${CORE_VERSION} |
+
+          ## Notes
+
+          The \`.zip\`, \`.yml\`, \`.yaml\`, and \`.blockmap\` files are used by the auto-updater. Most users should download one of the installers above.
+
+          ## Changelog
+
+          Full changelog: ${CHANGELOG_URL}
+          EOF
+
+          git fetch --tags origin
+          if ! git rev-parse "refs/tags/${DESIRED_TAG}" >/dev/null 2>&1; then
+            echo "Release tag does not exist: ${DESIRED_TAG}"
+            exit 1
+          fi
+          TAG_SHA="$(git rev-list -n 1 "refs/tags/${DESIRED_TAG}")"
+          HEAD_SHA="$(git rev-parse HEAD)"
+          if [ "$TAG_SHA" != "$HEAD_SHA" ]; then
+            echo "Finalize checkout ${HEAD_SHA} does not match ${DESIRED_TAG} (${TAG_SHA})"
+            exit 1
+          fi
+
+          # Never mutate an already public release. Retry a draft, or use a new
+          # version after publication so users cannot receive a mixed asset set.
+          if gh release view "$DESIRED_TAG" --json isDraft > /tmp/desktop-release-state.json 2>/dev/null; then
+            node -e 'if (!JSON.parse(require("fs").readFileSync("/tmp/desktop-release-state.json")).isDraft) throw new Error("Release already public; use a new Desktop tag")'
+          else
+            gh release create "$DESIRED_TAG" --title "$RELEASE_TITLE" --notes-file /tmp/desktop-release-notes.md --draft
+          fi
+          shopt -s nullglob
+
+          # Stable aliases keep website buttons and /latest/download/... links from
+          # depending on the current Desktop version string. The versioned assets
+          # above remain the canonical release artifacts and updater metadata.
+          copy_alias() {
+            local src="$1"
+            local dest="$2"
+            if [ -f "$src" ]; then
+              cp -f "$src" "artifacts/${dest}"
+            fi
+          }
+          copy_alias "artifacts/MindOS-${VERSION}-arm64.dmg" "MindOS-arm64.dmg"
+          copy_alias "artifacts/MindOS-${VERSION}.dmg" "MindOS.dmg"
+          copy_alias "artifacts/MindOS-Setup-${VERSION}.exe" "MindOS-Setup.exe"
+          copy_alias "artifacts/MindOS-Setup-${VERSION}-arm64.exe" "MindOS-Setup-arm64.exe"
+          copy_alias "artifacts/MindOS-${VERSION}.AppImage" "MindOS.AppImage"
+          copy_alias "artifacts/mindos-desktop_${VERSION}_amd64.deb" "mindos-desktop_amd64.deb"
+
+          candidates=(
+            artifacts/*.dmg
+            artifacts/*.zip
+            artifacts/*.exe
+            artifacts/*.AppImage
+            artifacts/*.deb
+            artifacts/*.blockmap
+            artifacts/latest*.yml
+          )
+          assets=()
+          for asset in "${candidates[@]}"; do
+            [ -f "$asset" ] && assets+=("$asset")
+          done
+          if [ "${#assets[@]}" -eq 0 ]; then
+            echo "No desktop artifacts downloaded; refusing to finalize release."
+            exit 1
+          fi
+          node scripts/desktop-release-assets.mjs verify artifacts "$VERSION"
+          gh release upload "$DESIRED_TAG" "${assets[@]}" --clobber
+
+          gh release view "$DESIRED_TAG" --json assets > /tmp/desktop-uploaded-assets.json
+          node scripts/desktop-release-assets.mjs verify-upload artifacts "$VERSION" /tmp/desktop-uploaded-assets.json
+          gh release edit "$DESIRED_TAG" --title "$RELEASE_TITLE" --notes-file /tmp/desktop-release-notes.md --draft=false --latest
 
       # ── Cloudflare R2 upload (optional, non-blocking) ──
       - name: Upload to Cloudflare R2
@@ -519,139 +640,28 @@ jobs:
           for pid in "${PIDS[@]}"; do
             wait "$pid" || ERRORS=$((ERRORS + 1))
           done
-          [ "$ERRORS" -eq 0 ] && echo "All versioned uploads succeeded" || echo "WARNING: ${ERRORS} upload(s) failed"
+          if [ "$ERRORS" -ne 0 ]; then
+            echo "::error::${ERRORS} OSS uploads failed; latest will not be promoted. Check bucket upload permissions."
+            exit 1
+          fi
+          echo "All versioned uploads succeeded"
 
-          # Server-side copy to latest/ (oss→oss, zero egress from runner)
+          # Promote only after the complete versioned set exists.
+          PIDS=()
           for file in artifacts/*.dmg artifacts/*.zip artifacts/*.exe artifacts/*.AppImage artifacts/*.deb; do
             [ -f "$file" ] || continue
             BASENAME=$(basename "$file")
             LATEST_NAME=$(strip_version "$BASENAME")
             oss cp "oss://${OSS_BUCKET}/desktop/v${VERSION}/${BASENAME}" \
                    "oss://${OSS_BUCKET}/desktop/latest/${LATEST_NAME}" -f &
+            PIDS+=($!)
           done
-          wait
+          ERRORS=0
+          for pid in "${PIDS[@]}"; do
+            wait "$pid" || ERRORS=$((ERRORS + 1))
+          done
+          if [ "$ERRORS" -ne 0 ]; then
+            echo "::error::${ERRORS} OSS latest copies failed. Mirror is not verified."
+            exit 1
+          fi
           echo "Uploaded to Alibaba Cloud OSS: desktop/v${VERSION}/ + desktop/latest/"
-
-      # ── Finalize GitHub Release ──
-      - name: Finalize release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          DESIRED_TAG="${{ inputs.tag }}"
-          VERSION="${{ steps.version.outputs.version }}"
-          if [ -z "$DESIRED_TAG" ]; then
-            DESIRED_TAG="desktop-v${VERSION}"
-          fi
-          RELEASE_TITLE="MindOS Desktop v${VERSION}"
-          CORE_VERSION="$(node -p "require('./packages/mindos/package.json').version")"
-          PREVIOUS_TAG="$(gh api 'repos/GeminiLight/MindOS/releases?per_page=100' --paginate --jq ".[] | select((.tag_name | startswith(\"desktop-v\")) and .tag_name != \"${DESIRED_TAG}\") | .tag_name" | head -n 1 || true)"
-          if [ -n "$PREVIOUS_TAG" ]; then
-            CHANGELOG_URL="https://github.com/GeminiLight/MindOS/compare/${PREVIOUS_TAG}...${DESIRED_TAG}"
-          else
-            CHANGELOG_URL="https://github.com/GeminiLight/MindOS/releases"
-          fi
-
-          cat > /tmp/desktop-release-notes.md <<EOF
-          ## Downloads
-
-          | Platform | Device / CPU | Recommended file | Download |
-          |---|---|---|---|
-          | macOS | Apple Silicon (M1/M2/M3/M4) | \`MindOS-${VERSION}-arm64.dmg\` | [Download DMG](https://github.com/GeminiLight/MindOS/releases/download/${DESIRED_TAG}/MindOS-${VERSION}-arm64.dmg) |
-          | macOS | Intel | \`MindOS-${VERSION}.dmg\` | [Download DMG](https://github.com/GeminiLight/MindOS/releases/download/${DESIRED_TAG}/MindOS-${VERSION}.dmg) |
-          | Windows | x64 | \`MindOS-Setup-${VERSION}.exe\` | [Download EXE](https://github.com/GeminiLight/MindOS/releases/download/${DESIRED_TAG}/MindOS-Setup-${VERSION}.exe) |
-          | Windows | ARM64 | \`MindOS-Setup-${VERSION}-arm64.exe\` | [Download EXE](https://github.com/GeminiLight/MindOS/releases/download/${DESIRED_TAG}/MindOS-Setup-${VERSION}-arm64.exe) |
-          | Linux | x64 AppImage | \`MindOS-${VERSION}.AppImage\` | [Download AppImage](https://github.com/GeminiLight/MindOS/releases/download/${DESIRED_TAG}/MindOS-${VERSION}.AppImage) |
-          | Linux | Debian / Ubuntu x64 | \`mindos-desktop_${VERSION}_amd64.deb\` | [Download DEB](https://github.com/GeminiLight/MindOS/releases/download/${DESIRED_TAG}/mindos-desktop_${VERSION}_amd64.deb) |
-
-          ## What's included
-
-          | Component | Version |
-          |---|---|
-          | MindOS Desktop | v${VERSION} |
-          | Bundled MindOS Core | v${CORE_VERSION} |
-
-          ## Notes
-
-          The \`.zip\`, \`.yml\`, \`.yaml\`, and \`.blockmap\` files are used by the auto-updater. Most users should download one of the installers above.
-
-          ## Changelog
-
-          Full changelog: ${CHANGELOG_URL}
-          EOF
-
-          git fetch --tags origin
-          if ! git rev-parse "refs/tags/${DESIRED_TAG}" >/dev/null 2>&1; then
-            echo "Release tag does not exist: ${DESIRED_TAG}"
-            exit 1
-          fi
-          TAG_SHA="$(git rev-list -n 1 "refs/tags/${DESIRED_TAG}")"
-          HEAD_SHA="$(git rev-parse HEAD)"
-          if [ "$TAG_SHA" != "$HEAD_SHA" ]; then
-            echo "Finalize checkout ${HEAD_SHA} does not match ${DESIRED_TAG} (${TAG_SHA})"
-            exit 1
-          fi
-
-          if gh release view "$DESIRED_TAG" >/dev/null 2>&1; then
-            gh release edit "$DESIRED_TAG" \
-              --title "$RELEASE_TITLE" \
-              --notes-file /tmp/desktop-release-notes.md \
-              --draft=false \
-              --latest
-          else
-            gh release create "$DESIRED_TAG" \
-              --title "$RELEASE_TITLE" \
-              --notes-file /tmp/desktop-release-notes.md \
-              --draft=false \
-              --latest
-          fi
-
-          shopt -s nullglob
-          gh release delete-asset "$DESIRED_TAG" "MindOS.Setup.${VERSION}.exe" --yes 2>/dev/null || true
-          gh release delete-asset "$DESIRED_TAG" "MindOS.Setup.${VERSION}.exe.blockmap" --yes 2>/dev/null || true
-
-          # Stable aliases keep website buttons and /latest/download/... links from
-          # depending on the current Desktop version string. The versioned assets
-          # above remain the canonical release artifacts and updater metadata.
-          copy_alias() {
-            local src="$1"
-            local dest="$2"
-            if [ -f "$src" ]; then
-              cp -f "$src" "artifacts/${dest}"
-            fi
-          }
-          copy_alias "artifacts/MindOS-${VERSION}-arm64.dmg" "MindOS-arm64.dmg"
-          copy_alias "artifacts/MindOS-${VERSION}.dmg" "MindOS.dmg"
-          copy_alias "artifacts/MindOS-Setup-${VERSION}.exe" "MindOS-Setup.exe"
-          copy_alias "artifacts/MindOS-Setup-${VERSION}-arm64.exe" "MindOS-Setup-arm64.exe"
-          copy_alias "artifacts/MindOS-${VERSION}.AppImage" "MindOS.AppImage"
-          copy_alias "artifacts/mindos-desktop_${VERSION}_amd64.deb" "mindos-desktop_amd64.deb"
-
-          candidates=(
-            artifacts/*.dmg
-            artifacts/*.zip
-            artifacts/*.exe
-            artifacts/*.AppImage
-            artifacts/*.deb
-            artifacts/*.blockmap
-            artifacts/latest*.yml
-          )
-          assets=()
-          for asset in "${candidates[@]}"; do
-            [ -f "$asset" ] && assets+=("$asset")
-          done
-          if [ "${#assets[@]}" -eq 0 ]; then
-            echo "No desktop artifacts downloaded; refusing to finalize release."
-            exit 1
-          fi
-          gh release upload "$DESIRED_TAG" "${assets[@]}" --clobber
-
-          gh release view "$DESIRED_TAG" --json assets --jq '.assets[].name' > /tmp/mindos-desktop-assets.txt
-          for required_asset in \
-            "MindOS-arm64.dmg" \
-            "MindOS.dmg" \
-            "MindOS-Setup.exe" \
-            "MindOS-Setup-arm64.exe" \
-            "MindOS.AppImage" \
-            "mindos-desktop_amd64.deb"; do
-            grep -Fx "$required_asset" /tmp/mindos-desktop-assets.txt
-          done

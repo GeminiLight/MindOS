@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import path from 'path';
 
 vi.mock('electron', () => ({
@@ -13,6 +13,10 @@ vi.mock('electron', () => ({
 }));
 
 describe('install-cli-shim', () => {
+  beforeEach(() => {
+    vi.stubEnv('MINDOS_DESKTOP_HOME_DIR', path.join(process.cwd(), 'tmp-install-cli-shim-home'));
+  });
+  afterEach(() => { vi.unstubAllEnvs(); });
   it('escapes only % in quoted set values (carets and bangs are literal without delayed expansion)', async () => {
     const { escapeCmdSetValue } = await import('./install-cli-shim');
 

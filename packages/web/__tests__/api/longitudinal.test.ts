@@ -202,3 +202,14 @@ it("serves researcher progress, blind packets and keys to the owner session only
   const list = await owner("");
   expect((await list.json()).studies[0]).toMatchObject({ participants: 1, consented: 1, pendingReviews: 0, rounds: 2 });
 });
+
+it("restricts atomic export bundles to owner sessions and keeps all packet identities aligned", async () => {
+  const {s}=seed(); const url="http://localhost/api/echo/longitudinal?id="+s.id+"&packet=bundle";
+  expect((await admin(new NextRequest(url))).status).toBe(401);
+  const response=await admin(new NextRequest(url,{headers:{Cookie:"mindos-session=owner-session"}}));
+  expect(response.status).toBe(200);
+  const bundle=await response.json();
+  expect(bundle.review.packetId).toBe(bundle.key.packetId);
+  expect(bundle.record.packetId).toBe(bundle.packetId);
+  expect(JSON.stringify(bundle)).not.toMatch(/tokenHash|issueHash|commands|salt/);
+});

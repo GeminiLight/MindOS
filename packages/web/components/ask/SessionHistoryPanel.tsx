@@ -21,6 +21,15 @@ import {
 import { SessionHistoryRow } from './SessionHistoryRow';
 
 interface SessionHistoryPanelProps {
+  externalScope?: 'all' | 'project';
+  onExternalScopeChange?: (scope: 'all' | 'project') => void;
+  externalProjectAvailable?: boolean;
+  externalQuery?: string;
+  onExternalQueryChange?: (query: string) => void;
+  externalHasMore?: boolean;
+  onLoadMoreExternal?: () => void;
+  externalArchived?: boolean;
+  onExternalArchivedChange?: (archived: boolean) => void;
   sessions: ChatSession[];
   activeSessionId: string | null;
   selectedAgentRuntime?: AgentRuntimeIdentity | null;
@@ -57,6 +66,9 @@ function compareHistoryRows(a: HistoryRow, b: HistoryRow): number {
 
 function SessionHistoryPanel({
   sessions, activeSessionId,
+  externalScope = 'all', onExternalScopeChange, externalProjectAvailable = false,
+  externalQuery, onExternalQueryChange, externalHasMore = false, onLoadMoreExternal,
+  externalArchived = false, onExternalArchivedChange,
   selectedAgentRuntime,
   runtimeSessions = [],
   runtimeSessionsLoading = false,
@@ -75,7 +87,9 @@ function SessionHistoryPanel({
   // changes on run start/end or unread membership — streaming chunks never
   // re-render the list (spec-chat-session-concurrency.md performance bar).
   const runSummary = useRunSummary();
-  const [query, setQuery] = useState('');
+  const [localQuery, setLocalQuery] = useState('');
+  const query = externalQuery ?? localQuery;
+  const setQuery = (value: string) => { setLocalQuery(value); onExternalQueryChange?.(value); };
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
@@ -106,6 +120,13 @@ function SessionHistoryPanel({
     return index;
   }, [runtimeSessions]);
 
+  // A native session already bound to a local chat is one conversation.
+  const unboundRuntimeSessions = useMemo(() => {
+    const bound = new Set(sessions.filter(s => s.runtimeSessionBinding?.runtime === selectedAgentRuntime?.kind
+      && s.runtimeSessionBinding?.runtimeId === selectedAgentRuntime?.id).map(s => s.runtimeSessionBinding?.externalSessionId));
+    return runtimeSessions.filter(entry => !bound.has(entry.id));
+  }, [sessions, runtimeSessions, selectedAgentRuntime?.id, selectedAgentRuntime?.kind]);
+
   // Filter sessions by search query
   const filtered = useMemo(() => {
     if (!searchQuery) return sessions;
@@ -117,12 +138,12 @@ function SessionHistoryPanel({
 
   const filteredRuntimeSessions = useMemo(() => {
     if (!runtimeSessionsSupported) return [];
-    if (!searchQuery) return runtimeSessions;
-    return runtimeSessions.filter((entry) => {
+    if (!searchQuery) return unboundRuntimeSessions;
+    return unboundRuntimeSessions.filter((entry) => {
       const listEntry = runtimeSessionEntryById.get(entry.id);
       return listEntry ? sessionListEntryMatchesSearch(listEntry, searchQuery) : false;
     });
-  }, [runtimeSessionEntryById, runtimeSessions, runtimeSessionsSupported, searchQuery]);
+  }, [runtimeSessionEntryById, unboundRuntimeSessions, runtimeSessionsSupported, searchQuery]);
 
   const pinnedCount = useMemo(() => sessions.filter(s => s.pinned).length, [sessions]);
   const totalCount = useMemo(() => {
@@ -163,7 +184,7 @@ function SessionHistoryPanel({
     rows.sort(compareHistoryRows);
     return rows;
   }, [filtered, filteredRuntimeSessions, runtimeSessionEntryById, sessionEntryById, showRuntimeSessions]);
-  const totalHistoryCount = totalCount + (showRuntimeSessions ? runtimeSessions.length : 0);
+  const totalHistoryCount = totalCount + (showRuntimeSessions ? unboundRuntimeSessions.length : 0);
 
   const handleLoad = useCallback((id: string) => {
     startTransition(() => {
@@ -209,6 +230,29 @@ function SessionHistoryPanel({
 
   return (
     <div className="flex flex-col flex-1 min-h-0 animate-in fade-in-0 duration-150">
+      {showRuntimeSessions && onExternalScopeChange && (
+        <div className="px-4 pt-3 pb-1 space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div role="group" aria-label={ask.externalSessions?.scope ?? 'Session scope'} className="inline-flex rounded-lg bg-muted p-0.5">
+              {(['all', 'project'] as const).map(scope => (
+                <button key={scope} type="button" aria-pressed={externalScope === scope}
+                  disabled={scope === 'project' && !externalProjectAvailable}
+                  onClick={() => onExternalScopeChange(scope)}
+                  className={`rounded-md px-2.5 py-1.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ${externalScope === scope ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+                  {scope === 'all' ? (ask.externalSessions?.allProjects ?? 'All projects') : (ask.externalSessions?.currentProject ?? 'Current project')}
+                </button>
+              ))}
+            </div>
+            {selectedAgentRuntime?.kind === 'codex' && onExternalArchivedChange && (
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <input type="checkbox" checked={externalArchived} onChange={event => onExternalArchivedChange(event.target.checked)} className="accent-[var(--amber)] focus-visible:ring-2 focus-visible:ring-ring" />
+                {ask.externalSessions?.archived ?? 'Archived'}
+              </label>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">{ask.externalSessions?.hint ?? 'Sessions on this computer. Open one to continue with its original Agent.'}</p>
+        </div>
+      )}
       {/* Search bar */}
       <div className="px-4 pt-2.5 pb-1.5 shrink-0">
         <div className="relative">
@@ -225,7 +269,7 @@ function SessionHistoryPanel({
             <button
               type="button"
               onClick={() => setQuery('')}
-              aria-label="Clear search"
+              aria-label={ask.externalSessions?.clearSearch ?? 'Clear search'}
               className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground/40 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <X size={12} />
@@ -247,8 +291,8 @@ function SessionHistoryPanel({
               onClick={onRefreshRuntimeSessions}
               disabled={runtimeSessionsLoading}
               className="hit-target-box inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground/45 transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-radius:var(--radius-md)]"
-              title="Refresh runtime sessions"
-              aria-label="Refresh runtime sessions"
+              title={ask.externalSessions?.refresh ?? 'Refresh sessions'}
+              aria-label={ask.externalSessions?.refresh ?? 'Refresh sessions'}
             >
               {runtimeSessionsLoading ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
             </button>
@@ -278,7 +322,7 @@ function SessionHistoryPanel({
             {showRuntimeSessions && runtimeSessionsLoading && filteredRuntimeSessions.length === 0 && (
               <RuntimeHistoryNotice
                 icon={<Loader2 size={12} className="animate-spin text-muted-foreground/50" />}
-                text="Loading runtime sessions..."
+                text={ask.externalSessions?.loading ?? 'Loading sessions…'}
               />
             )}
             {historyRows.map((row) => (
@@ -325,7 +369,7 @@ function SessionHistoryPanel({
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <MessageSquare size={32} className="text-muted-foreground/20 mb-3" />
             <p className="text-sm text-muted-foreground/60">
-              {query ? 'No matching conversations' : (ask?.historyEmpty ?? 'No conversations yet')}
+              {query ? (ask.externalSessions?.noMatches ?? 'No matching conversations') : (ask?.historyEmpty ?? 'No conversations yet')}
             </p>
             {!query && (
               <p className="text-2xs text-muted-foreground/40 mt-1">
@@ -333,6 +377,13 @@ function SessionHistoryPanel({
               </p>
             )}
           </div>
+        )}
+        {showRuntimeSessions && externalHasMore && onLoadMoreExternal && (
+          <button type="button" onClick={onLoadMoreExternal} disabled={runtimeSessionsLoading}
+            className="mt-3 inline-flex min-h-9 w-full items-center justify-center gap-2 rounded-md border border-border px-3 text-xs text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50">
+            {runtimeSessionsLoading && <Loader2 size={12} className="animate-spin" />}
+            {runtimeSessionsLoading ? (ask.externalSessions?.loading ?? 'Loading sessions…') : (ask.externalSessions?.loadMore ?? 'Load more sessions')}
+          </button>
         )}
       </div>
 
@@ -355,11 +406,11 @@ function RuntimeHistoryNotice({
   tone?: 'muted' | 'error';
 }) {
   return (
-    <div
+    <div role={tone === 'error' ? 'alert' : 'status'}
       className={`mb-0.5 flex items-start gap-2 rounded-md border px-3 py-2 text-2xs ${
         tone === 'error'
-          ? 'border-border/60 bg-muted/30 text-muted-foreground'
-          : 'border-border/50 text-muted-foreground/60'
+          ? 'border-error/20 bg-muted/30 text-error'
+          : 'border-border/50 text-muted-foreground'
       }`}
     >
       {icon}
@@ -425,7 +476,7 @@ function RuntimeSessionRow({
         {(updatedAtLabel || busy) && (
           <span
             data-session-row-time
-            className={`pointer-events-none absolute right-0 top-1/2 inline-flex -translate-y-1/2 items-center gap-1.5 text-2xs tabular-nums text-muted-foreground/40 transition-opacity duration-100 ${
+            className={`pointer-events-none absolute right-0 top-1/2 inline-flex -translate-y-1/2 items-center gap-1.5 text-2xs tabular-nums text-muted-foreground transition-opacity duration-100 ${
               hasActions ? 'group-hover:opacity-0 group-focus-within:opacity-0' : ''
             }`}
           >
@@ -458,7 +509,7 @@ function RuntimeSessionRow({
       </div>
       <div
         data-session-row-meta
-        className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[10px] text-muted-foreground/45 opacity-0 transition-opacity duration-100 group-hover:opacity-100 group-focus-within:opacity-100"
+        className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[10px] text-muted-foreground"
         title={listEntry.metadataTitle}
       >
         <span className="inline-flex shrink-0 items-center gap-1">

@@ -23,7 +23,7 @@ export interface PluginCompatibilityReport {
   nodeModules: string[];
   supportedModules?: string[];
   unsupportedModules: string[];
-  /** Third-party packages the host never provides (bundler leftovers like `ajv/dist/*`); not a runtime capability gap. */
+  /** Reserved for proven internal bundle modules; unknown imports are never assumed bundled. */
   bundledModules?: string[];
   platformRequirements?: PluginPlatformRequirements;
   supportedApis: string[];
@@ -467,7 +467,9 @@ function collectObsidianImports(code: string): string[] {
 
 function collectModuleImports(code: string): string[] {
   const modules: string[] = [];
-  const requireMatches = code.matchAll(/\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/g);
+  // A member such as lodash's guarded localModule.require('util') probe is
+  // not a call to the injected host require. Keep actual bare externals strict.
+  const requireMatches = code.matchAll(/(?<![.$\w\\])require\s*\(\s*['"]([^'"]+)['"]\s*\)/g);
   for (const match of requireMatches) {
     const moduleName = match[1];
     if (moduleName && moduleName !== 'obsidian') {
@@ -518,17 +520,6 @@ function collectSupportedModules(moduleImports: string[]): string[] {
   return unique(moduleImports.filter((moduleName) => SUPPORTED_RUNTIME_MODULES.has(moduleName)));
 }
 
-/**
- * Bare third-party package specifiers the host never provides (e.g. `ajv/dist/runtime/equal`
- * left in the bundle by esbuild/rollup). Obsidian does not resolve them either, so they are
- * plugin-owned dependencies rather than a host capability gap and must not block loading.
- * Relative specifiers are excluded; they stay in blockers as bundler leftovers per contract.
- */
-function collectBundledModules(moduleImports: string[]): string[] {
-  return unique(moduleImports.filter((moduleName) =>
-    !isRelativeModule(moduleName) && classifyRuntimeModuleTier(moduleName) === 'unknown'));
-}
-
 function collectUnsupportedModules(moduleImports: string[], supportedModules: string[], bundledModules: string[]): string[] {
   const excluded = new Set([...supportedModules, ...bundledModules]);
   return unique(moduleImports.filter((moduleName) => !excluded.has(moduleName)));
@@ -551,7 +542,8 @@ export function analyzePluginCompatibility(code: string, manifest?: { isDesktopO
   const moduleImports = collectModuleImports(code);
   const nodeModules = collectNodeModules(moduleImports);
   const supportedModules = collectSupportedModules(moduleImports);
-  const bundledModules = collectBundledModules(moduleImports);
+  // A package name alone cannot prove its external require was bundled.
+  const bundledModules: string[] = [];
   const unsupportedModules = collectUnsupportedModules(moduleImports, supportedModules, bundledModules);
   const platformRequirements: PluginPlatformRequirements = {
     desktop: manifest?.isDesktopOnly === true,

@@ -51,3 +51,16 @@ it('shows a launch failure and permits retry', async () => {
   expect(host.querySelector('[role=alert]')?.textContent).toContain('Local server unavailable');
   await submit(); expect(open).toHaveBeenCalledTimes(2);
 });
+
+it('prefers an available host candidate and guards every submission for unavailable dependencies', async () => {
+  const plugins = [
+    { id: 'native', name: 'Native', compatibility: { moduleImports: ['electron'], blockers: ['native module'] } },
+    { id: 'editor', name: 'Editor', compatibility: { moduleImports: ['obsidian', '@codemirror/view'], blockers: ['Requires unsupported runtime module: @codemirror/view'] } },
+  ];
+  await act(async () => root.render(<DesktopObsidianEditor plugins={plugins} />));
+  expect(host.querySelector('[aria-haspopup=listbox]')!.textContent).toContain('Editor');
+  await enter('Note.md'); await submit(); expect(open).toHaveBeenCalledWith('editor', 'Note.md'); open.mockClear();
+  await act(async () => (host.querySelector('[aria-haspopup=listbox]') as HTMLButtonElement).click());
+  await act(async () => [...host.querySelectorAll('[role=option]')].find(item => item.textContent === 'Native')!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })));
+  await submit(); expect(open).not.toHaveBeenCalled(); expect(host.textContent).toContain('electron');
+});

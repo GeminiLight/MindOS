@@ -71,7 +71,7 @@ export async function createObsidianEditorWindow(options: Options) {
     createdWindow = window;
     window.webContents.setWebRTCIPHandlingPolicy('disable_non_proxied_udp');
     let ready = false; let closed = false; let saving = false; let closing = false; let error = '';
-    let refreshing = false;
+    let refreshing = false; let configurationRequests = 0;
     const lifetime = new AbortController();
     let capture: { id: string; resolve: () => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> } | undefined;
     let initialized = false; let mainNavigations = 0; let frameNavigation = false;
@@ -115,7 +115,7 @@ export async function createObsidianEditorWindow(options: Options) {
     window.on('close', event => {
       if (closed || !ready) return;
       event.preventDefault();
-      if (closing || saving || refreshing) return;
+      if (closing || saving || refreshing || configurationRequests) return;
       closing = true; error = ''; sendState();
       void (async () => {
         try {
@@ -160,10 +160,26 @@ export async function createObsidianEditorWindow(options: Options) {
       if (closed || channel !== CHANNEL || event.senderFrame !== window.webContents.mainFrame || !message || typeof message !== 'object') return;
       if (Date.now() - messageEpoch >= 1000) { messageEpoch = Date.now(); messageCount = 0; }
       if (++messageCount > 100) { stop(new Error('Plugin editor message rate exceeded.')); return; }
-      const data = message as { kind?: string; content?: unknown; id?: unknown };
+      const data = message as { kind?: string; content?: unknown; id?: unknown; operation?: unknown; data?: unknown };
       if (data.kind === 'ready' && !initialized) {
         initialized = true;
         window.webContents.send(CHANNEL, { kind: 'init', frameUrl, package: approved.package, document: approved.snapshot, vault: approved.vault });
+      } else if (data.kind === 'plugin-data' && initialized && !closing && typeof data.id === 'string' && /^[a-f0-9-]{36}$/.test(data.id)) {
+        const id = data.id;
+        if (configurationRequests >= 32) { stop(new Error('Plugin configuration request limit exceeded.')); return; }
+        configurationRequests++;
+        try {
+          let value: unknown;
+          if (data.operation === 'read') value = await approved.readPluginData();
+          else if (data.operation === 'write') {
+            const json = JSON.stringify(data.data);
+            if (json === undefined || Buffer.byteLength(json) > 1024 * 1024) throw new Error('Plugin configuration size limit exceeded.');
+            await approved.savePluginData(data.data); value = null;
+          } else throw new Error('Invalid plugin configuration operation.');
+          if (!closed) window.webContents.send(CHANNEL, { kind: 'plugin-data-result', id, data: value });
+        } catch (failure) {
+          if (!closed) window.webContents.send(CHANNEL, { kind: 'plugin-data-result', id, error: (failure as Error).message.slice(0, 300) });
+        } finally { configurationRequests--; }
       } else if (data.kind === 'loaded' && initialized) {
         lastActivity = Date.now(); ready = true; sendState(); window.show(); resolveReady();
       } else if (data.kind === 'heartbeat' && ready) lastActivity = Date.now();

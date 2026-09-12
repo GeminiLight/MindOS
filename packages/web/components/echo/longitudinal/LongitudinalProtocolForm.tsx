@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { LongitudinalProtocol } from "@geminilight/mindos/knowledge";
 import { Button } from "@/components/ui/button";
 import { StudyTextField, studyNote } from "../research/StudyFields";
@@ -42,6 +42,8 @@ export default function LongitudinalProtocolForm({ draft, setDraft, runtime, bus
   onFreeze: () => void; p: LongitudinalCopy["form"];
 }) {
   const [confirmed, setConfirmed] = useState(false);
+  const runtimeKey = JSON.stringify(runtime);
+  useEffect(() => { setConfirmed(false); }, [runtimeKey]);
   const missing = missingProtocolFields(draft, !!runtime, p);
   const roundLabel = (i: number) => (p.round === "第" ? `第 ${i + 1} 轮` : `${p.round} ${i + 1}`);
   const field = (name: keyof ProtocolDraft, label: string, max = 4000, multiline = true) => (
@@ -53,11 +55,23 @@ export default function LongitudinalProtocolForm({ draft, setDraft, runtime, bus
       {children}
     </section>
   );
-  const focusField = (id: string) => document.getElementById("study-" + id)?.focus();
+  const focusField = (id: string) => {
+    const field = document.getElementById("study-" + id);
+    // A focus call cannot reveal a textarea inside a closed round (or outer preparation panel).
+    for (let parent = field?.parentElement; parent; parent = parent.parentElement) {
+      if (parent instanceof HTMLDetailsElement) parent.open = true;
+    }
+    field?.focus();
+    field?.scrollIntoView({ block: "center" });
+  };
   return (
     <form className="space-y-6" onSubmit={(e) => { e.preventDefault(); if (!missing.length && confirmed && !busy) onFreeze(); }}>
       <fieldset disabled={busy} className="min-w-0 space-y-6">
         <EchoDraftNotice />
+        <nav aria-label={p.jump} className="flex flex-wrap gap-x-4 gap-y-1 border-b border-border pb-4">
+          {[["title", p.basics], ["consent", p.participantInfo], ["baselineMethod", p.method], ["capacity", p.schedule], ["round-0-before", p.rounds], ["rubric", p.scoring], ["reviewedBy", p.review]].map(([key, label], i) =>
+            <button type="button" key={key} onClick={() => focusField(key.startsWith("round-") ? key : "long-" + key)} className="min-h-11 rounded text-left text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><span className="mr-2 font-mono text-xs">0{i + 1}</span>{label}</button>)}
+        </nav>
         {section(p.basics, <>{field("title", p.title, 200, false)}{field("hypothesis", p.hypothesis)}</>, p.hypothesisHint)}
         {section(p.participantInfo, <>{field("consent", p.consent, 6000)}{field("withdrawal", p.withdrawal)}</>)}
         {section(p.method, <>
@@ -99,9 +113,9 @@ export default function LongitudinalProtocolForm({ draft, setDraft, runtime, bus
             </details>
           ))}
           <div className="flex flex-wrap gap-3">
-            <Button type="button" variant="outline" className="min-h-11" disabled={draft.rounds.length >= 6} onClick={() => setDraft({ ...draft, rounds: [...draft.rounds.map((r, i) => (i === draft.rounds.length - 1 ? r : r)), blankRound()] })}>{p.addRound}</Button>
+            <Button type="button" variant="outline" className="min-h-11" disabled={draft.rounds.length >= 6} onClick={() => { setConfirmed(false); setDraft({ ...draft, rounds: [...draft.rounds, blankRound()] }); }}>{p.addRound}</Button>
             <Button type="button" variant="ghost" className="min-h-11" disabled={draft.rounds.length <= 2}
-              onClick={() => setDraft({ ...draft, rounds: draft.rounds.slice(0, -1).map((r, i) => (i === draft.rounds.length - 2 ? { ...r, updateAllowed: false } : r)) })}>{p.removeRound}</Button>
+              onClick={() => { setConfirmed(false); setDraft({ ...draft, rounds: draft.rounds.slice(0, -1).map((r, i) => (i === draft.rounds.length - 2 ? { ...r, updateAllowed: false } : r)) }); }}>{p.removeRound}</Button>
           </div>
         </>)}
         {section(p.scoring, field("rubric", p.rubric), p.rubricHint)}
@@ -119,7 +133,7 @@ export default function LongitudinalProtocolForm({ draft, setDraft, runtime, bus
             <input type="checkbox" name="confirm-freeze" className={check} checked={confirmed} disabled={!!missing.length} onChange={(e) => setConfirmed(e.target.checked)} />
             <span>{p.confirm}</span>
           </label>
-          <Button type="submit" className="min-h-11 h-auto whitespace-normal" disabled={busy || !!missing.length || !confirmed}>{busy ? p.freezing : p.freeze}</Button>
+          <Button variant="amber" type="submit" className="min-h-11 h-auto whitespace-normal" disabled={busy || !!missing.length || !confirmed}>{busy ? p.freezing : p.freeze}</Button>
         </section>
       </fieldset>
     </form>

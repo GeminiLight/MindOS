@@ -9,13 +9,14 @@
  * runs and debounced persistence survive component unmounts (the right Ask
  * panel closing must not kill an in-flight stream).
  *
- * Listener pattern precedent: hooks/useAskModal.ts. Subscriptions are
+ * Zustand owns React subscriptions. Selectors are
  * per-session so a streaming chunk only re-renders subscribers of that
  * session; the history list / future tab strip subscribe to a lightweight
  * run summary instead.
  */
 
-import { useSyncExternalStore } from 'react';
+import { useStore } from 'zustand';
+import { createStore } from 'zustand/vanilla';
 import type { AgentRuntimeIdentity, ChatSession, Message, RuntimeSessionBinding } from '@/lib/types';
 import type { AgentRunContextMetadata, ContextUsageMetadata } from '@/lib/agent/stream-consumer';
 
@@ -85,9 +86,8 @@ const persistTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const cooldownUntil = new Map<string, number>();
 let activeSessionId: string | null = null;
 
-const sessionListeners = new Map<string, Set<() => void>>();
-const summaryListeners = new Set<() => void>();
-let summarySnapshot: RunSummary = EMPTY_SUMMARY;
+type SessionView = { messages: Message[]; run: AgentRun | null; contextUsage: ContextUsageMetadata | null };
+const viewStore = createStore<{ sessions: Record<string, SessionView>; summary: RunSummary }>(() => ({ sessions: {}, summary: EMPTY_SUMMARY }));
 
 // Injection seam kept to avoid a two-way import with agent-session-store, which
 // wires all three slots exactly once at its module load (PR3) — registration
@@ -97,25 +97,13 @@ let sessionsUpdater: SessionsUpdater | null = null;
 let runtimeBindingWriter: RuntimeBindingWriter | null = null;
 
 function emitSession(sessionId: string) {
-  sessionListeners.get(sessionId)?.forEach((fn) => fn());
+  viewStore.setState(state => ({ sessions: { ...state.sessions, [sessionId]: {
+    messages: getMessages(sessionId), run: getRun(sessionId), contextUsage: getContextUsage(sessionId),
+  } } }));
 }
 
 function emitSummary() {
-  summarySnapshot = { running: new Set(runs.keys()), unread: new Set(unread) };
-  summaryListeners.forEach((fn) => fn());
-}
-
-function subscribeSession(sessionId: string, fn: () => void): () => void {
-  let set = sessionListeners.get(sessionId);
-  if (!set) {
-    set = new Set();
-    sessionListeners.set(sessionId, set);
-  }
-  set.add(fn);
-  return () => {
-    set.delete(fn);
-    if (set.size === 0) sessionListeners.delete(sessionId);
-  };
+  viewStore.setState({ summary: { running: new Set(runs.keys()), unread: new Set(unread) } });
 }
 
 // ---------------------------------------------------------------------------
@@ -408,39 +396,24 @@ export function removeSession(sessionId: string) {
   cooldownUntil.delete(sessionId);
   contextUsageBySession.delete(sessionId);
   const hadUnread = unread.delete(sessionId);
-  emitSession(sessionId);
-  if (hadUnread || summarySnapshot.running.has(sessionId)) emitSummary();
+  viewStore.setState(state => { const sessions = { ...state.sessions }; delete sessions[sessionId]; return { sessions }; });
+  if (hadUnread || viewStore.getState().summary.running.has(sessionId)) emitSummary();
 }
 
 // ---------------------------------------------------------------------------
 // React subscriptions
 
 export function useSessionMessages(sessionId: string | null): Message[] {
-  return useSyncExternalStore(
-    (fn) => (sessionId ? subscribeSession(sessionId, fn) : () => {}),
-    () => (sessionId ? getMessages(sessionId) : EMPTY_MESSAGES),
-    () => EMPTY_MESSAGES,
-  );
+  return useStore(viewStore, state => sessionId ? state.sessions[sessionId]?.messages ?? EMPTY_MESSAGES : EMPTY_MESSAGES);
 }
 
 export function useSessionRun(sessionId: string | null): AgentRun | null {
-  return useSyncExternalStore(
-    (fn) => (sessionId ? subscribeSession(sessionId, fn) : () => {}),
-    () => getRun(sessionId),
-    () => null,
-  );
+  return useStore(viewStore, state => sessionId ? state.sessions[sessionId]?.run ?? null : null);
 }
 
 /** Lightweight runs/unread summary — streaming chunks do not invalidate it. */
 export function useRunSummary(): RunSummary {
-  return useSyncExternalStore(
-    (fn) => {
-      summaryListeners.add(fn);
-      return () => summaryListeners.delete(fn);
-    },
-    () => summarySnapshot,
-    () => EMPTY_SUMMARY,
-  );
+  return useStore(viewStore, state => state.summary);
 }
 
 // ---------------------------------------------------------------------------
@@ -471,15 +444,9 @@ export function resetAgentRunStoreForTests() {
   metaResolver = null;
   sessionsUpdater = null;
   runtimeBindingWriter = null;
-  sessionListeners.clear();
-  summaryListeners.clear();
-  summarySnapshot = EMPTY_SUMMARY;
+  viewStore.setState({ sessions: {}, summary: EMPTY_SUMMARY });
 }
 
 export function useSessionContextUsage(sessionId: string | null): ContextUsageMetadata | null {
-  return useSyncExternalStore(
-    (fn) => (sessionId ? subscribeSession(sessionId, fn) : () => {}),
-    () => getContextUsage(sessionId),
-    () => null,
-  );
+  return useStore(viewStore, state => sessionId ? state.sessions[sessionId]?.contextUsage ?? null : null);
 }

@@ -100,7 +100,9 @@ export async function POST(req: NextRequest) {
       nextStep: {
         manageHref: '/settings?tab=plugins',
         surfacesHref: '/settings?tab=plugins&panel=surfaces',
-        message: 'Imported locally. Enable and load it from Installed before it can run.',
+        message: plugin.compatibilityLevel === 'blocked' && support.importable
+          ? 'Imported locally and left disabled. Open it from the Desktop experimental editor; server execution remains unavailable.'
+          : 'Imported locally. Enable and load it from Installed before it can run.',
       },
     });
   } catch (err) {

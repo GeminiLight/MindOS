@@ -365,7 +365,6 @@ describe('createMindosPiRuntimeLane', () => {
         session,
         agentRunContextResource: {},
         llmHistoryMessages: [],
-        fallbackTools: [],
         systemPrompt: 'sys',
         turnPrompt: 'turn',
         model: {},
@@ -381,16 +380,16 @@ describe('createMindosPiRuntimeLane', () => {
     };
   }
 
-  const config = { cwd: '/work', stepLimit: 10, thinkingLevel: 'medium', proxyMessages: { proxyCompatMode: 'compat', proxyCompatDetecting: 'detecting', proxyCompatFailed: (m: string) => `failed ${m}`, proxyCompatAlsoFailed: (m: string) => `also ${m}` } };
+  const config = { cwd: '/work', stepLimit: 10, thinkingLevel: 'medium' };
 
   it('shapes the lane session from the opened runtime (capsule patch, archive, terminal metadata)', async () => {
     const { runtime } = createFakeRuntime({
       runtimeSession: { externalSessionId: 'pi-1', sessionDir: '/sessions/pi-1', sessionFile: '/sessions/pi-1.jsonl', resumed: true },
     });
     const lane = createMindosPiRuntimeLane({ ...config, runtime: runtime as unknown as MindosPiAgentRuntime }, {
-      readCompatCache: () => ({}),
-      resolveCompatMode: () => undefined,
-      writeCompat: () => {},
+
+
+
     });
     const session: LaneSession = await lane.open({});
     expect(session.kind).toBe('mindos');
@@ -415,9 +414,9 @@ describe('createMindosPiRuntimeLane', () => {
     });
     const lane = createMindosPiRuntimeLane({ ...config, runtime: runtime as unknown as MindosPiAgentRuntime }, {
       runPiSession,
-      readCompatCache: () => ({ default: 'non-streaming' }),
-      resolveCompatMode: () => 'non-streaming',
-      writeCompat: () => {},
+
+
+
     });
     const { sink, frames } = createFakeSink();
     const session = await lane.open({});
@@ -432,8 +431,6 @@ describe('createMindosPiRuntimeLane', () => {
       timeoutMs: 42_000,
       signal: baseTurn.signal,
       provider: 'anthropic',
-      effectiveBaseUrlKey: 'default',
-      compatMode: 'non-streaming',
     }));
   });
 
@@ -441,9 +438,9 @@ describe('createMindosPiRuntimeLane', () => {
     const { runtime } = createFakeRuntime();
     const lane = createMindosPiRuntimeLane({ ...config, runtime: runtime as unknown as MindosPiAgentRuntime }, {
       runPiSession: async () => ({ status: 'error' as const, message: 'model failed', hasContent: true, lastModelError: 'model failed' }),
-      readCompatCache: () => ({}),
-      resolveCompatMode: () => undefined,
-      writeCompat: () => {},
+
+
+
     });
     const session = await lane.open({});
     const result = await lane.run(session, baseTurn, createFakeSink().sink);
@@ -462,9 +459,9 @@ describe('createMindosPiRuntimeLane', () => {
         capturedPrompt = options.prompt;
         return { status: 'completed' as const, hasContent: true, lastModelError: '' };
       },
-      readCompatCache: () => ({}),
-      resolveCompatMode: () => undefined,
-      writeCompat: () => {},
+
+
+
     });
     const session = await lane.open({});
     await lane.run(session, baseTurn, createFakeSink().sink);
@@ -475,9 +472,9 @@ describe('createMindosPiRuntimeLane', () => {
     const { runtime, session: piSession } = createFakeRuntime();
     const lane = createMindosPiRuntimeLane({ ...config, runtime: runtime as unknown as MindosPiAgentRuntime }, {
       runPiSession: async () => ({ status: 'error' as const, hasContent: false, lastModelError: '' }),
-      readCompatCache: () => ({}),
-      resolveCompatMode: () => undefined,
-      writeCompat: () => {},
+
+
+
     });
     const session = await lane.open({});
     const result = await lane.run(session, baseTurn, createFakeSink().sink);

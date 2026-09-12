@@ -11,6 +11,17 @@ describe('buildLineDiff (LCS-based diff)', () => {
     expect(buildLineDiff('', 'line1')).toContainEqual({ type: 'insert', text: 'line1' });
   });
 
+  it('stops pathological edits at a bounded edit distance', () => {
+    expect(() => buildLineDiff('a\nb\nc', 'x\ny\nz', { maxEditLength: 1 })).toThrow(/diff.*limit/i);
+  });
+
+  it('preserves trailing newlines and CRLF as line content', () => {
+    const result = buildLineDiff('a\r\nb\r\n', 'a\r\nc\r\n');
+    expect(result).toContainEqual({ type: 'equal', text: 'a\r' });
+    expect(result).toContainEqual({ type: 'insert', text: 'c\r' });
+    expect(result.at(-1)).toEqual({ type: 'equal', text: '' });
+  });
+
   it('detects unchanged lines', () => {
     const result = buildLineDiff('line1\nline2', 'line1\nline2');
     expect(result).toEqual([

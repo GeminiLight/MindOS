@@ -59,8 +59,8 @@ export function bindObsidianWindowOwner({ window, baseUrl, isCurrent: current }:
           detail: [
             `${subject.pluginId} · ${subject.pluginVersion}`, subject.filePath,
             `${zh ? '知识库' : 'Vault'}: ${subject.vaultId}`, `SHA-256: ${subject.fingerprint}`,
-            zh ? '默认仅批准读取和修改这篇笔记。不包括网络、Node.js 或系统权限。'
-              : 'By default, approves reading and modifying this note only. No network, Node.js or system access.',
+            zh ? '批准读取和修改这篇笔记，以及读取和保存此插件的配置（可能包含该插件原有的凭据）。不包括网络、Node.js 或系统权限。'
+              : 'Approves reading and modifying this note and reading/saving this plugin’s configuration, which may contain its existing credentials. No network, Node.js or system access.',
             ...(offerVault ? [zh ? '可选勾选：只读知识库其他可见文件（包括附件，不含隐藏目录）。每个文件最多 2 MiB，总量最多 64 MiB；超限会停止启动。写入仍只限这篇笔记。'
               : 'Optional: read other visible Vault files, including attachments but excluding hidden directories. Maximum 2 MiB per file and 64 MiB total; exceeding limits stops launch. Writes remain limited to this note.'] : []),
             zh ? '兼容功能仍在开发；此批准只对本次窗口会话和这份插件代码有效。'

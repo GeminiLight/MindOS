@@ -1,10 +1,12 @@
 "use client";
 import { useRef, useState } from "react";
-import type { LongitudinalAdminView } from "@geminilight/mindos/knowledge";
+import type { LongitudinalAdminView, LongitudinalExportBundle } from "@geminilight/mindos/knowledge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { downloadJson } from "@/lib/download-json";
 import { StudyTextField, studyNote } from "../research/StudyFields";
+import { useEchoDraft, EchoDraftNotice } from "../use-echo-draft";
+import { StudySectionNav } from "./StudySectionNav";
 import type { LongitudinalCopy } from "./longitudinal-copy";
 
 export type BoardData = LongitudinalAdminView & { accessReady: boolean };
@@ -19,63 +21,89 @@ function Chip({ tone = "muted", children }: { tone?: "muted" | "amber" | "error"
 export default function LongitudinalStudyBoard({ data, locale, busy, onInvite, invitation, onReview, p }: {
   data: BoardData; locale: "en" | "zh"; busy: boolean;
   onInvite: () => void; invitation: string;
-  onReview: (participantId: string, round: number, decision: "approved" | "rejected", reviewedBy: string, reason: string) => void;
+  onReview: (participantId: string, round: number, decision: "approved" | "rejected", reviewedBy: string, reason: string) => Promise<boolean>;
   p: LongitudinalCopy["board"];
 }) {
   const { study, progress, summary, accessReady } = data;
   const format = (value?: string) => (value ? new Date(value).toLocaleString(locale === "zh" ? "zh-CN" : "en-US") : "");
   const label = (participant: Participant | { id: string }) => "P" + (study.participants.findIndex((x) => x.id === participant.id) + 1);
-  const [reviews, setReviews] = useState<Record<string, { reviewedBy: string; reason: string }>>({});
+  const [reviews, setReviews, reviewDraftState] = useEchoDraft<Record<string, { reviewedBy: string; reason: string }>>(`longitudinal:reviews:${study.id}`, {});
+  const [section, setSection] = useState<"reviews" | "participants" | "invite" | "export">(summary.pendingReviews ? "reviews" : "participants");
+  const [filter, setFilter] = useState<"all" | "attention" | "complete">("all");
+  const visibleProgress = progress.filter(row => filter === "all" || (filter === "complete" ? row.status === "complete" : row.revisionPending || row.helpFailed > 0));
   const [feedback, setFeedback] = useState("");
   const [copyState, setCopyState] = useState("");
   const exporting = useRef(false);
+  const [exportBusy, setExportBusy] = useState(false);
+  const [snapshot, setSnapshot] = useState<LongitudinalExportBundle | null>(null);
   const pendingReviews = study.participants.flatMap((participant) => participant.withdrawnAt ? [] :
     participant.rounds.flatMap((round, index) => (round.revision?.decision === "pending" ? [{ participant, round, index }] : [])));
-  async function exportFile(kind: "record" | "review" | "key") {
+  async function submitReview(key: string, participantId: string, round: number, decision: "approved" | "rejected", draft: { reviewedBy: string; reason: string }) {
+    if (await onReview(participantId, round, decision, draft.reviewedBy, draft.reason)) {
+      setReviews(previous => { const next = { ...previous }; delete next[key]; return next; });
+    }
+  }
+  async function exportFile(kind: "record" | "review" | "key" | "refresh") {
     if (exporting.current) return;
-    exporting.current = true; setFeedback("");
+    exporting.current = true; setExportBusy(true); setFeedback("");
     try {
-      let payload: unknown = study;
-      if (kind !== "record") {
-        const response = await fetch(`/api/echo/longitudinal?id=${encodeURIComponent(study.id)}&packet=${kind}`, { cache: "no-store", signal: AbortSignal.timeout(20000) });
+      let bundle = snapshot?.record.id === study.id ? snapshot : null;
+      if (!bundle || kind === "refresh") {
+        const response = await fetch(`/api/echo/longitudinal?id=${encodeURIComponent(study.id)}&packet=bundle`, { cache: "no-store", signal: AbortSignal.timeout(20000) });
         if (!response.ok) throw new Error("export");
-        payload = await response.json();
+        bundle = await response.json() as LongitudinalExportBundle;
+        if (!bundle?.packetId || bundle.record?.id !== study.id || !bundle.review || !bundle.key) throw new Error("export");
+        setSnapshot(bundle);
       }
-      setFeedback(downloadJson(`${study.id}${kind === "record" ? "" : "-" + kind}.json`, payload) ? p.exportStarted : p.exportFailed);
+      if (kind === "refresh") setFeedback(p.snapshotReady);
+      else setFeedback(downloadJson(`${study.id}-${bundle.packetId}-${kind}.json`, bundle[kind]) ? p.exportStarted : p.exportFailed);
     } catch { setFeedback(p.exportFailed); }
-    finally { exporting.current = false; }
+    finally { exporting.current = false; setExportBusy(false); }
   }
   const tiles: [string, number | string][] = [
     [p.invited, `${summary.invited} / ${summary.capacity}`], [p.consented, summary.consented], [p.active, summary.active], [p.complete, summary.complete],
-    [p.withdrawn, summary.withdrawn], [p.pendingReviews, summary.pendingReviews], [p.failedRuns, summary.failedRuns],
   ];
   return (
     <div className="space-y-8">
       <p className={studyNote}>{p.frozen}</p>
       <section aria-label={p.summary}>
-        <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <dl className="grid grid-cols-2 overflow-hidden rounded-xl border border-border sm:grid-cols-4">
           {tiles.map(([name, value]) => (
-            <div key={name} className="rounded-lg border border-border p-3"><dt className="text-xs text-muted-foreground">{name}</dt><dd className="mt-1 font-mono text-xl">{value}</dd></div>
+            <div key={name} className="border-border p-4 sm:border-r last:sm:border-r-0"><dt className="text-xs text-muted-foreground">{name}</dt><dd className="mt-1 font-mono text-xl">{value}</dd></div>
           ))}
         </dl>
       </section>
 
-      <section className="space-y-4" aria-labelledby="pending-reviews-title">
+      <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
+        <span>{p.pendingReviews} <strong className={summary.pendingReviews ? "font-mono text-[var(--amber)]" : "font-mono"}>{summary.pendingReviews}</strong></span>
+        <span>{p.failedRuns} <strong className={summary.failedRuns ? "font-mono text-error" : "font-mono"}>{summary.failedRuns}</strong></span>
+        <span>{p.withdrawn} <strong className="font-mono">{summary.withdrawn}</strong></span>
+      </div>
+      <StudySectionNav label={p.sections} value={section} onChange={setSection} options={[
+        { value: "reviews", label: p.reviewTab, count: pendingReviews.length }, { value: "participants", label: p.peopleTab },
+        { value: "invite", label: p.inviteTab }, { value: "export", label: p.exportTab },
+      ]} />
+      <section hidden={section !== "reviews"} className="space-y-4" aria-labelledby="pending-reviews-title">
         <h2 id="pending-reviews-title" className="font-display text-xl">{p.reviews}{pendingReviews.length ? ` · ${pendingReviews.length}` : ""}</h2>
         {!pendingReviews.length ? <p className={studyNote}>{p.noReviews}</p> : pendingReviews.map(({ participant, round, index }) => {
-          const key = participant.id + ":" + index; const draft = reviews[key] ?? { reviewedBy: "", reason: "" };
+          const key = participant.id + ":" + index; const saved = reviews?.[key];
+          const draft = saved && typeof saved.reviewedBy === "string" && typeof saved.reason === "string" ? saved : { reviewedBy: "", reason: "" };
           const ready = !!draft.reviewedBy.trim() && !!draft.reason.trim();
           return (
             <article key={key} className="space-y-4 rounded-xl border border-[var(--amber)]/40 p-4">
               <p className="text-sm font-medium">{label(participant)} · {p.strategy[participant.strategy]} · {locale === "zh" ? `第 ${index + 1} 轮` : `${p.round} ${index + 1}`}</p>
-              <div><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{p.revised}</p><p className="mt-1 whitespace-pre-wrap break-words text-sm leading-6">{round.revision!.method}</p></div>
+              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="rounded-lg bg-muted/30 p-3"><p className="text-xs font-medium text-muted-foreground">{p.original}</p><p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6">{round.method}</p></div>
+              <div className="rounded-lg border border-[var(--amber)]/30 p-3"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{p.revised}</p><p className="mt-1 whitespace-pre-wrap break-words text-sm leading-6">{round.revision!.method}</p></div></div>
               <div><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{p.evidence}</p><p className="mt-1 whitespace-pre-wrap break-words text-sm leading-6 text-muted-foreground">{round.revision!.evidence}</p></div>
+              <p className={studyNote}>{p.reviewOutcome}</p>
               <fieldset disabled={busy} className="space-y-3">
                 <StudyTextField name={`review-${key}-by`} label={p.reviewedBy} value={draft.reviewedBy} max={80} onChange={(v) => setReviews({ ...reviews, [key]: { ...draft, reviewedBy: v } })} />
                 <StudyTextField name={`review-${key}-reason`} label={p.reason} value={draft.reason} max={2000} multiline onChange={(v) => setReviews({ ...reviews, [key]: { ...draft, reason: v } })} />
+                <EchoDraftNotice locale={locale} state={reviewDraftState} />
                 <div className="flex flex-wrap gap-3">
-                  <Button className="min-h-11" disabled={busy || !ready} onClick={() => onReview(participant.id, index, "approved", draft.reviewedBy, draft.reason)}>{p.approve}</Button>
-                  <Button variant="outline" className="min-h-11" disabled={busy || !ready} onClick={() => onReview(participant.id, index, "rejected", draft.reviewedBy, draft.reason)}>{p.reject}</Button>
+                  <Button variant="amber" className="min-h-11" disabled={busy || !ready} onClick={() => void submitReview(key, participant.id, index, "approved", draft)}>{p.approve}</Button>
+                  <Button variant="outline" className="min-h-11" disabled={busy || !ready} onClick={() => void submitReview(key, participant.id, index, "rejected", draft)}>{p.reject}</Button>
                 </div>
               </fieldset>
             </article>
@@ -83,11 +111,14 @@ export default function LongitudinalStudyBoard({ data, locale, busy, onInvite, i
         })}
       </section>
 
-      <section className="space-y-4" aria-labelledby="participants-title">
+      <section hidden={section !== "participants"} className="space-y-4" aria-labelledby="participants-title">
         <h2 id="participants-title" className="font-display text-xl">{p.participants}{progress.length ? ` · ${progress.length}` : ""}</h2>
-        {!progress.length ? <p className={studyNote}>{p.noParticipants}</p> : (
+        <StudySectionNav label={p.filters} value={filter} onChange={setFilter} options={[
+          { value: "all", label: p.all }, { value: "attention", label: p.attention }, { value: "complete", label: p.completedFilter },
+        ]} />
+        {!progress.length ? <p className="rounded-xl border border-dashed border-border px-4 py-8 text-sm text-muted-foreground">{p.noParticipants}</p> : !visibleProgress.length ? <p role="status" className="rounded-xl border border-dashed border-border px-4 py-8 text-sm text-muted-foreground">{p.noMatches}</p> : (
           <ul className="divide-y divide-border rounded-xl border border-border">
-            {progress.map((row) => {
+            {visibleProgress.map((row) => {
               const participant = study.participants.find((x) => x.id === row.id)!;
               const tone = row.status === "withdrawn" ? "muted" : row.revisionPending ? "amber" : row.status === "complete" ? "success" : "muted";
               return (
@@ -123,11 +154,11 @@ export default function LongitudinalStudyBoard({ data, locale, busy, onInvite, i
         )}
       </section>
 
-      <section className="space-y-4" aria-labelledby="invitations-title">
+      <section hidden={section !== "invite"} className="space-y-4" aria-labelledby="invitations-title">
         <h2 id="invitations-title" className="font-display text-xl">{p.invitations}</h2>
         <p className={studyNote}>{p.linkNote}</p>
         <div className="flex flex-wrap items-center gap-3">
-          <Button className="min-h-11" disabled={busy || !accessReady || summary.invited >= summary.capacity} onClick={onInvite}>{p.invite}</Button>
+          <Button variant="amber" className="min-h-11" disabled={busy || !accessReady || summary.invited >= summary.capacity} onClick={onInvite}>{p.invite}</Button>
           {summary.invited >= summary.capacity ? <span className={studyNote}>{p.capacityReached}</span> : null}
         </div>
         {invitation ? (
@@ -143,13 +174,18 @@ export default function LongitudinalStudyBoard({ data, locale, busy, onInvite, i
         ) : null}
       </section>
 
-      <section className="space-y-4" aria-labelledby="exports-title">
+      <section hidden={section !== "export"} className="space-y-4" aria-labelledby="exports-title">
         <h2 id="exports-title" className="font-display text-xl">{p.exports}</h2>
-        <ul className="space-y-4">
-          {([["record", p.record, p.recordNote], ["review", p.packet, p.packetNote], ["key", p.key, p.keyNote]] as const).map(([kind, title, note]) => (
-            <li key={kind} className="flex flex-wrap items-start justify-between gap-3 border-t border-border pt-4 first:border-t-0 first:pt-0">
-              <p className={studyNote + " max-w-xl"}>{note}</p>
-              <Button variant="outline" className="min-h-11 h-auto whitespace-normal" disabled={busy} onClick={() => void exportFile(kind)}>{title}</Button>
+        <p className={studyNote}>{p.snapshotNote}</p>
+        {snapshot?.record.id === study.id ? <div className="flex flex-wrap items-center gap-3">
+          <time className={studyNote} dateTime={snapshot.review.generatedAt}>{format(snapshot.review.generatedAt)}</time>
+          <Button variant="outline" className="min-h-11" disabled={busy || exportBusy} onClick={() => void exportFile("refresh")}>{p.refreshSnapshot}</Button>
+        </div> : null}
+        <ul className="space-y-3">
+          {([["review", p.packet, p.packetNote], ["key", p.key, p.keyNote], ["record", p.record, p.recordNote]] as const).map(([kind, title, note]) => (
+            <li key={kind} className="space-y-3 rounded-xl border border-border p-4">
+              <p className={studyNote}>{note}</p>
+              <Button variant="outline" className="min-h-11 h-auto whitespace-normal" disabled={busy || exportBusy} onClick={() => void exportFile(kind)}>{title}</Button>
             </li>
           ))}
         </ul>

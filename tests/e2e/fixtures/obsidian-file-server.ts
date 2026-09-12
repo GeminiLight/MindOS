@@ -1,3 +1,5 @@
+import '../../../packages/mindos/src/server/handlers/change-log-store';
+import { readPluginData, writePluginData } from '../../../packages/mindos/src/server/plugin-data-store';
 import { randomBytes } from 'node:crypto';
 import { createServer } from 'node:http';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
@@ -25,6 +27,15 @@ export async function startObsidianFileFixture(options: { ownerPage?: string; af
         response.writeHead(401).end(JSON.stringify({ error: 'Unauthorized' })); return;
       }
       const url = new URL(request.url!, 'http://localhost');
+      if (url.pathname === '/api/obsidian-plugins/data') {
+        if (request.method === 'GET') {
+          response.writeHead(200).end(JSON.stringify(readPluginData(root, Object.fromEntries(url.searchParams) as any))); return;
+        }
+        const chunks: Buffer[] = []; let length = 0;
+        for await (const chunk of request) { length += chunk.length; if (length > 1024 * 1024 + 4096) throw new Error('Body too large'); chunks.push(chunk); }
+        const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+        response.writeHead(200).end(JSON.stringify(writePluginData(root, body, body.revision, body.data))); return;
+      }
       if (url.pathname === '/api/obsidian-plugins/vault' && request.method === 'GET') {
         const snapshot = readPluginVaultSnapshot(root, { pluginId: url.searchParams.get('pluginId')!,
           vaultId: url.searchParams.get('vaultId')!, fingerprint: url.searchParams.get('fingerprint')! });

@@ -130,23 +130,23 @@ export function isObsidianApiSurfaceValueKind(kind: ObsidianApiSurfaceExportKind
   return OBSIDIAN_API_SURFACE_VALUE_KINDS.has(kind);
 }
 
-function describeMiss(miss: ObsidianApiSurfaceMiss): string {
+function describeMiss(miss: ObsidianApiSurfaceMiss, tier: 'server' | 'browser'): string {
   const where = miss.owner === 'obsidian' ? `require('obsidian').${miss.api}` : miss.api;
   if (!miss.declared) {
     return `${where} is not part of the public Obsidian API (obsidian.d.ts) and is not provided by the MindOS runtime.`;
   }
   const since = miss.since ? ` (since Obsidian ${miss.since})` : '';
   const deprecated = miss.deprecated ? ' It is deprecated upstream.' : '';
-  return `${where} is declared by obsidian.d.ts${since} but is not implemented by the MindOS server runtime tier.${deprecated}`;
+  return `${where} is declared by obsidian.d.ts${since} but is not implemented by the MindOS ${tier} runtime tier.${deprecated}`;
 }
 
-export function createObsidianApiNotImplementedError(miss: ObsidianApiSurfaceMiss): CompatError {
-  return new CompatError(describeMiss(miss), CompatErrorCodes.API_NOT_IMPLEMENTED, {
+export function createObsidianApiNotImplementedError(miss: ObsidianApiSurfaceMiss, tier: 'server' | 'browser' = 'server'): CompatError {
+  return new CompatError(describeMiss(miss, tier), CompatErrorCodes.API_NOT_IMPLEMENTED, {
     owner: miss.owner,
     api: miss.api,
     kind: miss.kind,
     declared: miss.declared,
-    tier: 'server',
+    tier,
   });
 }
 
@@ -161,21 +161,21 @@ function missFor(owner: ObsidianApiSurfaceMissOwner, api: string, declaration: {
   };
 }
 
-function createStubClass(miss: ObsidianApiSurfaceMiss): unknown {
+function createStubClass(miss: ObsidianApiSurfaceMiss, tier: 'server' | 'browser'): unknown {
   // `class X extends Stub {}` must succeed at declaration time so the plugin module
   // evaluates; instantiation is where the typed error surfaces.
   const Stub = class ObsidianApiNotImplemented {
     constructor() {
-      throw createObsidianApiNotImplementedError(miss);
+      throw createObsidianApiNotImplementedError(miss, tier);
     }
   };
   Object.defineProperty(Stub, 'name', { value: miss.api });
   return Stub;
 }
 
-function createStubFunction(miss: ObsidianApiSurfaceMiss): unknown {
+function createStubFunction(miss: ObsidianApiSurfaceMiss, tier: 'server' | 'browser'): unknown {
   const stub = function obsidianApiNotImplemented(): never {
-    throw createObsidianApiNotImplementedError(miss);
+    throw createObsidianApiNotImplementedError(miss, tier);
   };
   Object.defineProperty(stub, 'name', { value: miss.api });
   return stub;
@@ -196,6 +196,7 @@ export function createDiagnosticObsidianModule<T extends Record<string, unknown>
   module: T,
   onMiss: ObsidianApiSurfaceMissListener,
   source: ObsidianApiSurface = surface,
+  tier: 'server' | 'browser' = 'server',
 ): T {
   const reported = new Set<string>();
   const stubs = new Map<string, unknown>();
@@ -221,7 +222,7 @@ export function createDiagnosticObsidianModule<T extends Record<string, unknown>
       if (!declaration || !isObsidianApiSurfaceValueKind(declaration.kind)) return undefined;
       let stub = stubs.get(prop);
       if (!stub) {
-        stub = declaration.kind === 'function' ? createStubFunction(miss) : declaration.kind === 'class' || declaration.kind === 'abstract-class' ? createStubClass(miss) : undefined;
+        stub = declaration.kind === 'function' ? createStubFunction(miss, tier) : declaration.kind === 'class' || declaration.kind === 'abstract-class' ? createStubClass(miss, tier) : undefined;
         if (stub) stubs.set(prop, stub);
       }
       return stub;

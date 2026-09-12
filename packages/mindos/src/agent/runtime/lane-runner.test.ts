@@ -1,3 +1,4 @@
+import { executeAgentTurn } from '../turn/execute.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -178,6 +179,11 @@ describe('runRuntimeLaneTurn', () => {
       type: 'codex-thread',
       externalSessionId: 'thr-1',
     }));
+  });
+
+  it('rejects a headless caller when a lane fails without emitting an error frame', async () => {
+    const { lane } = createFakeLane({ behavior: async () => ({ error: new Error('runtime failed') }) });
+    await expect(executeAgentTurn(lane, baseInput(mindRoot))).rejects.toThrow('runtime failed');
   });
 
   it('records a failure without rethrowing when the lane reports result.error', async () => {

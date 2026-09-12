@@ -26,7 +26,7 @@ beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn(async (input: string, init?: RequestInit) => {
     if (fail) return Response.json({ code: 'storage' }, { status: 500 });
     const url = new URL(String(input), 'http://localhost');
-    if (url.searchParams.get('packet')) return Response.json({ kind: 'review-packet', items: [] });
+    if (url.searchParams.get('packet')) return Response.json({packetId:'packet-a',record:admin().study,review:{kind:'review-packet',generatedAt:'2026-09-12T01:00:00Z',items:[]},key:{kind:'review-key',items:[]}});
     if (url.searchParams.get('id') || init?.method === 'PATCH') return Response.json(admin());
     return Response.json({ studies: [summary()], unavailableCount: 0, runtime: hasRuntime ? runtime : null, accessReady });
   }));
@@ -69,17 +69,21 @@ it('opens the study board, gates revision review on reviewer and reason, and exp
   expect(review).toMatchObject({ action: 'review', decision: 'approved', reviewedBy: 'qa-lead', participantId, round: 0 });
   expect(button('Create participant link')?.disabled).toBe(false);
   await click('Download blind review packet');
-  expect(vi.mocked(fetch).mock.calls.some(call => String(call[0]).includes('packet=review'))).toBe(true);
+  expect(vi.mocked(fetch).mock.calls.some(call => String(call[0]).includes('packet=bundle'))).toBe(true);
   expect(host.textContent).toContain('Download started.');
   await click('Download packet key');
-  expect(vi.mocked(fetch).mock.calls.some(call => String(call[0]).includes('packet=key'))).toBe(true);
+  expect(vi.mocked(fetch).mock.calls.filter(call => String(call[0]).includes('packet=bundle'))).toHaveLength(1);
+  await click('Download study record');
+  expect(vi.mocked(fetch).mock.calls.filter(call => String(call[0]).includes('packet=bundle'))).toHaveLength(1);
+  await click('Refresh export snapshot');
+  expect(vi.mocked(fetch).mock.calls.filter(call => String(call[0]).includes('packet=bundle'))).toHaveLength(2);
 });
 it('renders the research hub with design cards, readiness rows and a retry on failure', async () => {
   hasRuntime = true;
   await act(async () => renderer.render(<ResearchHub locale="en" fourStageCount={2} />));
   expect(host.textContent).toContain('1 frozen · 1 in progress · 1 awaiting review');
   expect(host.textContent).toContain('2 drafts below');
-  expect(host.textContent).toContain('Fixed model ready: openai / glm-5.3-flash');
+  expect(host.textContent).toContain('Model configured: openai / glm-5.3-flash');
   expect(host.textContent).toContain('Enable a Web password and an access token');
   await act(async () => renderer.unmount());
   fail = true; renderer = createRoot(host);
@@ -88,4 +92,32 @@ it('renders the research hub with design cards, readiness rows and a retry on fa
   fail = false;
   await click('重试');
   expect(host.textContent).toContain('1 项已冻结');
+});
+
+it('preserves a review draft across a refresh and isolates it from the study list', async () => {
+  await act(async () => renderer.render(<LongitudinalWorkspace />));
+  await click('Open');
+  await fill(`review-${participantId}:0-by`, 'reviewer');
+  await fill(`review-${participantId}:0-reason`, 'Evidence needs a narrower scope.');
+  await click('Study list'); await click('Open');
+  expect((host.querySelector(`[name="review-${participantId}:0-reason"]`) as HTMLTextAreaElement).value).toBe('Evidence needs a narrower scope.');
+});
+it('provides focused board sections with an explicit empty filter state', async () => {
+  await act(async () => renderer.render(<LongitudinalWorkspace />)); await click('Open');
+  const nav = host.querySelector('nav[aria-label="Study sections"]');
+  expect(nav).not.toBeNull();
+  await click('Participants');
+  expect(host.querySelector('#pending-reviews-title')?.closest('section')?.hidden).toBe(true);
+  await click('Completed');
+  expect(host.textContent).toContain('No participants match this view.');
+  await click('All');
+  expect(host.querySelector('#participants-title')?.closest('section')?.textContent).toContain('P1');
+});
+it('keeps review notes after a failed save and clears only the confirmed review draft', async () => {
+  await act(async () => renderer.render(<LongitudinalWorkspace />)); await click('Open');
+  await fill(`review-${participantId}:0-by`, 'reviewer'); await fill(`review-${participantId}:0-reason`, 'Evidence checked.');
+  fail=true; await click('Approve revision');
+  expect((host.querySelector(`[name="review-${participantId}:0-reason"]`) as HTMLTextAreaElement).value).toBe('Evidence checked.');
+  fail=false; await click('Approve revision');
+  expect((host.querySelector(`[name="review-${participantId}:0-reason"]`) as HTMLTextAreaElement).value).toBe('');
 });

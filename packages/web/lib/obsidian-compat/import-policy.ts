@@ -1,3 +1,4 @@
+import { planObsidianExecution } from './runtime-plan';
 import type { CompatibilityLevel } from './compatibility-report';
 
 export type ObsidianImportSupportKind = 'ready' | 'limited' | 'review' | 'blocked';
@@ -5,6 +6,8 @@ export type ObsidianImportSupportKind = 'ready' | 'limited' | 'review' | 'blocke
 export interface ObsidianImportPolicyPlugin {
   compatibilityLevel: CompatibilityLevel;
   compatibility: {
+    moduleImports?: string[];
+    unsupportedModules?: string[];
     partialApis: string[];
     unsupportedApis?: string[];
     blockers: string[];
@@ -34,6 +37,14 @@ export function getObsidianImportSupport(
   const hasSourceEnabledList = options.hasEnabledList === true;
   const enabledInObsidian = plugin.obsidianConfig?.enabledInObsidian === true;
   const sourceAllowsDefault = !hasSourceEnabledList || enabledInObsidian;
+
+  if (plugin.compatibilityLevel === 'blocked' && planObsidianExecution(plugin.compatibility).desktopCandidate) {
+    return {
+      kind: 'review', importable: true, defaultSelected: false,
+      label: 'Desktop editor', summaryLabel: 'desktop candidate',
+      reason: 'Install disabled, then request the local Desktop experimental editor. Server execution remains blocked; plugin features need verification.',
+    };
+  }
 
   if (plugin.compatibilityLevel === 'blocked') {
     return {

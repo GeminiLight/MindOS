@@ -601,7 +601,7 @@ describe('Obsidian community catalog adapter', () => {
       if (url.endsWith('/main.js')) {
         return new Response('', {
           status: 200,
-          headers: { 'content-length': String(3 * 1024 * 1024) },
+          headers: { 'content-length': String(9 * 1024 * 1024) },
         });
       }
       return new Response('missing', { status: 404 });

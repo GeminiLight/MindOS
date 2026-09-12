@@ -1,12 +1,11 @@
-name: Obsidian Corpus Nightly
+name: Obsidian Corpus (Manual)
 
 # Static-only sweep of the top-N Obsidian community plugins by downloads.
 # Produces the API miss histogram that orders runtime-tier work. No plugin
 # code is executed here (--skip-smoke); smoke runs stay on the curated P0 set.
+# Opt-in only: corpus sweeps must not consume Actions minutes on a schedule.
 
 on:
-  schedule:
-    - cron: '23 3 * * *'
   workflow_dispatch:
     inputs:
       top:

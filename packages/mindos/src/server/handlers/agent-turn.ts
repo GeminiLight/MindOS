@@ -13,9 +13,8 @@ import {
  *
  * Thin shell over the shared turn-request contract in `agent/turn/request.ts`
  * (single source with the Next host route; spec-runtime-lane-contract). The
- * actual turn runtime is a host-injected service: the standalone Product
- * Server ships an error stub, and the Next host serves turns through its own
- * route before this handler is reached.
+ * Product Server provides an executable default backed by the shared runtime
+ * lanes. Hosts can inject their own preparation and projection services.
  */
 
 export type {

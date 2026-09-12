@@ -91,9 +91,10 @@ export default function LongitudinalWorkspace() {
     }
   }
   async function review(participantId: string, round: number, decision: "approved" | "rejected", reviewedBy: string, reason: string) {
-    if (!study) return;
+    if (!study) return false;
     const data = await call(api, "PATCH", { id: study.study.id, action: "review", participantId, round, decision, reviewedBy, reason });
-    if (data?.study) setStudy(data as BoardData);
+    if (data?.study) { setStudy(data as BoardData); return true; }
+    return false;
   }
   return (
     <section aria-labelledby="longitudinal-title" className="mx-auto w-full max-w-4xl space-y-7 px-4 py-8 md:px-6 md:py-10">
@@ -113,7 +114,7 @@ export default function LongitudinalWorkspace() {
         {study ? <Button variant="ghost" className="min-h-11" disabled={busy} onClick={() => { setStudy(null); void refresh(); }}>{p.list}</Button> : null}
       </div>
       {study ? (
-        <LongitudinalStudyBoard data={study} locale={zh ? "zh" : "en"} busy={busy} onInvite={() => void invite()} invitation={invitation} onReview={(...args) => void review(...args)} p={copy.board} />
+        <LongitudinalStudyBoard data={study} locale={zh ? "zh" : "en"} busy={busy} onInvite={() => void invite()} invitation={invitation} onReview={review} p={copy.board} />
       ) : (
         <div className="space-y-8" aria-busy={busy && !loaded}>
           {loaded ? (

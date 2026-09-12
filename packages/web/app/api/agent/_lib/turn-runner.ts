@@ -118,9 +118,6 @@ function permissionModeForRequest(
 
 // toPiCustomToolDefinitions adapter removed — KB tools now registered via kb-extension.ts
 
-// reassembleSSE, piMessagesToOpenAI, runNonStreamingFallback
-// → @/lib/agent/non-streaming
-
 // ---------------------------------------------------------------------------
 // POST /api/agent/sessions/:sessionId/turns
 // ---------------------------------------------------------------------------

@@ -661,6 +661,7 @@ function classifyGapCategory(id: string): AgentRuntimeReadinessGapCategory {
     || id === 'artifact-index'
     || id === 'durable-approval-queue'
     || id === 'approval-timeout-recovery'
+    || id === 'approval-owner-recovery'
     || id === 'skill-runtime-routing'
     || id === 'mailbox'
     || id === 'task-board'

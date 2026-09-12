@@ -45,6 +45,16 @@ function runtimes() {
 }
 
 describe('runtime permission projections', () => {
+  it('reports durable cross-process approvals separately from owner recovery', () => {
+    const payload = buildAgentRuntimePermissionProjectionsPayload({ runtimes: runtimes(), permissionMode: 'ask' });
+    const native = payload.projections.find(item => item.runtimeId === 'codex')!;
+    expect(native.interactiveApproval.scope).toBe('cross-process-run');
+    expect(native.reasons).toContainEqual(expect.objectContaining({ id: 'durable-approval-queue', status: 'satisfied' }));
+    expect(native.unattendedApproval.supported).toBe(false);
+    expect(native.blockers).toContain('approval-owner-recovery');
+    expect(native.blockers).not.toContain('durable-approval-queue');
+  });
+
   it('projects Pi, native, and ACP permission readiness for ask mode', () => {
     const payload = buildAgentRuntimePermissionProjectionsPayload({
       runtimes: runtimes(),
@@ -72,7 +82,7 @@ describe('runtime permission projections', () => {
       unattendedApproval: {
         status: 'limited',
         supported: false,
-        blockers: ['durable-approval-queue'],
+        blockers: ['approval-owner-recovery', 'approval-timeout-recovery'],
       },
       policy: {
         permissionMode: 'ask',
@@ -93,14 +103,14 @@ describe('runtime permission projections', () => {
       interactiveApproval: {
         supported: true,
         route: 'runtime-permission-bridge',
-        scope: 'in-process-run',
+        scope: 'cross-process-run',
       },
       unattendedApproval: {
         status: 'limited',
         supported: false,
-        blockers: ['durable-approval-queue', 'approval-timeout-recovery'],
+        blockers: ['approval-owner-recovery', 'approval-timeout-recovery'],
       },
-      blockers: expect.arrayContaining(['durable-approval-queue', 'approval-timeout-recovery']),
+      blockers: expect.arrayContaining(['approval-owner-recovery', 'approval-timeout-recovery']),
     });
     expect(claude).toMatchObject({
       status: 'blocked',
@@ -121,15 +131,15 @@ describe('runtime permission projections', () => {
       unattendedApproval: {
         status: 'limited',
         supported: false,
-        blockers: ['durable-approval-queue'],
+        blockers: ['approval-owner-recovery', 'approval-timeout-recovery'],
       },
-      blockers: expect.arrayContaining(['durable-approval-queue']),
+      blockers: expect.arrayContaining(['approval-owner-recovery', 'approval-timeout-recovery']),
     });
     expect(acp?.blockers).not.toContain('adapter-approval-contract');
     expect(acp?.reasons).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: 'adapter-approval-contract', status: 'satisfied' }),
       expect.objectContaining({ id: 'mindos-permission-bridge', status: 'satisfied' }),
-      expect.objectContaining({ id: 'durable-approval-queue', status: 'missing' }),
+      expect.objectContaining({ id: 'durable-approval-queue', status: 'satisfied' }),
     ]));
   });
 

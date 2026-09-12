@@ -1,5 +1,6 @@
+import { z } from 'zod';
 import type { MindosPermissionMode } from '../permission/index.js';
-import { isMindosThinkingLevel, type MindosThinkingLevel } from '../mindos-pi/thinking.js';
+import { isMindosThinkingLevel, MINDOS_THINKING_LEVELS } from '../mindos-pi/thinking.js';
 import type { MindosAgentMode } from '../mode.js';
 import { normalizeRuntimeEffort, type RuntimeEffortKind } from '../runtime/runtime-effort.js';
 import type {
@@ -30,22 +31,18 @@ export type MindosAgentRuntimeKind = 'mindos' | 'acp' | 'codex' | 'claude';
 export type { MindosAgentMode };
 export type MindosAgentPermissionMode = MindosPermissionMode;
 
-export type MindosSelectedRuntime = {
-  id: string;
-  name: string;
-  kind: MindosAgentRuntimeKind;
-  binaryPath?: string;
-};
-
-export type MindosRuntimeSessionBinding = {
-  kind: 'codex-thread' | 'claude-session' | 'acp-session';
-  runtime: Exclude<MindosAgentRuntimeKind, 'mindos'>;
-  runtimeId: string;
-  externalSessionId?: string;
-  cwd?: string;
-  status?: 'active' | 'missing' | 'signed-out' | 'archived' | 'failed';
-  updatedAt: number;
-};
+const selectedRuntimeSchema = z.object({
+  id: z.string(), name: z.string(), kind: z.enum(['mindos', 'acp', 'codex', 'claude']),
+  binaryPath: z.string().optional(),
+});
+const runtimeBindingSchema = z.object({
+  kind: z.enum(['codex-thread', 'claude-session', 'acp-session']),
+  runtime: z.enum(['acp', 'codex', 'claude']), runtimeId: z.string(), updatedAt: z.number(),
+  externalSessionId: z.string().optional().catch(undefined), cwd: z.string().optional().catch(undefined),
+  status: z.enum(['active', 'missing', 'signed-out', 'archived', 'failed']).optional().catch(undefined),
+});
+export type MindosSelectedRuntime = z.infer<typeof selectedRuntimeSchema>;
+export type MindosRuntimeSessionBinding = z.infer<typeof runtimeBindingSchema>;
 
 export type MindosUploadedFile = {
   name: string;
@@ -93,11 +90,12 @@ export type MindosAcpRuntimeOptions = {
   configValues?: Record<string, string>;
 };
 
-export type MindosAgentOptions = {
-  enableThinking?: boolean;
-  thinkingLevel?: MindosThinkingLevel;
-  thinkingBudget?: number;
-};
+const agentOptionsSchema = z.object({
+  enableThinking: z.boolean().optional(),
+  thinkingLevel: z.enum(MINDOS_THINKING_LEVELS).optional(),
+  thinkingBudget: z.number().optional(),
+});
+export type MindosAgentOptions = z.infer<typeof agentOptionsSchema>;
 
 export type MindosAgentTurnRequest = {
   messages: MindosAgentTurnMessage[];
@@ -153,9 +151,9 @@ export const MINDOS_AGENT_TURN_CONTEXT_FIELDS: ReadonlySet<string> = new Set(['c
 export const MINDOS_AGENT_TURN_MESSAGE_FIELDS: ReadonlySet<string> = new Set(['text', 'content', 'images', 'skillName']);
 export const MINDOS_NATIVE_RUNTIME_OPTION_FIELDS: ReadonlySet<string> = new Set(['reasoningEffort', 'modelOverride']);
 export const MINDOS_ACP_RUNTIME_OPTION_FIELDS: ReadonlySet<string> = new Set(['modeId', 'configValues']);
-export const MINDOS_AGENT_OPTION_FIELDS: ReadonlySet<string> = new Set(['enableThinking', 'thinkingLevel', 'thinkingBudget']);
-export const MINDOS_SELECTED_RUNTIME_FIELDS: ReadonlySet<string> = new Set(['id', 'name', 'kind', 'binaryPath']);
-export const MINDOS_RUNTIME_BINDING_FIELDS: ReadonlySet<string> = new Set(['kind', 'runtime', 'runtimeId', 'externalSessionId', 'cwd', 'status', 'updatedAt']);
+export const MINDOS_AGENT_OPTION_FIELDS: ReadonlySet<string> = new Set(Object.keys(agentOptionsSchema.shape));
+export const MINDOS_SELECTED_RUNTIME_FIELDS: ReadonlySet<string> = new Set(Object.keys(selectedRuntimeSchema.shape));
+export const MINDOS_RUNTIME_BINDING_FIELDS: ReadonlySet<string> = new Set(Object.keys(runtimeBindingSchema.shape));
 
 // ── Generic field helpers ───────────────────────────────────────────────────
 
@@ -340,16 +338,11 @@ export function validateMindosAgentOptionsObject(value: unknown): string | null 
   if (!isMindosTurnRecord(value)) return 'agentOptions must be an object';
   const unknown = firstUnknownMindosTurnField(value, MINDOS_AGENT_OPTION_FIELDS, 'agentOptions');
   if (unknown) return unknown;
-  if (value.enableThinking !== undefined && typeof value.enableThinking !== 'boolean') {
-    return 'agentOptions.enableThinking must be a boolean';
-  }
-  if (value.thinkingLevel !== undefined && !isMindosThinkingLevel(value.thinkingLevel)) {
-    return 'agentOptions.thinkingLevel must be off, minimal, low, medium, high, xhigh, or max';
-  }
-  if (
-    value.thinkingBudget !== undefined
-    && (typeof value.thinkingBudget !== 'number' || !Number.isFinite(value.thinkingBudget))
-  ) {
+  const result = agentOptionsSchema.safeParse(value);
+  if (!result.success) {
+    const field = result.error.issues[0]?.path[0];
+    if (field === 'enableThinking') return 'agentOptions.enableThinking must be a boolean';
+    if (field === 'thinkingLevel') return 'agentOptions.thinkingLevel must be off, minimal, low, medium, high, xhigh, or max';
     return 'agentOptions.thinkingBudget must be a finite number';
   }
   return null;
@@ -565,20 +558,8 @@ export function isMindosSelectedAcpAgent(value: unknown): value is { id: string;
 
 export function normalizeMindosRuntimeSessionBinding(value: unknown): MindosRuntimeSessionBinding | null | undefined {
   if (value === null) return null;
-  if (!value || typeof value !== 'object') return undefined;
-  const record = value as Record<string, unknown>;
-  if (!isMindosRuntimeSessionKind(record.kind) || !isMindosExternalRuntimeKind(record.runtime)) return undefined;
-  if (typeof record.runtimeId !== 'string' || typeof record.updatedAt !== 'number' || !Number.isFinite(record.updatedAt)) return undefined;
-  const binding: MindosRuntimeSessionBinding = {
-    kind: record.kind,
-    runtime: record.runtime,
-    runtimeId: record.runtimeId,
-    updatedAt: record.updatedAt,
-  };
-  if (typeof record.externalSessionId === 'string') binding.externalSessionId = record.externalSessionId;
-  if (typeof record.cwd === 'string') binding.cwd = record.cwd;
-  if (isMindosRuntimeSessionStatus(record.status)) binding.status = record.status;
-  return binding;
+  const result = runtimeBindingSchema.safeParse(value);
+  return result.success ? result.data : undefined;
 }
 
 /**
@@ -602,22 +583,6 @@ export function validateMindosRuntimeBindingMatchesRuntime(
   return null;
 }
 
-function isMindosRuntimeSessionKind(value: unknown): value is MindosRuntimeSessionBinding['kind'] {
-  return value === 'codex-thread' || value === 'claude-session' || value === 'acp-session';
-}
-
-function isMindosExternalRuntimeKind(value: unknown): value is MindosRuntimeSessionBinding['runtime'] {
-  return value === 'acp' || value === 'codex' || value === 'claude';
-}
-
-function isMindosRuntimeSessionStatus(value: unknown): value is NonNullable<MindosRuntimeSessionBinding['status']> {
-  return value === 'active' || value === 'missing' || value === 'signed-out' || value === 'archived' || value === 'failed';
-}
-
-function isMindosAgentRuntimeKind(value: unknown): value is MindosAgentRuntimeKind {
-  return value === 'mindos' || value === 'acp' || value === 'codex' || value === 'claude';
-}
-
 function isMindosSessionWorkDirSource(value: unknown): value is NonNullable<MindosSessionWorkDir['source']> {
   return value === 'mind-root' || value === 'project-default' || value === 'runtime-binding' || value === 'manual';
 }
@@ -635,13 +600,8 @@ function isMindosContextAssistantSource(value: unknown): value is NonNullable<Mi
 }
 
 export function isMindosSelectedRuntime(value: unknown): value is MindosSelectedRuntime {
-  if (!value || typeof value !== 'object') return false;
-  const record = value as Record<string, unknown>;
-  return (
-    typeof record.id === 'string'
-    && typeof record.name === 'string'
-    && isMindosAgentRuntimeKind(record.kind)
-  );
+  // binaryPath is normalized separately for legacy callers.
+  return selectedRuntimeSchema.omit({ binaryPath: true }).safeParse(value).success;
 }
 
 /** Legacy `selectedAcpAgent` selections are lifted into `selectedRuntime`. */

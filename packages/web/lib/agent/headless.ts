@@ -4,16 +4,7 @@ import { getProjectRoot } from '@/lib/project-root';
 import type { Message as FrontendMessage } from '@/lib/types';
 import { performActiveRecallWithReceipt } from '@/lib/agent/active-recall';
 import { toMindosUiAgentMessages } from '@/lib/agent/to-agent-messages';
-import {
-  getTextDelta,
-  getThinkingDelta,
-  getToolExecutionEnd,
-  getToolExecutionStart,
-  isTextDeltaEvent,
-  isThinkingDeltaEvent,
-  isToolExecutionEndEvent,
-  isToolExecutionStartEvent,
-} from '@geminilight/mindos/agent/turn';
+import { executeMindosPiRuntimeTurn, normalizeMindosAgentStepLimit } from '@geminilight/mindos/agent/turn';
 import { buildMindosContextPrompt, buildMindosSystemPrompt } from '@geminilight/mindos/agent';
 import type { MindosPermissionMode } from '@geminilight/mindos/agent/mindos-pi/permission';
 import { resolveHeadlessAgentPermission, type HeadlessAgentEntryPoint } from './headless-permission-guard';
@@ -39,6 +30,7 @@ export interface HeadlessAgentRunResult {
 }
 
 export async function runHeadlessAgent(options: HeadlessAgentRunOptions): Promise<HeadlessAgentRunResult> {
+  options.signal?.throwIfAborted();
   const permissionDecision = resolveHeadlessAgentPermission({
     entrypoint: options.entrypoint,
     permissionMode: options.permissionMode,
@@ -101,6 +93,7 @@ export async function runHeadlessAgent(options: HeadlessAgentRunOptions): Promis
   const runtime = await runWithKbPermissionPolicy(permissionPolicy, () => createMindosAgentRuntime({
     messages: mindosUiMessages,
     systemPrompt,
+    turnPrompt,
     providerOverride: options.providerOverride,
     modelOverride: typeof options.modelOverride === 'string' ? options.modelOverride : undefined,
     projectRoot,
@@ -116,44 +109,14 @@ export async function runHeadlessAgent(options: HeadlessAgentRunOptions): Promis
     hostServices: createWebMindosPiRuntimeHostServices(serverSettings),
   }));
 
-  let text = '';
-  let thinking = '';
-  const toolCalls: Array<{ toolCallId: string; toolName: string; output: string; isError: boolean }> = [];
-
-  runtime.session.subscribe((event: unknown) => {
-    if (isTextDeltaEvent(event)) {
-      text += getTextDelta(event);
-    } else if (isThinkingDeltaEvent(event)) {
-      thinking += getThinkingDelta(event);
-    } else if (isToolExecutionStartEvent(event)) {
-      const { toolCallId, toolName } = getToolExecutionStart(event);
-      toolCalls.push({ toolCallId, toolName, output: '', isError: false });
-    } else if (isToolExecutionEndEvent(event)) {
-      const { toolCallId, output, isError } = getToolExecutionEnd(event);
-      const index = toolCalls.findIndex((call) => call.toolCallId === toolCallId);
-      if (index >= 0) {
-        toolCalls[index] = { ...toolCalls[index], output, isError };
-      } else {
-        toolCalls.push({ toolCallId, toolName: 'unknown', output, isError });
-      }
-    }
+  return executeMindosPiRuntimeTurn({
+    runtime, mindRoot, cwd: workDir,
+    permissionMode: permissionPolicy.permissionMode,
+    maxSteps: normalizeMindosAgentStepLimit({ requestedMaxSteps: options.maxSteps, agentMaxSteps: agentConfig.maxSteps }),
+    signal: options.signal,
+    capsuleRequest: { messages: mindosUiMessages, runtime: { kind: 'mindos', id: 'mindos', name: 'MindOS' }, permissionMode: permissionPolicy.permissionMode, context: { attachedFiles: [], uploadedFiles: [], receiptIds: [], assetIds: [] } },
+    source: options.entrypoint === 'im' ? 'event' : 'automation',
+    runId: options.runId,
+    metadata: { entrypoint: options.entrypoint ?? 'headless', automationId: options.automationId },
   });
-
-  if (options.signal?.aborted) throw options.signal.reason ?? new Error('Headless agent run aborted.');
-  const abortRuntime = () => { void runtime.session.abort(); };
-  options.signal?.addEventListener('abort', abortRuntime, { once: true });
-  try {
-    await runtime.session.prompt(
-      turnPrompt,
-      runtime.lastUserImages ? { images: runtime.lastUserImages } : undefined,
-    );
-  } finally {
-    options.signal?.removeEventListener('abort', abortRuntime);
-  }
-
-  return {
-    text: text.trim(),
-    thinking: thinking.trim(),
-    toolCalls,
-  };
 }

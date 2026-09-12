@@ -205,7 +205,8 @@ export type ParticipantStatus =
   | "waiting"
   | "ready"
   | "complete"
-  | "withdrawn";
+  | "withdrawn"
+  | "expired";
 export function participantView(
   r: LongitudinalRecord,
   p: LongitudinalParticipant,
@@ -221,21 +222,24 @@ export function participantView(
   const stage = round
     ? (["before", "coaching", "after"] as const)[round.answers.length]
     : undefined;
+  const accessExpired = Date.parse(p.expiresAt) <= now.getTime();
   const status: ParticipantStatus = p.withdrawnAt
     ? "withdrawn"
-    : !p.consentAt
-      ? "consent"
-      : complete
-        ? "complete"
-        : stage
-          ? "answering"
-          : round?.revision?.decision === "pending"
-            ? "review"
-            : round?.dueAt
-              ? Date.parse(round.dueAt) > now.getTime()
-                ? "waiting"
-                : "ready"
-              : "revision";
+    : accessExpired
+      ? "expired"
+      : !p.consentAt
+        ? "consent"
+        : complete
+          ? "complete"
+          : stage
+            ? "answering"
+            : round?.revision?.decision === "pending"
+              ? "review"
+              : round?.dueAt
+                ? Date.parse(round.dueAt) > now.getTime()
+                  ? "waiting"
+                  : "ready"
+                : "revision";
   const assisted = status === "answering" && stage === "coaching" && !!round;
   return {
     id: p.id,
@@ -245,6 +249,8 @@ export function participantView(
     consent: r.protocol.consent,
     withdrawal: r.protocol.withdrawal,
     status,
+    accessExpired,
+    erased: !!p.erasedAt,
     round: index,
     roundCount: r.protocol.rounds.length,
     stage: status === "answering" ? stage : undefined,

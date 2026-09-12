@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { PluginManager } from '@/lib/obsidian-compat/plugin-manager';
 import {
   installObsidianCommunityPlugin,
   planObsidianCommunityPluginUpdate,
@@ -87,6 +88,18 @@ describe('Obsidian community plugin install helper', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     fs.rmSync(mindRoot, { recursive: true, force: true });
+  });
+
+  it('installs a generic CM editor candidate disabled while the server runtime still refuses it', async () => {
+    const result = await installObsidianCommunityPlugin({
+      repo: 'owner/quickadd', pluginId: 'quickadd', targetMindRoot: mindRoot, confirm: true,
+      fetchImpl: createFetchMock({ mainJs: "const {Plugin} = require('obsidian'); const {autocompletion} = require('@codemirror/autocomplete'); module.exports = class extends Plugin {};" }) as typeof fetch,
+    });
+    expect(result).toMatchObject({ ok: true, installed: { enabled: false, loaded: false }, preflight: { installable: true } });
+    const manager = new PluginManager(mindRoot);
+    const plugins = await manager.discover();
+    expect(plugins[0]).toMatchObject({ enabled: false, loaded: false, compatibilityLevel: 'blocked' });
+    await expect(manager.load('quickadd')).rejects.toThrow(/unsupported runtime module/);
   });
 
   it('atomically installs a fetched community plugin package without enabling or loading it', async () => {

@@ -248,6 +248,7 @@ describe('runMindosAcpAgentTurn pooled session lifecycle', () => {
       hasContent: () => false,
       send: () => {},
       createSession: async () => POOLED,
+      loadSession: async () => POOLED,
       acquireSession: async () => undefined,
       releaseSession: async () => { released.push('x'); return true; },
       promptStream: () => new Promise<void>(() => {}),
@@ -273,7 +274,8 @@ describe('runMindosAcpAgentTurn pooled session lifecycle', () => {
       externalSessionId: 'ext-1',
       hasContent: () => events.some((event) => event.type === 'text_delta'),
       send: (event) => events.push(event),
-      createSession: async () => { created.push('x'); return { ...POOLED }; },
+      createSession: async () => { throw new Error('must resume'); },
+      loadSession: async () => { created.push('x'); return { ...POOLED }; },
       acquireSession: async () => parked,
       releaseSession: async (session) => { parked = session as typeof POOLED; return true; },
       promptStream: async (sessionId, _prompt, onUpdate) => {
@@ -291,5 +293,20 @@ describe('runMindosAcpAgentTurn pooled session lifecycle', () => {
     expect(created).toHaveLength(1);
     expect(closed).toEqual([]);
     expect(events.some((event) => event.type === 'text_delta' && event.delta === 'recovered')).toBe(true);
+  });
+});
+
+describe('continuing an external ACP session', () => {
+  it('keeps the original binding when resume fails instead of creating a different session', async () => {
+    let created = 0;
+    const result = await runMindosAcpAgentTurn({
+      agentId: 'opencode', cwd: '/original', externalSessionId: 'ses-existing', prompt: 'continue',
+      maxRetries: 1, hasContent: () => false, send: () => {},
+      loadSession: async () => { throw new Error('session not found'); },
+      createSession: async () => { created++; return { id: 'wrong-session' }; },
+      promptStream: async () => {}, closeSession: async () => {}, sleep: async () => {},
+    });
+    expect(result.error?.message).toMatch(/resume|session not found/i);
+    expect(created).toBe(0);
   });
 });

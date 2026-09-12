@@ -217,7 +217,7 @@ export function renderObsidianApiMissHistogramMarkdown(histogram: ObsidianApiMis
     lines.push(`| ${tier} | ${formatCount(bucket.plugins)} | ${formatCount(bucket.downloads)} | ${percent(bucket.downloads, histogram.totalDownloads)} |`);
   }
   lines.push(
-    `| loads in server tier today | ${formatCount(histogram.loadsInServerTier.plugins)} | ${formatCount(histogram.loadsInServerTier.downloads)} | ${percent(histogram.loadsInServerTier.downloads, histogram.totalDownloads)} |`,
+    `| no static server module blockers | ${formatCount(histogram.loadsInServerTier.plugins)} | ${formatCount(histogram.loadsInServerTier.downloads)} | ${percent(histogram.loadsInServerTier.downloads, histogram.totalDownloads)} |`,
     '',
     '## Top misses by downloads',
     '',

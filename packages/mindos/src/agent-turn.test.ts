@@ -27,14 +27,8 @@ import {
   resolveMindosAgentTimeoutMs,
   mindosRetryDelay,
   mapMindosAcpUpdateToSseEvents,
-  buildMindosCompatEndpointCandidates,
-  mindosPiMessagesToOpenAI,
-  parseMindosOpenAICompatResponse,
-  reassembleMindosOpenAISse,
   buildMindosExternalRuntimePrompt,
   runMindosAcpAgentTurn,
-  runMindosNonStreamingFallback,
-  runMindosOpenAICompatFallback,
   runMindosAgentTurnWithRetry,
   safeParseMindosJsonObject,
   sanitizeToolArgs,
@@ -45,7 +39,6 @@ import {
 } from './agent/turn/index.js';
 import {
   createMindosPiAgentRuntime,
-  runMindosPiAgentTurnProxyFallback,
   runMindosPiAgentTurnSession,
 } from './agent/mindos-pi/index.js';
 
@@ -296,7 +289,7 @@ describe('MindOS session event contract', () => {
     expect(third.steerMessage).toContain('loop');
   });
 
-  it('steers once for a final answer when the step limit is reached after a tool call', () => {
+  it('stops at the tool step limit without granting another tool turn', () => {
     const reducer = createMindosAgentEventReducer({ stepLimit: 2 });
 
     reducer.handle({
@@ -308,8 +301,8 @@ describe('MindOS session event contract', () => {
       type: 'turn_end',
       toolResults: [{ toolName: 'read_file', content: { path: 'b.md' } }],
     });
-    expect(second.shouldAbort).toBeUndefined();
-    expect(second.steerMessage).toContain('provide a concise final answer');
+    expect(second.shouldAbort).toBe(true);
+    expect(second.steerMessage).toBeUndefined();
 
     const third = reducer.handle({
       type: 'turn_end',
@@ -721,337 +714,25 @@ describe('MindOS session event contract', () => {
     });
   });
 
-  it('owns cached proxy fallback execution policy', async () => {
-    const events: Array<{ type: string; message?: string }> = [];
-    let fallbackRuns = 0;
 
-    const handled = await runMindosPiAgentTurnProxyFallback({
-      phase: 'before-stream',
-      provider: 'openai',
-      baseUrl: 'https://proxy.example/v1',
-      compatMode: 'non-streaming',
-      send: (event) => events.push(event),
-      messages: {
-        proxyCompatMode: 'proxy mode',
-        proxyCompatFailed: (message) => `failed: ${message}`,
-        proxyCompatDetecting: 'detecting',
-        proxyCompatAlsoFailed: (message) => `also failed: ${message}`,
-      },
-      runFallback: async () => { fallbackRuns += 1; },
-    });
 
-    expect(handled).toEqual({ handled: true, status: 'completed' });
-    expect(fallbackRuns).toBe(1);
-    expect(events).toEqual([
-      { type: 'status', message: 'proxy mode' },
-      { type: 'done' },
-    ]);
-  });
 
-  it('owns empty OpenAI-compatible fallback detection and compat cache write', async () => {
-    const events: Array<{ type: string; message?: string }> = [];
-    let cachedKey = '';
 
-    const handled = await runMindosPiAgentTurnProxyFallback({
-      phase: 'after-stream',
-      provider: 'openai',
-      baseUrl: 'https://proxy.example/v1',
-      effectiveBaseUrlKey: 'https://proxy.example/v1',
-      hasContent: false,
-      lastModelError: 'stream failed',
-      send: (event) => events.push(event),
-      writeCompat: (key, mode) => { cachedKey = `${key}:${mode}`; },
-      messages: {
-        proxyCompatMode: 'proxy mode',
-        proxyCompatFailed: (message) => `failed: ${message}`,
-        proxyCompatDetecting: 'detecting',
-        proxyCompatAlsoFailed: (message) => `also failed: ${message}`,
-      },
-      runFallback: async () => {},
-    });
 
-    expect(handled).toEqual({ handled: true, status: 'completed' });
-    expect(cachedKey).toBe('https://proxy.example/v1:non-streaming');
-    expect(events).toEqual([
-      { type: 'status', message: 'detecting' },
-      { type: 'done' },
-    ]);
-  });
 
-  it('reports non-OpenAI model errors without running proxy fallback', async () => {
-    const events: Array<{ type: string; message?: string }> = [];
-    let fallbackRuns = 0;
 
-    const handled = await runMindosPiAgentTurnProxyFallback({
-      phase: 'after-stream',
-      provider: 'anthropic',
-      hasContent: false,
-      lastModelError: 'model failed',
-      send: (event) => events.push(event),
-      messages: {
-        proxyCompatMode: 'proxy mode',
-        proxyCompatFailed: (message) => `failed: ${message}`,
-        proxyCompatDetecting: 'detecting',
-        proxyCompatAlsoFailed: (message) => `also failed: ${message}`,
-      },
-      runFallback: async () => { fallbackRuns += 1; },
-    });
 
-    expect(handled).toEqual({ handled: true, status: 'error', message: 'model failed' });
-    expect(fallbackRuns).toBe(0);
-    expect(events).toEqual([{ type: 'error', message: 'model failed' }]);
-  });
 
-  it('owns OpenAI-compatible endpoint candidate construction', () => {
-    expect(buildMindosCompatEndpointCandidates(
-      'https://proxy.example',
-      '/chat/completions',
-      'openai-completions',
-    )).toEqual([
-      'https://proxy.example/chat/completions',
-      'https://proxy.example/v1/chat/completions',
-    ]);
-    expect(buildMindosCompatEndpointCandidates(
-      'https://proxy.example/v1/',
-      'models',
-      'openai-completions',
-    )).toEqual(['https://proxy.example/v1/models']);
-    expect(buildMindosCompatEndpointCandidates(
-      'https://proxy.example',
-      '/messages',
-      'custom-api',
-    )).toEqual(['https://proxy.example/messages']);
-  });
 
-  it('converts pi-agent history into OpenAI-compatible messages', () => {
-    expect(mindosPiMessagesToOpenAI([
-      { role: 'system', content: 'skip' },
-      { role: 'user', content: 'hello' },
-      {
-        role: 'assistant',
-        content: [
-          { type: 'text', text: 'Use tool' },
-          { type: 'toolCall', id: 'call-1', name: 'read_file', arguments: { path: 'a.md' } },
-        ],
-      },
-      {
-        role: 'toolResult',
-        toolCallId: 'call-1',
-        content: [{ type: 'text', text: 'contents' }],
-      },
-    ])).toEqual([
-      { role: 'user', content: 'hello' },
-      {
-        role: 'assistant',
-        content: 'Use tool',
-        tool_calls: [{
-          id: 'call-1',
-          type: 'function',
-          function: { name: 'read_file', arguments: '{"path":"a.md"}' },
-        }],
-      },
-      { role: 'tool', tool_call_id: 'call-1', content: 'contents' },
-    ]);
-  });
 
-  it('reassembles streaming OpenAI chunks for fallback execution', () => {
-    const result = reassembleMindosOpenAISse([
-      'data: {"choices":[{"delta":{"role":"assistant","content":"Hel"}}]}',
-      'data: {"choices":[{"delta":{"content":"lo","tool_calls":[{"index":0,"id":"call-1","type":"function","function":{"name":"read_file","arguments":"{\\"path\\""}}]}}]}',
-      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":":\\"a.md\\"}"}}]},"finish_reason":"tool_calls"}]}',
-      'data: [DONE]',
-    ].join('\n'));
 
-    expect(result).toEqual({
-      choices: [{
-        message: {
-          role: 'assistant',
-          content: 'Hello',
-          tool_calls: [{
-            id: 'call-1',
-            type: 'function',
-            function: { name: 'read_file', arguments: '{"path":"a.md"}' },
-          }],
-        },
-        finish_reason: 'tool_calls',
-      }],
-    });
-  });
 
-  it('normalizes JSON chunk-shaped responses for OpenAI-compatible fallback execution', () => {
-    const result = parseMindosOpenAICompatResponse(JSON.stringify({
-      choices: [{
-        delta: {
-          role: 'assistant',
-          content: 'Chunk-style JSON',
-          tool_calls: [{
-            id: 'call-json',
-            type: 'function',
-            function: { name: 'read_file', arguments: '{"path":"b.md"}' },
-          }],
-        },
-        finish_reason: 'tool_calls',
-      }],
-    }));
 
-    expect(result).toEqual({
-      choices: [{
-        message: {
-          role: 'assistant',
-          content: 'Chunk-style JSON',
-          tool_calls: [{
-            id: 'call-json',
-            type: 'function',
-            function: { name: 'read_file', arguments: '{"path":"b.md"}' },
-          }],
-        },
-        finish_reason: 'tool_calls',
-      }],
-    });
-  });
 
-  it('runs the OpenAI-compatible non-streaming fallback loop from product session', async () => {
-    const events: Array<{ type: string; delta?: string; toolCallId?: string; toolName?: string; output?: string; isError?: boolean }> = [];
-    const calls: Array<{ url: string; body: any }> = [];
-    const fetchImpl = async (url: string, init?: RequestInit) => {
-      calls.push({ url, body: JSON.parse(String(init?.body ?? '{}')) });
-      if (calls.length === 1) {
-        return new Response(JSON.stringify({
-          choices: [{
-            message: {
-              role: 'assistant',
-              content: null,
-              tool_calls: [{
-                id: 'call-1',
-                type: 'function',
-                function: { name: 'read_file', arguments: '{"path":"a.md"}' },
-              }],
-            },
-            finish_reason: 'tool_calls',
-          }],
-        }), { status: 200 });
-      }
-      return new Response(JSON.stringify({
-        choices: [{
-          message: { role: 'assistant', content: 'Done' },
-          finish_reason: 'stop',
-        }],
-      }), { status: 200 });
-    };
 
-    await runMindosNonStreamingFallback({
-      baseUrl: 'https://proxy.example/v1',
-      apiKey: 'key',
-      model: 'model',
-      systemPrompt: 'system',
-      historyMessages: [],
-      userContent: 'read it',
-      tools: [{
-        name: 'read_file',
-        description: 'Read file',
-        parameters: { type: 'object' },
-        execute: async (_toolCallId, _args, _signal, onUpdate) => {
-          onUpdate?.({ content: [{ type: 'text', text: 'Reading file...' }] });
-          return { content: [{ type: 'text', text: 'contents' }] };
-        },
-      }],
-      send: (event) => events.push(event),
-      signal: new AbortController().signal,
-      maxSteps: 3,
-      fetch: fetchImpl,
-      chunkDelayMs: 0,
-    });
 
-    expect(calls).toHaveLength(2);
-    expect(calls[0]?.url).toBe('https://proxy.example/v1/chat/completions');
-    expect(calls[0]?.body.stream).toBe(false);
-    expect(calls[1]?.body.stream).toBe(false);
-    expect(calls[1]?.body.messages).toEqual([
-      { role: 'system', content: 'system' },
-      { role: 'user', content: 'read it' },
-      {
-        role: 'assistant',
-        content: null,
-        tool_calls: [{
-          id: 'call-1',
-          type: 'function',
-          function: { name: 'read_file', arguments: '{"path":"a.md"}' },
-        }],
-      },
-      { role: 'tool', tool_call_id: 'call-1', content: 'contents' },
-    ]);
-    expect(events).toEqual([
-      { type: 'tool_start', toolCallId: 'call-1', toolName: 'read_file', args: { path: 'a.md' } },
-      { type: 'tool_delta', toolCallId: 'call-1', toolName: 'read_file', delta: 'Reading file...' },
-      { type: 'tool_end', toolCallId: 'call-1', toolName: 'read_file', output: 'contents', isError: false },
-      { type: 'text_delta', delta: 'Done' },
-    ]);
-  });
 
-  it('keeps non-streaming fallback transport on stream:false while accepting proxy SSE responses', async () => {
-    const events: Array<{ type: string; delta?: string }> = [];
-    const calls: Array<{ body: any }> = [];
-    const fetchImpl = async (_url: string, init?: RequestInit) => {
-      calls.push({ body: JSON.parse(String(init?.body ?? '{}')) });
-      return new Response([
-        'data: {"choices":[{"delta":{"role":"assistant"},"finish_reason":null}]}',
-        'data: {"choices":[{"delta":{"content":"Proxy "},"finish_reason":null}]}',
-        'data: {"choices":[{"delta":{"content":"SSE"},"finish_reason":"stop"}]}',
-        'data: [DONE]',
-      ].join('\n'), { status: 200 });
-    };
 
-    await runMindosNonStreamingFallback({
-      baseUrl: 'https://proxy.example',
-      apiKey: 'key',
-      model: 'model',
-      systemPrompt: 'system',
-      historyMessages: [],
-      userContent: 'hello',
-      tools: [],
-      send: (event) => events.push(event),
-      signal: new AbortController().signal,
-      maxSteps: 1,
-      fetch: fetchImpl,
-      chunkDelayMs: 0,
-    });
-
-    expect(calls[0]?.body.stream).toBe(false);
-    expect(events).toEqual([{ type: 'text_delta', delta: 'Proxy SSE' }]);
-  });
-
-  it('can explicitly request streaming transport while keeping MindOS delivery events stable', async () => {
-    const events: Array<{ type: string; delta?: string }> = [];
-    const calls: Array<{ body: any }> = [];
-    const fetchImpl = async (_url: string, init?: RequestInit) => {
-      calls.push({ body: JSON.parse(String(init?.body ?? '{}')) });
-      return new Response(JSON.stringify({
-        choices: [{
-          message: { role: 'assistant', content: 'Streaming requested, JSON returned' },
-          finish_reason: 'stop',
-        }],
-      }), { status: 200 });
-    };
-
-    await runMindosOpenAICompatFallback({
-      baseUrl: 'https://proxy.example',
-      apiKey: 'key',
-      model: 'model',
-      systemPrompt: 'system',
-      historyMessages: [],
-      userContent: 'hello',
-      tools: [],
-      send: (event) => events.push(event),
-      signal: new AbortController().signal,
-      maxSteps: 1,
-      fetch: fetchImpl,
-      chunkDelayMs: 0,
-      requestStream: true,
-    });
-
-    expect(calls[0]?.body.stream).toBe(true);
-    expect(events).toEqual([{ type: 'text_delta', delta: 'Streaming requested, JSON returned' }]);
-  });
 
   it('keeps Pi resource loading on projectRoot while executing the session in workDir', async () => {
     const captured: {
@@ -1132,167 +813,12 @@ describe('MindOS session event contract', () => {
       },
     });
 
-    const tool = runtime.fallbackTools.find((item) => item.name === 'capture_context');
-    expect(tool).toBeTruthy();
-    await tool!.execute('tool-1', {}, undefined, undefined);
-
     expect(captured.resourceCwd).toBe('/repo');
     expect(captured.sessionCwd).toBe('/repo/app');
-    expect(captured.extensionCwd).toBe('/repo/app');
     expect(captured.settings).toMatchObject({ compaction: { enabled: true } });
   });
 
-  it('runs extension-registered tools in the non-streaming fallback with headless context', async () => {
-    const captured: {
-      params?: unknown;
-      ctx?: Record<string, unknown>;
-      toolCallId?: string;
-    } = {};
-    const webSearchTool = {
-      name: 'web_search',
-      description: 'Search the web',
-      parameters: { type: 'object', properties: { query: { type: 'string' } } },
-      prepareArguments: (args: unknown) => ({
-        ...(typeof args === 'object' && args ? args as Record<string, unknown> : {}),
-        query: String(typeof args === 'object' && args ? (args as Record<string, unknown>).query ?? '' : '').trim(),
-        workflow: 'none',
-      }),
-      execute: async (
-        toolCallId: string,
-        params: unknown,
-        _signal: AbortSignal | undefined,
-        onUpdate: ((update: unknown) => void) | undefined,
-        ctx: Record<string, unknown>,
-      ) => {
-        captured.toolCallId = toolCallId;
-        captured.params = params;
-        captured.ctx = ctx;
-        onUpdate?.({ content: [{ type: 'text', text: 'Searching pi.dev...' }] });
-        return { content: [{ type: 'text', text: 'pi-web-access result' }] };
-      },
-    };
-    const duplicateReadTool = {
-      name: 'read_file',
-      description: 'Extension read should be used by fallback',
-      execute: async () => ({ content: [{ type: 'text', text: 'extension read' }] }),
-    };
-    const resourceLoader = {
-      reload: async () => {},
-      getSkills: () => ({ skills: [] }),
-      getExtensions: () => ({
-        extensions: [{
-          path: '/ext/pi-web-access.ts',
-          tools: new Map<string, unknown>([
-            ['read_file', { definition: duplicateReadTool }],
-            ['web_search', { definition: webSearchTool }],
-          ]),
-        }],
-        errors: [],
-      }),
-    };
-    const session = {
-      subscribe: () => {},
-      prompt: async () => {},
-      steer: async () => {},
-      abort: async () => {},
-    };
 
-    const runtime = await createMindosPiAgentRuntime({
-      messages: [{ role: 'user', content: 'search web', timestamp: 1 }],
-      systemPrompt: 'prompt',
-      projectRoot: '/repo',
-      agentDir: '/home/test/.pi',
-      mindRoot: '/mind',
-      agentConfig: {},
-      serverSettings: {},
-      bashTool: { name: 'bash' },
-      services: {
-        resolveModelConfig: () => ({
-          model: { id: 'model-object' },
-          modelName: 'gpt-test',
-          apiKey: 'key',
-          provider: 'openai',
-        }),
-        toRuntimeProvider: (provider) => provider,
-        createModelRuntime: async () => ({ setRuntimeApiKey: async () => {} }),
-        createExtensionModelRegistry: () => ({ registry: true }),
-        clampThinkingLevel: (_model, level) => level,
-        createSettingsManager: (settings) => ({ settings }),
-        createSessionManager: () => ({ appendMessage: () => {} }),
-        createResourceLoader: () => resourceLoader,
-        convertToLlm: (messages) => [...messages],
-        createAgentSession: async () => ({ session }),
-      },
-    });
-
-    expect(runtime.fallbackTools.map((tool) => tool.name)).toEqual(['read_file', 'web_search']);
-    await expect(runtime.fallbackTools.find((tool) => tool.name === 'read_file')?.execute(
-      'call-read',
-      {},
-      undefined,
-      undefined,
-    )).resolves.toEqual({ content: [{ type: 'text', text: 'extension read' }] });
-
-    const events: Array<{ type: string; delta?: string; toolCallId?: string; toolName?: string; output?: string; isError?: boolean; args?: unknown }> = [];
-    const calls: Array<{ body: Record<string, unknown> }> = [];
-    const fetchImpl = async (_url: string, init?: RequestInit) => {
-      calls.push({ body: JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown> });
-      if (calls.length === 1) {
-        return new Response(JSON.stringify({
-          choices: [{
-            message: {
-              role: 'assistant',
-              content: null,
-              tool_calls: [{
-                id: 'call-search',
-                type: 'function',
-                function: { name: 'web_search', arguments: '{"query":" pi-web-access "}' },
-              }],
-            },
-            finish_reason: 'tool_calls',
-          }],
-        }), { status: 200 });
-      }
-      return new Response(JSON.stringify({
-        choices: [{
-          message: { role: 'assistant', content: 'Done' },
-          finish_reason: 'stop',
-        }],
-      }), { status: 200 });
-    };
-
-    await runMindosNonStreamingFallback({
-      baseUrl: 'https://proxy.example/v1',
-      apiKey: runtime.apiKey,
-      model: runtime.modelName,
-      systemPrompt: runtime.systemPrompt,
-      historyMessages: runtime.llmHistoryMessages,
-      userContent: runtime.lastUserContent,
-      tools: runtime.fallbackTools,
-      send: (event) => events.push(event),
-      signal: new AbortController().signal,
-      maxSteps: 3,
-      fetch: fetchImpl,
-      chunkDelayMs: 0,
-    });
-
-    const firstCallTools = calls[0]?.body.tools as Array<{ function?: { name?: string } }>;
-    expect(firstCallTools.map((tool) => tool.function?.name)).toContain('web_search');
-    expect(captured.toolCallId).toBe('call-search');
-    expect(captured.params).toEqual({ query: 'pi-web-access', workflow: 'none' });
-    expect(captured.ctx).toMatchObject({
-      cwd: '/mind',
-      hasUI: false,
-      model: { id: 'model-object' },
-      modelRegistry: { registry: true },
-    });
-    expect(events).toEqual([
-      { type: 'tool_start', toolCallId: 'call-search', toolName: 'web_search', args: { query: ' pi-web-access ' } },
-      { type: 'tool_delta', toolCallId: 'call-search', toolName: 'web_search', delta: 'Searching pi.dev...' },
-      { type: 'tool_end', toolCallId: 'call-search', toolName: 'web_search', output: 'pi-web-access result', isError: false },
-      { type: 'text_delta', delta: 'Done' },
-    ]);
-  });
 
   it('owns ACP agent session lifecycle and update mapping', async () => {
     const events: Array<{ type: string; delta?: string }> = [];
@@ -1365,7 +891,7 @@ describe('MindOS session event contract', () => {
     expect(closed).toEqual([{ sessionId: 'loaded-session', closeAgentSession: false }]);
   });
 
-  it('starts a fresh ACP session when external session resume fails', async () => {
+  it('preserves the original ACP binding when external session resume fails', async () => {
     const events: Array<{ type: string; message?: string; visible?: boolean; runtime?: string; delta?: string; externalSessionId?: string; cwd?: string; status?: string }> = [];
     const ready: Array<{ id: string; resumed: boolean; externalSessionId?: string }> = [];
     const closed: Array<{ sessionId: string; closeAgentSession?: boolean }> = [];
@@ -1397,20 +923,11 @@ describe('MindOS session event contract', () => {
       sleep: async () => {},
     });
 
-    expect(result.error).toBeUndefined();
-    expect(ready).toEqual([{ id: 'fresh-session', resumed: false, externalSessionId: 'fresh-agent-session' }]);
-    expect(events).toEqual([
-      {
-        type: 'status',
-        runtime: 'acp',
-        visible: true,
-        message: 'Could not resume the previous ACP session, so MindOS started a fresh ACP session.',
-      },
-      { type: 'runtime_binding', runtime: 'acp', externalSessionId: 'fresh-agent-session', cwd: '/mind', status: 'active' },
-      { type: 'text_delta', delta: 'fresh' },
-      { type: 'done' },
-    ]);
-    expect(closed).toEqual([{ sessionId: 'fresh-session', closeAgentSession: false }]);
+    expect(result.error?.message).toContain('Could not resume the original ACP session');
+    expect(ready).toEqual([]);
+    expect(events.filter(event => event.type === 'runtime_binding' || event.type === 'text_delta')).toEqual([]);
+    expect(events.some(event => event.type === 'error')).toBe(true);
+    expect(closed).toEqual([]);
   });
 
   it('retries ACP sessions before content and always closes failed sessions', async () => {
@@ -1562,42 +1079,7 @@ describe('MindOS session event contract', () => {
     expect(aborts).toEqual(['abort']);
   });
 
-  it('uses cached proxy fallback before running pi-agent prompt', async () => {
-    const events: Array<{ type: string; message?: string }> = [];
-    let promptRuns = 0;
-    let fallbackRuns = 0;
 
-    await runMindosPiAgentTurnSession({
-      session: {
-        subscribe: () => {},
-        prompt: async () => { promptRuns += 1; },
-        steer: async () => {},
-        abort: async () => {},
-      },
-      prompt: 'hello',
-      stepLimit: 5,
-      send: (event) => events.push(event),
-      signal: new AbortController().signal,
-      provider: 'openai',
-      baseUrl: 'https://proxy.example/v1',
-      compatMode: 'non-streaming',
-      runFallback: async () => { fallbackRuns += 1; },
-      proxyMessages: {
-        proxyCompatMode: 'proxy mode',
-        proxyCompatDetecting: 'detecting',
-        proxyCompatFailed: (message) => `failed: ${message}`,
-        proxyCompatAlsoFailed: (message) => `also failed: ${message}`,
-      },
-      sleep: async () => {},
-    });
-
-    expect(promptRuns).toBe(0);
-    expect(fallbackRuns).toBe(1);
-    expect(events).toEqual([
-      { type: 'status', message: 'proxy mode' },
-      { type: 'done' },
-    ]);
-  });
 
   it('owns pi-coding-agent runtime initialization order through injected adapters', async () => {
     const calls: string[] = [];
@@ -1718,18 +1200,6 @@ describe('MindOS session event contract', () => {
     expect(runtime.lastUserImages).toEqual([{ type: 'image', data: 'img', mimeType: 'image/png' }]);
     expect(runtime.modelName).toBe('gpt-test');
     expect(runtime.provider).toBe('anthropic');
-    expect(runtime.fallbackTools.map((tool) => tool.name)).toEqual(['read_file', 'web_search']);
-    await expect(runtime.fallbackTools.find((tool) => tool.name === 'read_file')?.execute(
-      'call-read',
-      {},
-      undefined,
-      undefined,
-    )).resolves.toEqual({ content: [{ type: 'text', text: 'extension' }] });
-    expect(runtime.fallbackTools.find((tool) => tool.name === 'web_search')).toMatchObject({
-      name: 'web_search',
-      description: 'Search the web',
-      parameters: { type: 'object' },
-    });
     expect(runtime.lastUserSkillName).toBe('third-party');
     expect(runtime.systemPrompt).toContain('<skills>third-party</skills>');
     expect(runtime.systemPrompt).toContain('## MindOS Pi Runtime Tools');

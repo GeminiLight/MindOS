@@ -1,3 +1,4 @@
+import { installMindosProxyTransport } from './proxy-transport.js';
 import { nativeImport } from '../../foundation/native-import.js';
 import {
   createMindosPiAgentRuntime,
@@ -118,7 +119,11 @@ export function createMindosPiCodingAgentRuntimeServices(
       };
     },
     createResourceLoader: (config) => new pi.DefaultResourceLoader(config as any) as any,
-    createAgentSession: (config) => pi.createAgentSession(config as any) as any,
+    createAgentSession: async (config) => {
+      const result = await pi.createAgentSession(config as any);
+      await installMindosProxyTransport(result.session);
+      return result as any;
+    },
     convertToLlm: (messages) => pi.convertToLlm(messages as any) as unknown[],
     compactPrompt: hostServices.compactPrompt ?? ((prompt, options) => compactMindosPromptForTokenBudget(prompt, options)),
   };

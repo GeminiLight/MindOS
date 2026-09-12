@@ -10,7 +10,7 @@ let host: HTMLDivElement; let renderer: ReturnType<typeof createRoot>;
 let view: LongitudinalView; let status = 200; let code = '';
 const base = (): LongitudinalView => ({
   id: 'participant-' + 'b'.repeat(24), studyId: id, version: 3, title: 'Synthetic multi-round study', consent: 'Please read this first.', withdrawal: 'You may withdraw and erase.',
-  status: 'consent', round: 0, roundCount: 2, stage: undefined, stageIndex: undefined, task: undefined, previousAnswer: undefined, help: undefined,
+  status: 'consent', accessExpired: false, erased: false, round: 0, roundCount: 2, stage: undefined, stageIndex: undefined, task: undefined, previousAnswer: undefined, help: undefined,
   updateAllowed: undefined, dueAt: undefined, method: undefined, revision: undefined, runs: [],
 });
 beforeEach(() => {
@@ -79,4 +79,67 @@ it('maps access failures to participant copy and keeps withdrawal behind an inli
   await click('Confirm withdrawal');
   expect(host.querySelector('[role=alert]')?.textContent).toContain('This link is not available');
   expect(window.confirm).not.toHaveBeenCalled();
+});
+
+it('shows loading instead of a missing invitation while progress is being read', async () => {
+  vi.mocked(fetch).mockImplementation(() => new Promise(() => {}));
+  await render();
+  expect(host.textContent).toContain('Loading saved progress');
+  expect(host.textContent).not.toContain('Open your private participant link');
+});
+it('allows a withdrawn participant to explicitly erase retained data and confirms completion', async () => {
+  view = {...base(), status:'withdrawn'};
+  await render();
+  expect(button('Erase my study data')?.disabled).toBe(true);
+  await tick('confirmErasure');
+  view = {...view, erased:true, version:4};
+  await click('Erase my study data');
+  expect(JSON.parse(String(vi.mocked(fetch).mock.calls.at(-1)?.[1]?.body))).toMatchObject({action:'withdraw',erase:true});
+  expect(host.textContent).toContain('Your answers, methods and replies have been erased');
+  expect(button('Erase my study data')).toBeUndefined();
+});
+it('uses a fresh help attempt after recovering a confirmed server-side failure', async () => {
+  view={...base(),status:'answering',stage:'coaching',stageIndex:1,task:'Practice',help:{attempts:0,maxAttempts:4,succeeded:0,maxSucceeded:2}};
+  await render(); await fill('help-question','Explain the evidence');
+  vi.mocked(fetch).mockRejectedValueOnce(new Error('connection lost after reservation'));
+  await click('Ask for help');
+  const lost=JSON.parse(String(vi.mocked(fetch).mock.calls.at(-1)?.[1]?.body));
+  view={...view,version:5,help:{attempts:1,maxAttempts:4,succeeded:0,maxSucceeded:2},runs:[{id:'help-1',question:'Explain the evidence',status:'failed',output:undefined,failure:'provider'}]};
+  await click('Check saved progress');
+  await click('Ask for help');
+  const retry=JSON.parse(String(vi.mocked(fetch).mock.calls.at(-1)?.[1]?.body));
+  expect(retry.requestId).not.toBe(lost.requestId);
+  expect(retry.version).toBe(5);
+  expect((host.querySelector('[name="help-question"]') as HTMLTextAreaElement).value).toBe('Explain the evidence');
+});
+
+it('keeps draft guidance in the participant language even if the owner uses English', async () => {
+  view = {...base(),status:'answering',stage:'before',stageIndex:0,task:'独立任务'};
+  await act(async () => renderer.render(<LongitudinalParticipant id={id} zh />));
+  await fill('independent-answer','本地保存的作答');
+  expect(host.textContent).toContain('草稿');
+  expect(host.textContent).not.toContain('Unsubmitted drafts');
+});
+it('explains how to return during the waiting period and never starts a round automatically', async () => {
+  view = {...base(),status:'waiting',dueAt:'2026-09-15T00:00:00.000Z'};
+  await render();
+  expect(host.textContent).toContain('Return using the same private link');
+  expect(host.querySelector('time')?.dateTime).toBe(view.dueAt);
+  expect(button('Start next round')).toBeUndefined();
+  expect(vi.mocked(fetch).mock.calls.filter(c=>c[1]?.method==='PATCH')).toHaveLength(0);
+});
+it('shows a pending final help attempt before the exhausted-budget message', async () => {
+  view={...base(),status:'answering',stage:'coaching',stageIndex:1,task:'Practice',help:{attempts:4,maxAttempts:4,succeeded:1,maxSucceeded:2},runs:[{id:'help-last',question:'Explain',status:'pending',output:undefined,failure:undefined}]};
+  await render();
+  expect(host.textContent).toContain('A reply is still being prepared');
+  expect(host.textContent).not.toContain('The help limit for this round is reached');
+  expect(button('Submit and continue')?.disabled).toBe(true);
+});
+it('keeps an unsent answer and shows local draft failure when storage is unavailable', async () => {
+  view={...base(),status:'answering',stage:'before',stageIndex:0,task:'Judge independently'};
+  await render();
+  vi.spyOn(localStorage,'setItem').mockImplementation(()=>{throw new Error('quota');});
+  await fill('independent-answer','My work stays in the form.');
+  expect(host.querySelector('[role=alert]')?.textContent).toContain('Draft storage is unavailable');
+  expect((host.querySelector('[name="independent-answer"]') as HTMLTextAreaElement).value).toBe('My work stays in the form.');
 });

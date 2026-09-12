@@ -7,6 +7,7 @@ import { spawn, spawnSync } from 'node:child_process';
 const args = parseArgs(process.argv.slice(2));
 const appPath = args.app ? resolve(args.app) : findPackagedApp();
 const timeoutMs = Number(args.timeout ?? 60_000);
+if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new Error('Invalid smoke timeout');
 const webPort = Number(args.webPort ?? 3456);
 const home = mkdtempSync(join(tmpdir(), 'mindos-desktop-smoke-home-'));
 const mindRoot = mkdtempSync(join(tmpdir(), 'mindos-desktop-smoke-mind-'));
@@ -32,13 +33,13 @@ if (!appPath || !existsSync(appPath)) {
 // arm64 Macs can execute the x64 build under Rosetta — actually smoke it
 // instead of skipping (a skip means the Intel build ships unverified).
 let rosettaPrefix = null;
-if (args.skipIfArchMismatch && isArchMismatch(appPath)) {
+if (isArchMismatch(appPath)) {
   if (canRunUnderRosetta(appPath)) {
     console.log(`[smoke-desktop-app] arch mismatch — running x64 app under Rosetta`);
     rosettaPrefix = ['arch', '-x86_64'];
   } else {
-    console.log(`[smoke-desktop-app] SKIP arch mismatch for ${appPath}`);
-    process.exit(0);
+    console.error(`[smoke-desktop-app] Unsupported architecture for ${appPath}; run on a matching host.`);
+    process.exit(1);
   }
 }
 
@@ -50,9 +51,7 @@ const executable = resolveExecutable(appPath);
 console.log(`[smoke-desktop-app] Launching ${executable}`);
 console.log(`[smoke-desktop-app] Log: ${logPath}`);
 
-let child = process.platform === 'win32' && args.windowsRuntimeOnly
-  ? spawnWindowsRuntime(executable)
-  : spawnDesktopApp(executable);
+const child = spawnDesktopApp(executable);
 
 let log = '';
 child.stdout.on('data', (chunk) => appendLog(chunk));
@@ -66,13 +65,10 @@ try {
   scanFatalLog();
   console.log(`[smoke-desktop-app] OK ${appPath}`);
 } catch (error) {
-  const recovered = await maybeRunWindowsRuntimeFallback(error);
-  if (!recovered) {
-    scanFatalLog(false);
-    console.error(`[smoke-desktop-app] FAILED: ${error instanceof Error ? error.message : String(error)}`);
-    dumpDiagnostics();
-    process.exitCode = 1;
-  }
+  scanFatalLog(false);
+  console.error(`[smoke-desktop-app] FAILED: ${error instanceof Error ? error.message : String(error)}`);
+  dumpDiagnostics();
+  process.exitCode = 1;
 } finally {
   persistSmokeLogArtifact();
   terminateChild();
@@ -82,57 +78,26 @@ try {
   process.exit(process.exitCode ?? 0);
 }
 
-async function maybeRunWindowsRuntimeFallback(originalError) {
-  if (process.platform !== 'win32' || !args.windowsRuntimeFallback || args.windowsRuntimeOnly) return false;
-  const fatalPattern = findFatalLogPattern();
-  if (fatalPattern) return false;
-
-  const message = originalError instanceof Error ? originalError.message : String(originalError);
-  appendLog(`\n[smoke-desktop-app] Windows Electron smoke did not become healthy: ${message}\n`);
-  appendLog('[smoke-desktop-app] Retrying with packaged runtime-only smoke.\n');
-  console.warn(`[smoke-desktop-app] Windows Electron smoke did not become healthy: ${message}`);
-  console.warn('[smoke-desktop-app] Retrying with packaged runtime-only smoke.');
-
-  terminateChild();
-  child = spawnWindowsRuntime(executable);
-  child.stdout.on('data', (chunk) => appendLog(chunk));
-  child.stderr.on('data', (chunk) => appendLog(chunk));
-  child.on('exit', (code, signal) => {
-    appendLog(`\n[smoke-desktop-app] runtime fallback child exited code=${code} signal=${signal}\n`);
-  });
-
-  try {
-    await waitForApp(timeoutMs);
-    scanFatalLog();
-    console.log(`[smoke-desktop-app] OK ${appPath} (Windows runtime fallback)`);
-    process.exitCode = 0;
-    return true;
-  } catch (fallbackError) {
-    scanFatalLog(false);
-    console.error(`[smoke-desktop-app] Windows runtime fallback FAILED: ${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)}`);
-    console.error(`[smoke-desktop-app] Original Electron smoke failure: ${message}`);
-    dumpDiagnostics();
-    process.exitCode = 1;
-    return true;
-  }
-}
-
 async function waitForApp(timeout) {
   const started = Date.now();
   let lastError;
+  child.on('error', error => { lastError = error; });
   while (Date.now() - started < timeout) {
     if (child.exitCode !== null) {
       throw new Error(`Desktop app exited before health check passed (code ${child.exitCode})`);
     }
     try {
       const port = currentWebPort();
-      const health = await fetch(`http://127.0.0.1:${port}/api/health`);
+      const health = await fetch(`http://127.0.0.1:${port}/api/health`, { signal: AbortSignal.timeout(3000) });
       if (health.ok) {
-        const root = await fetch(`http://127.0.0.1:${port}/`, { redirect: 'follow' });
+        const root = await fetch(`http://127.0.0.1:${port}/`, { redirect: 'follow', signal: AbortSignal.timeout(3000) });
         const html = await root.text();
         if (!root.ok) throw new Error(`root/login returned HTTP ${root.status}`);
         if (!html.includes('<html') || !html.includes('MindOS')) {
           throw new Error('root/login did not return the MindOS HTML shell');
+        }
+        if (!readFileSync(logPath, 'utf8').includes('[MindOS] Desktop renderer ready')) {
+          throw new Error('HTTP server is healthy but the Electron renderer/preload has not become ready');
         }
         return;
       }
@@ -163,7 +128,8 @@ function appendLog(chunk) {
 }
 
 function spawnDesktopApp(executablePath) {
-  const launchArgs = process.platform === 'linux' ? ['--no-sandbox'] : [];
+  const launchArgs = [`--user-data-dir=${join(home, 'electron-user-data')}`];
+  if (process.platform === 'linux') launchArgs.push('--no-sandbox');
   // Under Rosetta, `arch` becomes the process-group leader; group kill in
   // terminateChild still reaches the app since it shares the group.
   const [command, ...prefixArgs] = rosettaPrefix
@@ -176,6 +142,9 @@ function spawnDesktopApp(executablePath) {
       ...process.env,
       HOME: home,
       USERPROFILE: home,
+      APPDATA: join(home, 'AppData', 'Roaming'),
+      LOCALAPPDATA: join(home, 'AppData', 'Local'),
+      ELECTRON_RUN_AS_NODE: undefined,
       ELECTRON_ENABLE_LOGGING: '1',
       ELECTRON_ENABLE_STACK_DUMPING: '1',
       APPIMAGE_EXTRACT_AND_RUN: process.platform === 'linux' ? '1' : process.env.APPIMAGE_EXTRACT_AND_RUN,
@@ -192,44 +161,9 @@ function spawnDesktopApp(executablePath) {
   });
 }
 
-function spawnWindowsRuntime(executablePath) {
-  const runtimeRoot = join(dirname(executablePath), 'resources', 'mindos-runtime');
-  const nodePath = join(runtimeRoot, 'node', 'node.exe');
-  const appDir = join(runtimeRoot, 'packages', 'web');
-  const serverPath = join(appDir, '.next', 'standalone', 'server.js');
-
-  for (const requiredPath of [runtimeRoot, nodePath, appDir, serverPath]) {
-    if (!existsSync(requiredPath)) {
-      throw new Error(`Windows packaged runtime smoke missing required path: ${requiredPath}`);
-    }
-  }
-
-  console.log(`[smoke-desktop-app] Windows runtime-only smoke from packaged resources: ${serverPath}`);
-  return spawn(nodePath, [serverPath], {
-    cwd: appDir,
-    detached: false,
-    env: {
-      ...process.env,
-      HOME: home,
-      USERPROFILE: home,
-      MIND_ROOT: mindRoot,
-      MINDOS_DESKTOP_HOME_DIR: home,
-      MINDOS_DISABLE_CLI_SHIM_PATH_APPEND: '1',
-      MINDOS_DISABLE_OBSIDIAN_SECRET_STORAGE_BROKER: '1',
-      MINDOS_WEB_PORT: String(webPort),
-      MINDOS_MCP_PORT: String(args.mcpPort ?? 8781),
-      MINDOS_PROJECT_ROOT: runtimeRoot,
-      MINDOS_CLI_PATH: join(runtimeRoot, 'packages', 'mindos', 'bin', 'cli.js'),
-      MINDOS_MANAGED: '1',
-      NODE_ENV: 'production',
-      HOSTNAME: '127.0.0.1',
-      PORT: String(webPort),
-    },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-}
-
 function seedDesktopConfig() {
+  mkdirSync(join(home, 'AppData', 'Roaming'), { recursive: true });
+  mkdirSync(join(home, 'AppData', 'Local'), { recursive: true });
   const config = JSON.stringify({
     desktopMode: 'local',
     mindRoot,
@@ -309,8 +243,9 @@ function scanFatalLog(throwOnMatch = true) {
 }
 
 function findFatalLogPattern() {
+  const combined = log + (existsSync(logPath) ? readFileSync(logPath, 'utf8') : '');
   for (const pattern of fatalPatterns) {
-    if (pattern.test(log)) {
+    if (pattern.test(combined)) {
       return pattern;
     }
   }
@@ -335,7 +270,7 @@ function terminateChild() {
   }
   try {
     if (pid && process.platform !== 'win32') process.kill(-pid, 'SIGTERM');
-    else child.kill('SIGTERM');
+    else if (pid) spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], { windowsHide: true, timeout: 10000 });
   } catch {
     // already exited
   }
@@ -404,9 +339,6 @@ function parseArgs(argv) {
     else if (arg === '--timeout') parsed.timeout = argv[++i];
     else if (arg === '--web-port') parsed.webPort = argv[++i];
     else if (arg === '--mcp-port') parsed.mcpPort = argv[++i];
-    else if (arg === '--skip-if-arch-mismatch') parsed.skipIfArchMismatch = true;
-    else if (arg === '--windows-runtime-only') parsed.windowsRuntimeOnly = true;
-    else if (arg === '--windows-runtime-fallback') parsed.windowsRuntimeFallback = true;
     else throw new Error(`Unknown argument: ${arg}`);
   }
   return parsed;

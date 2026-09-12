@@ -47,6 +47,7 @@ export interface SubagentOrchestrationPlan {
   permissionMode?: AgentRunPermissionMode;
   timeoutMs?: number;
   contextBudget?: number;
+  concurrency?: number;
   tasks: SubagentSubtaskPlan[];
 }
 
@@ -334,12 +335,13 @@ function markTaskCanceled(
   plan: SubagentOrchestrationPlan,
   parentRun: AgentRunRecord,
   dependencyResults: ReadonlyMap<string, SubagentTaskExecutionResult>,
+  ownerCanceled = false,
 ): SubagentTaskExecutionResult {
   const failedDependencies = normalizeDependencies(task)
     .map((dependencyId) => dependencyResults.get(dependencyId))
     .filter((result): result is SubagentTaskExecutionResult => result !== undefined && result.status !== 'completed')
     .map((result) => `${result.taskId}:${result.status}`);
-  const error = `Subagent task ${task.id} was canceled because dependencies did not complete: ${failedDependencies.join(', ')}.`;
+  const error = ownerCanceled ? `Subagent task ${task.id} was canceled by its owner.` : `Subagent task ${task.id} was canceled because dependencies did not complete: ${failedDependencies.join(', ')}.`;
   const run = startAgentRun({
     ...buildTaskRunInput(task, plan, parentRun),
     status: 'queued',
@@ -348,7 +350,8 @@ function markTaskCanceled(
     status: 'canceled',
     error,
     metadata: {
-      canceledByDependency: true,
+      canceledByDependency: !ownerCanceled,
+      canceledByOwner: ownerCanceled,
       failedDependencies,
     },
   }) ?? run;
@@ -361,6 +364,10 @@ export async function executeSubagentOrchestrationPlan(
   options: { signal?: AbortSignal } = {},
 ): Promise<SubagentOrchestrationResult> {
   validateSubagentPlan(plan);
+  const concurrency = plan.concurrency ?? 4;
+  if (!Number.isSafeInteger(concurrency) || concurrency < 1 || concurrency > 64) {
+    throw new SubagentPlanValidationError('Subagent concurrency must be an integer between 1 and 64.');
+  }
 
   const parentRun = startAgentRun({
     id: plan.id,
@@ -410,12 +417,12 @@ export async function executeSubagentOrchestrationPlan(
         const task = byId.get(taskId)!;
         const dependencies = normalizeDependencies(task);
         const dependencyResults = dependencies.map((dependencyId) => results.get(dependencyId));
-        if (dependencyResults.some((result) => result && result.status !== 'completed')) {
+        if (options.signal?.aborted || dependencyResults.some((result) => result && result.status !== 'completed')) {
           pending.delete(taskId);
-          results.set(taskId, markTaskCanceled(task, plan, parentRun, results));
+          results.set(taskId, markTaskCanceled(task, plan, parentRun, results, options.signal?.aborted));
           continue;
         }
-        if (dependencyResults.every(Boolean)) {
+        if (running.size < concurrency && dependencyResults.every(Boolean)) {
           launch(task);
           launched = true;
         }

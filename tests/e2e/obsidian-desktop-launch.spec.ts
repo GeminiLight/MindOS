@@ -21,7 +21,10 @@ test.beforeAll(async () => {
   await build({ entryPoints: [join(desktop, 'src/preload.ts')], bundle: true, platform: 'node', format: 'cjs', external: ['electron'], outfile: join(directory, 'owner-preload.js') });
   await build({ stdin: { contents: `import React from 'react'; import {createRoot} from 'react-dom/client';
     import {DesktopObsidianEditor} from './components/settings/DesktopObsidianEditor';
-    createRoot(document.getElementById('root')).render(<DesktopObsidianEditor plugins={[{id:'table-editor-obsidian',name:'Advanced Tables'}]}/>);`,
+    createRoot(document.getElementById('root')).render(<DesktopObsidianEditor plugins={[
+      {id:'native-example',name:'Native dependency example',compatibility:{moduleImports:['fs'],blockers:['Requires unsupported runtime module: fs']}},
+      {id:'table-editor-obsidian',name:'Advanced Tables',compatibility:{moduleImports:['@codemirror/view'],blockers:['Requires unsupported runtime module: @codemirror/view']}}
+    ]}/>);`,
     loader: 'tsx', resolveDir: web }, tsconfig: join(web, 'tsconfig.json'), bundle: true, platform: 'browser', format: 'iife', outfile: join(directory, 'ui.js') });
   const require = createRequire(join(web, 'package.json'));
   const postcss = require('postcss'); const tailwind = require('@tailwindcss/postcss');
@@ -88,11 +91,19 @@ const backups = () => {
 
 test('settings entry uses production preload and native coordinator to open an original plugin, then owner revocation closes it', async () => {
   await prepareVault(); const owner = await launch();
+  await expect(owner.locator('[aria-haspopup="listbox"]')).toHaveText('Advanced Tables');
+  await owner.locator('[aria-haspopup="listbox"]').click();
+  await owner.getByRole('option', { name: 'Native dependency example' }).click();
+  await expect(owner.getByRole('button', { name: '请求桌面运行' })).toBeDisabled();
+  await expect(owner.getByText('当前桌面宿主暂不能运行：fs。安装包仍保留。')).toBeVisible();
+  await owner.screenshot({ path: '/tmp/obsidian-desktop-unavailable.png', fullPage: true });
+  await owner.locator('[aria-haspopup="listbox"]').click();
+  await owner.getByRole('option', { name: 'Advanced Tables' }).click();
   await owner.screenshot({ path: '/tmp/obsidian-desktop-launch-light.png', fullPage: true });
   await owner.evaluate(() => document.documentElement.classList.add('dark'));
   const expectedAmber = await owner.evaluate(() => {
     const swatch = document.body.appendChild(document.createElement('span'));
-    swatch.style.color = 'var(--amber)'; const color = getComputedStyle(swatch).color; swatch.remove(); return color;
+    swatch.style.color = 'var(--amber-action)'; const color = getComputedStyle(swatch).color; swatch.remove(); return color;
   });
   await expect(owner.getByRole('button', { name: '请求桌面运行' })).toHaveCSS('background-color', expectedAmber);
   await owner.screenshot({ path: '/tmp/obsidian-desktop-launch-dark.png', fullPage: true });

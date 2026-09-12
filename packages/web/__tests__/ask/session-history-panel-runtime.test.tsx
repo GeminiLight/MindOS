@@ -34,6 +34,10 @@ vi.mock('@/lib/stores/locale-store', () => ({
 function renderPanel(
   sessions: ChatSession[],
   options: {
+    externalScope?: 'all' | 'project';
+    onExternalScopeChange?: (scope: 'all' | 'project') => void;
+    externalHasMore?: boolean;
+    onLoadMoreExternal?: () => void;
     selectedAgentRuntime?: AgentRuntimeIdentity | null;
     runtimeSessions?: RuntimeSessionEntry[];
     runtimeSessionsLoading?: boolean;
@@ -50,6 +54,7 @@ function renderPanel(
   act(() => {
     root.render(
       <SessionHistoryPanel
+        {...options}
         sessions={sessions}
         activeSessionId={sessions[0]?.id ?? null}
         selectedAgentRuntime={options.selectedAgentRuntime}
@@ -293,8 +298,8 @@ describe('SessionHistoryPanel runtime session metadata', () => {
     expect(runtimeRow?.querySelector('[data-session-row-actions]')).toBeTruthy();
     expect(runtimeRow?.querySelector('[data-stable-row-trailing]')).toBeNull();
     const meta = runtimeRow?.querySelector('[data-session-row-meta]') as HTMLElement | null;
-    expect(meta?.className).toContain('opacity-0');
-    expect(meta?.className).toContain('group-hover:opacity-100');
+    expect(meta?.className).not.toContain('opacity-0');
+    expect(meta?.textContent).toContain('/mindos-dev');
 
     const openRow = view.host.querySelector('[role="button"][title="Open this Claude Code session"]') as HTMLElement;
     await act(async () => {
@@ -465,5 +470,25 @@ describe('SessionHistoryPanel runtime session metadata', () => {
     expect(view.host.textContent).not.toContain('Confirm clear saved chats?');
 
     view.cleanup();
+  });
+});
+
+
+describe('external history navigation', () => {
+  it('offers all projects and pagination without enabling an unavailable project', () => {
+    const more = vi.fn(); const scope = vi.fn();
+    const panel = renderPanel([], { selectedAgentRuntime: { id: 'claude', name: 'Claude', kind: 'claude' }, runtimeSessionsSupported: true, externalHasMore: true, onLoadMoreExternal: more, onExternalScopeChange: scope });
+    const buttons = [...panel.host.querySelectorAll('button')];
+    expect(buttons.find(b => b.textContent === 'All projects')?.getAttribute('aria-pressed')).toBe('true');
+    expect(buttons.find(b => b.textContent === 'Current project')?.disabled).toBe(true);
+    act(() => buttons.find(b => b.textContent === 'Load more sessions')?.click());
+    expect(more).toHaveBeenCalledOnce(); panel.cleanup();
+  });
+  it('does not duplicate a native session already bound to a local chat', () => {
+    const runtime: AgentRuntimeIdentity = { id: 'claude', name: 'Claude', kind: 'claude' };
+    const panel = renderPanel([{ id: 'local', title: 'Existing', createdAt: 1, updatedAt: 1, messages: [], defaultAgentRuntime: runtime,
+      runtimeSessionBinding: { kind: 'claude-session', runtime: 'claude', runtimeId: 'claude', externalSessionId: 'original', status: 'active', updatedAt: 1 } }],
+      { selectedAgentRuntime: runtime, runtimeSessionsSupported: true, runtimeSessions: [{ id: 'original', title: 'Existing', runtime }] });
+    expect(panel.host.querySelectorAll('[data-runtime-session-row]')).toHaveLength(0); panel.cleanup();
   });
 });

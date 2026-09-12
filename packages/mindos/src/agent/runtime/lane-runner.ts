@@ -184,6 +184,8 @@ export type RuntimeLaneTurnLedgerSeed = {
 };
 
 export type RuntimeLaneTurnInput = {
+  /** Explicit owner cancellation (IM/worker); distinct from a reconnectable HTTP disconnect. */
+  signal?: AbortSignal;
   chatSessionId?: string;
   /** The HTTP/SSE request signal: watched by the disconnect grace, never linked to the run directly. */
   requestSignal?: AbortSignal;
@@ -432,7 +434,7 @@ function cancelReasonToAbortError(reason: unknown): Error {
  * - thrown error → fail + rethrow so the SSE shell emits the error frame.
  *
  * No caller-level retry: ACP retries live in `runMindosAcpAgentTurn`, the Pi
- * compat fallback in the session runner, native has none — unchanged.
+ * transport retries stay within the session runner, native has none.
  */
 export async function runRuntimeLaneTurn(
   lane: RuntimeLane,
@@ -485,6 +487,9 @@ async function runLaneTurnWithRun(
   let streamedError: Error | undefined;
   const runAbort = new AbortController();
   const runSignal = runAbort.signal;
+  const abortFromOwner = () => runAbort.abort(input.signal?.reason ?? new DOMException('Agent run canceled', 'AbortError'));
+  if (input.signal?.aborted) abortFromOwner();
+  else input.signal?.addEventListener('abort', abortFromOwner, { once: true });
   const unregisterCancelHandler = registerAgentRunCancelHandler(run.id, ({ reason }) => {
     if (runSignal.aborted) return;
     runAbort.abort(cancelReasonToAbortError(reason));
@@ -561,6 +566,7 @@ async function runLaneTurnWithRun(
     : undefined;
 
   try {
+    if (runSignal.aborted) throw runSignal.reason;
     const result = await runWithAgentRunContext(runContext, () => runWithTurnDeadline(deadline, () => (
       runWithRuntimePermissionBridge({
         runId: permissionRunId,
@@ -574,6 +580,7 @@ async function runLaneTurnWithRun(
     // an error field. Preserve that failure instead of recording false success.
     const terminalError = result.error ?? streamedError;
     if (terminalError) {
+      if (!streamedError) sendWithLedger({ type: 'error', message: terminalError.message });
       const terminalStatus = classifyLaneTerminalStatus(terminalError, runSignal);
       const modeArtifacts = recordModeArtifacts(terminalStatus);
       failAgentRun(run.id, {
@@ -620,6 +627,7 @@ async function runLaneTurnWithRun(
     finalizeCapsule(terminalStatus);
     throw error;
   } finally {
+    input.signal?.removeEventListener('abort', abortFromOwner);
     restoreResourceContext?.();
     releaseDisconnectGrace?.();
     unregisterCancelHandler();

@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 // main.ts boots Electron on import, so its lifecycle wiring is asserted as a
 // source contract (same approach as main-startup-contract.test.ts).
-const source = readFileSync(path.join(__dirname, 'main.ts'), 'utf-8');
+const source = readFileSync(path.join(__dirname, 'main.ts'), 'utf-8').replace(/\r\n/g, '\n');
 
 function sliceBetween(startMarker: string, endMarker: string, from = 0): string {
   const start = source.indexOf(startMarker, from);

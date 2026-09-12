@@ -270,6 +270,7 @@ it("validates frozen reasoning-inclusive budgets without weakening old records",
 
 import {
   adminLongitudinal,
+  exportLongitudinalBundle,
   exportLongitudinalReviewPacket,
   exportLongitudinalReviewKey,
 } from "./index.js";
@@ -307,7 +308,7 @@ it("builds a blind review packet with stable codes and no allocation, method tex
   const packet = exportLongitudinalReviewPacket(root, s.id);
   expect(packet.items).toHaveLength(6);
   expect(new Set(packet.items.map((i) => i.code)).size).toBe(6);
-  expect(packet.items.every((i) => /^W\d{3}$/.test(i.code))).toBe(true);
+  expect(packet.items.every((i) => /^W-[a-f0-9]{24}$/.test(i.code))).toBe(true);
   const text = JSON.stringify(packet);
   expect(text).not.toMatch(/participant-|frozen|next-round|Check evidence|tokenHash|methodHash|salt|strategy/);
   expect(text).toContain("SECRET RUBRIC 0");
@@ -352,4 +353,63 @@ it("refuses packets and admin views for unknown studies without creating files",
   expect(() => adminLongitudinal(root, "cohort-" + "0".repeat(24))).toThrow();
   expect(() => exportLongitudinalReviewKey(root, "not-a-study")).toThrow();
   expect(listLongitudinal(root).studies).toHaveLength(0);
+});
+
+it("allows retained withdrawal to be followed by irreversible erasure, but no further answers", () => {
+  const {s, token}=setup();
+  round(s.id,token);
+  cmd(s.id,token,"withdraw",{erase:false});
+  expect(() => cmd(s.id,token,"answer",{answer:"late"})).toThrow();
+  const erased=cmd(s.id,token,"withdraw",{erase:true});
+  expect(erased.status).toBe("withdrawn");
+  expect(erased.erased).toBe(true);
+  expect(exportLongitudinal(root,s.id).participants[0].rounds).toEqual([]);
+  expect(() => cmd(s.id,token,"withdraw",{erase:false})).toThrow();
+});
+it("lets an expired participant see only withdrawal controls and erase retained records", () => {
+  const {s,token}=setup(); round(s.id,token);
+  const later=new Date(Date.now()+91*86400000);
+  const v=readLongitudinal(root,s.id,token,later);
+  expect(v.accessExpired).toBe(true);
+  expect(v.task).toBeUndefined(); expect(v.method).toBeUndefined(); expect(v.runs).toEqual([]);
+  expect(() => useLongitudinal(root,s.id,token,{action:"keep",version:v.version,requestId:"late"},later)).toThrow();
+  const erased=useLongitudinal(root,s.id,token,{action:"withdraw",erase:true,version:v.version,requestId:"erase"},later);
+  expect(erased.erased).toBe(true);
+  expect(() => readLongitudinal(root,s.id,"f".repeat(64),later)).toThrow();
+});
+it("keeps blind answer identities stable across new submissions and erasure", () => {
+  const {s,token}=setup(); const other=issueLongitudinalAccess(root,s.id,{requestId:"other"});
+  for(const t of [token,other.token]) {cmd(s.id,t,"consent");cmd(s.id,t,"answer",{answer:t===token?"alpha":"beta"});}
+  const before=exportLongitudinalReviewPacket(root,s.id);
+  const key=exportLongitudinalReviewKey(root,s.id);
+  const removed=[token,other.token].find(t=>readLongitudinal(root,s.id,t).id===key.items[0].participantId)!;
+  const retained=before.items[1];
+  cmd(s.id,removed,"withdraw",{erase:true});
+  const after=exportLongitudinalReviewPacket(root,s.id);
+  expect(after.items.find(x=>x.answer===retained.answer)!.code).toBe(retained.code);
+  expect(after.packetId).not.toBe(before.packetId);
+  expect(after.packetId).toBe(exportLongitudinalReviewKey(root,s.id).packetId);
+  expect(JSON.stringify(after)).not.toMatch(/participant-|strategy|tokenHash/);
+});
+
+it("exports one matching empty or populated snapshot without access secrets", () => {
+  const {s,token}=setup();
+  const empty=exportLongitudinalBundle(root,s.id);
+  expect(empty.review.items).toEqual([]); expect(empty.key.items).toEqual([]);
+  round(s.id,token);
+  const bundle=exportLongitudinalBundle(root,s.id);
+  expect(bundle.packetId).not.toBe(empty.packetId);
+  for(const item of [bundle.record,bundle.review,bundle.key]) expect(item.packetId).toBe(bundle.packetId);
+  expect(bundle.review.generatedAt).toBe(bundle.key.generatedAt);
+  expect(JSON.stringify(bundle)).not.toMatch(/tokenHash|issueHash|commands|salt/);
+  expect(() => exportLongitudinalBundle(root,"../outside")).toThrow();
+  expect(() => exportLongitudinalBundle(root,"cohort-"+"f".repeat(24))).toThrow();
+});
+it("acknowledges a retried deletion without restoring data or requiring the old version", () => {
+  const {s,token}=setup(); round(s.id,token);
+  const v=readLongitudinal(root,s.id,token);
+  const deletion={action:"withdraw",erase:true,version:v.version,requestId:"delete-once"};
+  useLongitudinal(root,s.id,token,deletion);
+  expect(useLongitudinal(root,s.id,token,deletion).erased).toBe(true);
+  expect(exportLongitudinal(root,s.id).participants[0].rounds).toEqual([]);
 });

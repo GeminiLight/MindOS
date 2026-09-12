@@ -1,3 +1,4 @@
+import { listContentChangesFromLog } from '../../packages/mindos/src/server/handlers/change-log-store';
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -668,8 +669,8 @@ test.describe('unmodified Advanced Tables 0.23.2', () => {
       session!.setDraft(formatted);
       await session!.save();
       expect(readFileSync(diskPath, 'utf8')).toBe(formatted);
-      const audit = JSON.parse(readFileSync(resolve(server.root, '.mindos/change-log.json'), 'utf8'));
-      expect(audit.events).toEqual(expect.arrayContaining([expect.objectContaining({ agentName: 'obsidian:table-editor-obsidian', after: formatted })]));
+      const audit = listContentChangesFromLog(server.root);
+      expect(audit).toEqual(expect.arrayContaining([expect.objectContaining({ agentName: 'obsidian:table-editor-obsidian', after: formatted })]));
       expect(session!.snapshot.dirty).toBe(false);
       await frame.evaluate(() => (window as any).host.editor.replaceRange('Green apple', { line: 2, ch: 2 }, { line: 2, ch: 7 }));
       const draft = await frame.evaluate(() => (window as any).host.editor.getValue()) as string;
@@ -680,7 +681,7 @@ test.describe('unmodified Advanced Tables 0.23.2', () => {
       await expect(session!.save()).rejects.toThrow('conflict');
       expect(readFileSync(diskPath, 'utf8')).toBe('External editor owns this change.');
       expect(session!.snapshot).toMatchObject({ content: draft, dirty: true, status: 'conflict' });
-      expect(JSON.parse(readFileSync(resolve(server.root, '.mindos/change-log.json'), 'utf8')).events).toEqual(audit.events);
+      expect(listContentChangesFromLog(server.root)).toEqual(audit);
       await expect(session!.save()).rejects.toThrow('conflict');
       await frame.evaluate(() => (window as any).host.destroy());
     } finally {

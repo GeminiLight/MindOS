@@ -1,5 +1,7 @@
+import { diffArrays } from 'diff';
+
 // Sunk from packages/web/components/changes/line-diff.ts (Wave 3, spec-agent-core-consolidation).
-// Pure LCS line diff shared by agent KB tools and the web change viewers.
+// Bounded jsdiff adapter shared by agent KB tools and the web change viewers.
 
 export type DiffLineType = 'equal' | 'insert' | 'delete';
 
@@ -15,42 +17,22 @@ export interface CollapsedGap {
 
 export type DiffRow = DiffLine | CollapsedGap;
 
-export function buildLineDiff(before: string, after: string): DiffLine[] {
-  const oldLines = before.split('\n');
-  const newLines = after.split('\n');
-  const m = oldLines.length;
-  const n = newLines.length;
-  const lcs: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+/** The UI and tool output share one bounded algorithm. Array tokens preserve CRLF and trailing empty lines. */
+export function buildLineDiff(before: string, after: string, options: { maxEditLength?: number; timeout?: number } = {}): DiffLine[] {
+  if (before.length + after.length > 4_000_000) throw new Error('Diff input limit exceeded');
+  const changes = diffArrays(before.split('\n'), after.split('\n'), {
+    maxEditLength: options.maxEditLength ?? 4_000,
+    timeout: options.timeout ?? 40,
+  });
+  if (!changes) throw new Error('Diff computation limit exceeded');
+  return changes.flatMap(change => change.value.map(text => ({
+    type: change.added ? 'insert' as const : change.removed ? 'delete' as const : 'equal' as const,
+    text,
+  })));
+}
 
-  for (let i = m - 1; i >= 0; i--) {
-    const row = lcs[i]!;
-    const nextRow = lcs[i + 1]!;
-    for (let j = n - 1; j >= 0; j--) {
-      row[j] = oldLines[i] === newLines[j]
-        ? 1 + (nextRow[j + 1] ?? 0)
-        : Math.max(nextRow[j] ?? 0, row[j + 1] ?? 0);
-    }
-  }
-
-  const rows: DiffLine[] = [];
-  let i = 0;
-  let j = 0;
-  while (i < m || j < n) {
-    if (i < m && j < n && oldLines[i] === newLines[j]) {
-      rows.push({ type: 'equal', text: oldLines[i]! });
-      i += 1;
-      j += 1;
-      continue;
-    }
-    if (j < n && (i >= m || (lcs[i]?.[j + 1] ?? 0) >= (lcs[i + 1]?.[j] ?? 0))) {
-      rows.push({ type: 'insert', text: newLines[j]! });
-      j += 1;
-      continue;
-    }
-    rows.push({ type: 'delete', text: oldLines[i]! });
-    i += 1;
-  }
-  return rows;
+export function tryBuildLineDiff(before: string, after: string): DiffLine[] | null {
+  try { return buildLineDiff(before, after); } catch { return null; }
 }
 
 export function collapseDiffContext(lines: DiffLine[], context = 2): DiffRow[] {

@@ -1,3 +1,4 @@
+import { RUNTIME_APPROVAL_CAPABILITIES, runtimeApprovalRequirements } from './approval-capabilities.js';
 import type {
   AgentRuntimeCapabilities,
   AgentRuntimeCompatibilityAssessment,
@@ -258,11 +259,11 @@ export function nativeRuntimeCompatibilityProfile(
         owner: 'external',
         summary: runtime === 'codex'
           ? 'Codex provides native thread continuity, list/attach/fork/archive semantics, and MindOS stores only bindings and archive pointers.'
-          : 'Claude Code can resume through its own local semantics, but list/attach/archive are not exposed as a full MindOS session lifecycle.',
+          : 'Claude Code exposes native local history listing, attachment and resume. Fork and archive controls remain owned by Claude.',
         requirements: [
           requirement('runtime-session-owner', 'external', 'external', `${name} owns full session history and compaction.`),
           requirement('mindos-runtime-binding', 'satisfied', 'mindos', 'MindOS stores the runtime binding needed to continue from the product session.'),
-          requirement('list-attach-archive', runtime === 'codex' ? 'satisfied' : 'missing', 'external', 'Native runtime should expose list/attach/archive when MindOS needs full session lifecycle controls.'),
+          requirement('list-attach-archive', runtime === 'codex' ? 'satisfied' : 'missing', 'external', runtime === 'codex' ? 'Native list, attachment and archive are supported.' : 'Native list and attachment are supported; archive is not yet exposed.'),
         ],
         ...(runtime === 'codex' ? {} : { blockers: ['list-attach-archive'] }),
       }),
@@ -284,9 +285,9 @@ export function nativeRuntimeCompatibilityProfile(
           requirement('runtime-approvals', input.capabilities.supportsApprovals ? 'external' : 'unknown', 'external', `${name} must expose approval prompts or a safe native permission mode.`),
           requirement('mindos-permission-bridge', input.capabilities.supportsApprovals ? 'satisfied' : 'unknown', 'mindos', 'MindOS can route supported native approval requests into product stream events.'),
           requirement('permission-projection-contract', 'satisfied', 'mindos', 'MindOS exposes read-only permission readiness diagnostics for native runtime bridges.'),
-          requirement('durable-approval-queue', 'missing', 'mindos', 'Native approval prompts are still in-process and interactive, not durable for headless or resumed runs.'),
+          ...runtimeApprovalRequirements(),
         ],
-        ...(input.capabilities.supportsApprovals ? { blockers: ['durable-approval-queue'] } : {}),
+        ...(input.capabilities.supportsApprovals ? { blockers: [...RUNTIME_APPROVAL_CAPABILITIES.blockers] } : {}),
       }),
       'mcp-tooling': assessment({
         level: input.capabilities.supportsMcpConfig ? 'limited' : 'blocked',
@@ -395,14 +396,14 @@ function acpPermissionGovernanceAssessment(input: RuntimeCompatibilityInput): Ag
   return assessment({
     level: 'limited',
     owner: 'shared',
-    summary: 'MindOS answers ACP session/request_permission prompts interactively and surfaces them as permission events; unattended approval still needs a durable queue.',
+    summary: RUNTIME_APPROVAL_CAPABILITIES.summary,
     requirements: [
       requirement('permission-projection-contract', 'satisfied', 'mindos', 'MindOS exposes read-only permission readiness diagnostics for runtime descriptors.'),
       requirement('adapter-approval-contract', 'satisfied', 'external', 'The ACP protocol routes approval prompts through session/request_permission, which MindOS bridges.'),
       requirement('mindos-permission-bridge', 'satisfied', 'mindos', 'MindOS resolves ACP permission requests from the selected permission mode or the user.'),
-      requirement('durable-approval-queue', 'missing', 'mindos', 'Approvals are not persisted in a durable queue for headless or resumed runs yet.'),
+      ...runtimeApprovalRequirements(),
     ],
-    blockers: ['durable-approval-queue'],
+    blockers: [...RUNTIME_APPROVAL_CAPABILITIES.blockers],
   });
 }
 

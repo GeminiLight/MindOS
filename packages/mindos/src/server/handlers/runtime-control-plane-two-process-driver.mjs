@@ -5,6 +5,7 @@
 //
 // argv: <distDir> <mindRoot> <mode> [...modeArgs]
 import path from 'node:path';
+import { setTimeout } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 
 const [distDir, mindRoot, mode, ...rest] = process.argv.slice(2);
@@ -21,10 +22,22 @@ if (mode === 'upsert-many') {
   const prefix = rest[0];
   const count = Number(rest[1]);
   for (let index = 0; index < count; index += 1) {
-    const result = controlPlane.applyRuntimeControlPlaneMutation(mindRoot, {
-      action: 'upsert-task',
-      task: { id: `${prefix}-${index}`, title: `Task ${prefix} ${index}` },
-    });
+    // A busy lease is an explicit retryable 409, not a lost write. Under
+    // concurrent builds, a process can be descheduled beyond the 1 s wait.
+    const deadline = Date.now() + 15_000;
+    let result;
+    for (;;) {
+      try {
+        result = controlPlane.applyRuntimeControlPlaneMutation(mindRoot, {
+          action: 'upsert-task',
+          task: { id: `${prefix}-${index}`, title: `Task ${prefix} ${index}` },
+        });
+        break;
+      } catch (error) {
+        if (!(error instanceof controlPlane.RuntimeControlPlaneBusyError) || Date.now() >= deadline) throw error;
+        await setTimeout(25);
+      }
+    }
     if ('error' in result) {
       process.stderr.write(`upsert-many: ${result.error}\n`);
       process.exit(2);

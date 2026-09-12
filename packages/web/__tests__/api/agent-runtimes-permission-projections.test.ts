@@ -65,23 +65,23 @@ describe('GET /api/agent-runtimes/permission-projections', () => {
       interactiveApproval: { route: 'mindos-policy' },
       unattendedApproval: {
         status: 'limited',
-        blockers: ['durable-approval-queue'],
+        blockers: ['approval-owner-recovery', 'approval-timeout-recovery'],
       },
     });
     expect(codex).toMatchObject({
       status: 'interactive-only',
       harnessPermissionModel: 'runtime-bridged',
       interactiveApproval: { route: 'runtime-permission-bridge' },
-      blockers: expect.arrayContaining(['durable-approval-queue']),
+      blockers: expect.arrayContaining(['approval-owner-recovery', 'approval-timeout-recovery']),
     });
     // The MindOS ACP client answers session/request_permission, so even an
     // opaque ACP agent projects as interactively approvable through the
-    // adapter protocol; the durable queue for unattended runs is still missing.
+    // adapter protocol; lost-owner recovery for unattended runs is not supported.
     expect(acp).toMatchObject({
       status: 'interactive-only',
       harnessPermissionModel: 'runtime-bridged',
       interactiveApproval: { route: 'adapter-protocol' },
-      blockers: ['durable-approval-queue'],
+      blockers: ['approval-owner-recovery', 'approval-timeout-recovery'],
     });
   });
 

@@ -317,6 +317,21 @@ const ACP_RUNTIME_SESSION_ADAPTER: RuntimeSessionHistoryAdapter = {
   },
 };
 
+const CLAUDE_RUNTIME_SESSION_ADAPTER: RuntimeSessionHistoryAdapter = {
+  capabilities: { supportsList: true, supportsReadHistory: true, supportsAttachExisting: true, supportsFork: false, supportsArchive: false },
+  list: (runtime, options) => fetchExternalRuntimeSessions(runtime, options),
+  async readHistory(entry, runtime) {
+    const params = new URLSearchParams({ runtimeId: runtime.id, page: '1', sessionId: entry.id });
+    if (entry.cwd) params.set('cwd', entry.cwd);
+    const response = await fetch(`/api/agent-runtimes/external-sessions?${params}`, { cache: 'no-store', signal: AbortSignal.timeout(20_000) });
+    if (!response.ok) throw await runtimeSessionFetchError(response, `Cannot read ${runtime.name} session.`);
+    const body = await response.json() as { sessions?: unknown[] };
+    const selected = body.sessions?.map(row => normalizeRuntimeSessionEntry(row, runtime)).find(row => row?.id === entry.id);
+    if (!selected) throw new Error('This session is no longer available. Refresh the list.');
+    return { entry: selected, messages: runtimeSessionEntryTurnsToMessages(selected, runtime) };
+  },
+};
+
 function normalizedRuntime(runtime: AgentRuntimeIdentity): AgentRuntimeIdentity {
   return compactAgentRuntimeIdentity(runtime) ?? runtime;
 }
@@ -325,6 +340,8 @@ function getRuntimeSessionHistoryAdapter(
   runtime: AgentRuntimeIdentity | null | undefined,
 ): RuntimeSessionHistoryAdapter | null {
   if (runtime?.kind === 'codex') return CODEX_RUNTIME_SESSION_ADAPTER;
+  if (runtime?.kind === 'claude') return CLAUDE_RUNTIME_SESSION_ADAPTER;
+  if (runtime?.kind === 'acp' && runtime.id === 'opencode') return { ...ACP_RUNTIME_SESSION_ADAPTER, readHistory: CLAUDE_RUNTIME_SESSION_ADAPTER.readHistory };
   if (runtime?.kind === 'acp') return ACP_RUNTIME_SESSION_ADAPTER;
   return null;
 }
@@ -422,3 +439,5 @@ export async function importBoundRuntimeSessionHistory(
   if (!attached) return { status: 'refused' };
   return { status: 'imported', messageCount: messages.length };
 }
+
+export { listRuntimeSessionPage, type RuntimeSessionPage, type RuntimeSessionPageOptions } from './runtime-session-page';

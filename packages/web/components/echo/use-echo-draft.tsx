@@ -85,9 +85,11 @@ export function useEchoDraft<T>(key: string, initial: T | (() => T)) {
     { failed, restored },
   ] as const;
 }
-export function EchoDraftNotice() {
+export function EchoDraftNotice({ locale: language, state }: { locale?: "en" | "zh"; state?: { failed: boolean; restored: boolean } } = {}) {
   const { locale } = useLocale();
-  const [failed, setFailed] = useState(false);
+  const [storageFailed, setFailed] = useState(false);
+  const failed = state?.failed ?? storageFailed;
+  const zh = (language ?? locale) === "zh";
   useEffect(() => {
     const on = (e: Event) => setFailed(!!(e as CustomEvent).detail?.failed);
     window.addEventListener(event, on);
@@ -99,10 +101,12 @@ export function EchoDraftNotice() {
       className="text-xs leading-5 text-muted-foreground"
     >
       {failed
-        ? locale === "zh"
+        ? zh
           ? "草稿暂时无法保存到本机，请保留此页面或复制内容。"
           : "Draft storage is unavailable. Keep this page open or copy your work."
-        : locale === "zh"
+        : state?.restored
+          ? zh ? "已恢复本机草稿。尚未提交，请核对后继续。" : "Draft restored from this device. Review it before submitting."
+        : zh
           ? "未提交的草稿在本机保留 7 天，返回或重新打开后可继续。"
           : "Unsubmitted drafts stay on this device for 7 days, ready when you return."}
     </p>

@@ -267,11 +267,9 @@ export function createDefaultMindosHttpServices(options: DefaultMindosHttpServic
         settings: readRuntimeSettings(options),
       }),
     }),
-    agentTurnStream: async function* () {
-      yield {
-        type: 'error',
-        message: 'Product agent turn runtime is not configured. Start the Next adapter or inject an agentTurnStream service.',
-      };
+    agentTurnStream: async function* (body) {
+      const { createStandaloneAgentTurnStream } = await import('./agent-turn-service.js');
+      yield* createStandaloneAgentTurnStream({ ...options, mindRoot })(body);
     },
   };
 }

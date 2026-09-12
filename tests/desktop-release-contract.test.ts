@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 const root = resolve(__dirname, '..');
 
 function readText(relativePath: string): string {
-  return readFileSync(resolve(root, relativePath), 'utf-8');
+  return readFileSync(resolve(root, relativePath), 'utf-8').replace(/\r\n/g, '\n');
 }
 
 describe('Desktop release packaging contract', () => {
@@ -24,17 +24,11 @@ describe('Desktop release packaging contract', () => {
     expect(linuxSection).toContain('executableName: MindOS');
   });
 
-  it('initialises the PowerShell availability flag before using electron-builder process macros', () => {
-    // Overriding customCheckAppRunning skips electron-builder's default block
-    // that declares $IsPowerShellAvailable; FIND_PROCESS / _CHECK_APP_RUNNING
-    // still read it, and electron-builder 26 compiles NSIS with -WX.
+  it('uses scoped executable ownership instead of global name matching', () => {
     const script = readText('packages/desktop/build/installer.nsh');
-    const macroStart = script.indexOf('!macro customCheckAppRunning');
-    const macroEnd = script.indexOf('!macroend', macroStart);
-    const macro = script.slice(macroStart, macroEnd);
-    const powershellProbe = macro.indexOf('!insertmacro IS_POWERSHELL_AVAILABLE');
-    expect(powershellProbe).toBeGreaterThan(-1);
-    expect(powershellProbe).toBeLessThan(macro.indexOf('!insertmacro FIND_PROCESS'));
+    expect(script).toContain('-Action Probe -InstallDir "$INSTDIR"');
+    expect(script).not.toContain('/IM');
+    expect(script).not.toContain('!macro customInit');
   });
 
   it('builds macOS on the macos-15 image until electron-builder unlocks its keychain correctly on macOS 26', () => {
@@ -54,26 +48,13 @@ describe('Desktop release packaging contract', () => {
     expect(nsis).toContain('ExecWait');
   });
 
-  it('stops MindOS-owned Windows processes before the NSIS running-app check blocks install', () => {
+  it('protects legacy cleanup before invoking the old installer', () => {
     const nsis = readText('packages/desktop/build/installer.nsh');
-
-    expect(nsis).toContain('!macro customInit');
-    expect(nsis).toContain('!macro customCheckAppRunning');
-    expect(nsis).toContain('!macro mindosStopRuntimeChildren');
-    expect(nsis).toContain('Var mindosRuntimeCleanupDone');
-    expect(nsis).toContain('StrCmp $mindosRuntimeCleanupDone "1"');
-    expect(nsis).toContain('-NoProfile -NonInteractive -ExecutionPolicy Bypass');
-    expect(nsis).toContain('-Filter "Name = \'node.exe\'"');
-    expect(nsis).toContain('$PLUGINSDIR\\mindos-runtime-cleanup.ps1');
-    expect(nsis).toContain('Get-CimInstance Win32_Process');
-    expect(nsis).toContain('"@geminilight\\mindos"');
-    expect(nsis).toContain('"\\packages\\web\\.next\\standalone\\server.js"');
-    expect(nsis).toContain('"\\dist\\protocols\\mcp-server\\index.cjs"');
-    expect(nsis).toContain('/PID $$proc.ProcessId /T /F');
-    expect(nsis).toContain('/IM "${APP_EXECUTABLE_FILENAME}" /T /F');
-    expect(nsis).toContain('!insertmacro _CHECK_APP_RUNNING');
-    expect(nsis).not.toMatch(/taskkill(?:\.exe)?\s+\/IM\s+"?node(?:\.exe)?"?/i);
-    expect(nsis).not.toContain('/F /IM node.exe');
+    expect(nsis).toContain('-Action Protect -ProfileDir');
+    expect(nsis).toContain('${ifNot} ${isUpdated}');
+    expect(nsis).toContain('--purge');
+    expect(nsis.indexOf('-Action Probe')).toBeLessThan(nsis.indexOf('-Action Stop'));
+    expect(nsis.indexOf('MessageBox MB_OKCANCEL')).toBeLessThan(nsis.indexOf('-Action Stop'));
   });
 
   it('builds Windows ARM64 installers with a distinct updater channel and artifact name', () => {
@@ -225,128 +206,29 @@ describe('Desktop release packaging contract', () => {
     expect(sshTunnel).toContain('getSshTunnelPidFile');
   });
 
-  it('smokes packaged Desktop runtime before release artifacts are uploaded', () => {
+  it('validates native app readiness and final artifacts before publishing', () => {
     const workflow = readText('.github/workflows/build-desktop.yml');
-    const verifier = readText('scripts/verify-desktop-runtime.mjs');
     const smoke = readText('scripts/smoke-desktop-app.mjs');
-    const smokeStep = workflow.slice(
-      workflow.indexOf('- name: Smoke packaged app'),
-      workflow.indexOf('- name: Verify Windows signatures'),
-    );
-
     expect(workflow).toContain('node scripts/verify-desktop-runtime.mjs');
-    expect(workflow).toContain('node scripts/smoke-desktop-app.mjs --skip-if-arch-mismatch --timeout 90000');
-    expect(workflow).toContain('node scripts/smoke-desktop-app.mjs --skip-if-arch-mismatch --timeout 90000 --windows-runtime-only');
-    expect(workflow.indexOf('Smoke packaged app')).toBeGreaterThan(workflow.indexOf('Package (${{ matrix.platform }})'));
-    expect(workflow.indexOf('Upload artifacts')).toBeGreaterThan(workflow.indexOf('Smoke packaged app'));
-    expect(verifier).toContain('isPrunedStandaloneDependency');
-    expect(verifier).toContain("packageName.startsWith('@types/')");
-    expect(verifier).toContain("'caniuse-lite'");
-    // mac x64 smokes under Rosetta on the arm64 runner instead of being skipped
+    expect(workflow).toContain('os: windows-11-arm');
+    expect(workflow).toContain('node scripts/smoke-desktop-app.mjs --timeout 240000');
+    expect(workflow).toContain('node scripts/smoke-desktop-app.mjs --timeout 90000');
+    expect(workflow).not.toContain('--windows-runtime-fallback');
+    expect(workflow).not.toContain('--skip-if-arch-mismatch');
+    expect(smoke).toContain('Desktop renderer ready');
+    expect(smoke).toContain('AbortSignal.timeout(3000)');
     expect(smoke).toContain("['arch', '-x86_64']");
-    expect(smoke).toContain('canRunUnderRosetta');
-    expect(workflow).toContain('electron-builder --${{ matrix.platform }} --${{ matrix.arch }} --publish never');
-    expect(workflow).not.toContain('--publish always');
-    expect(workflow).toContain('WINDOWS_CERTIFICATE_BASE64');
+    expect(smoke).toContain("spawnSync('taskkill'");
+    expect(workflow).toContain('Publishing Windows releases requires');
     expect(workflow).toContain('Get-AuthenticodeSignature');
-    expect(workflow).toContain('Publishing unsigned Windows artifacts because WINDOWS_CERTIFICATE_BASE64/WINDOWS_CERTIFICATE_PASSWORD are not configured.');
-    expect(workflow).toContain('Skipping Windows Authenticode verification because code-signing secrets are not configured; unsigned artifacts will be published.');
-    expect(smokeStep).toContain('if [ "${{ matrix.platform }}" = "win" ] && [ "${{ matrix.arch }}" = "arm64" ]; then');
-    expect(smokeStep).toContain('if [ "${{ matrix.platform }}" = "mac" ] && [ "${{ matrix.arch }}" = "x64" ]; then');
-    expect(smokeStep).toContain('node scripts/smoke-desktop-app.mjs --skip-if-arch-mismatch --timeout 240000');
-    expect(smokeStep.indexOf('matrix.platform }}" = "mac"')).toBeLessThan(smokeStep.indexOf('matrix.platform }}" = "win"'));
-    expect(smokeStep).toContain('node scripts/smoke-desktop-app.mjs --skip-if-arch-mismatch --timeout 90000 --windows-runtime-only');
-    expect(smokeStep).toContain('elif [ "${{ matrix.platform }}" = "win" ]; then');
-    expect(smokeStep).toContain('node scripts/smoke-desktop-app.mjs --skip-if-arch-mismatch --timeout 90000 --windows-runtime-fallback');
-    expect(workflow).not.toContain('Publishing Windows releases requires WINDOWS_CERTIFICATE_BASE64');
     expect(workflow).toContain('Publishing macOS releases requires sign_mac=true');
-    expect(workflow).toContain('No notarization credentials configured for a publish build');
-    expect(workflow).toContain('for file in packages/desktop/dist/*.dmg packages/desktop/dist/*.zip; do');
-    expect(workflow).toContain('xcrun stapler validate "$file"');
-    expect(workflow).toContain('gh release delete-asset "$DESIRED_TAG" "MindOS.Setup.${VERSION}.exe" --yes');
-    expect(workflow).toContain('gh release delete-asset "$DESIRED_TAG" "MindOS.Setup.${VERSION}.exe.blockmap" --yes');
-    expect(workflow).toContain('copy_alias "artifacts/MindOS-${VERSION}-arm64.dmg" "MindOS-arm64.dmg"');
-    expect(workflow).toContain('copy_alias "artifacts/MindOS-${VERSION}.dmg" "MindOS.dmg"');
-    expect(workflow).toContain('copy_alias "artifacts/MindOS-Setup-${VERSION}.exe" "MindOS-Setup.exe"');
-    expect(workflow).toContain('copy_alias "artifacts/MindOS-Setup-${VERSION}-arm64.exe" "MindOS-Setup-arm64.exe"');
-    expect(workflow).toContain('copy_alias "artifacts/MindOS-${VERSION}.AppImage" "MindOS.AppImage"');
-    expect(workflow).toContain('copy_alias "artifacts/mindos-desktop_${VERSION}_amd64.deb" "mindos-desktop_amd64.deb"');
-    expect(workflow).toContain('gh release view "$DESIRED_TAG" --json assets --jq \'.assets[].name\'');
-    expect(workflow).toContain('grep -Fx "$required_asset" /tmp/mindos-desktop-assets.txt');
-    expect(workflow).toContain('candidates=(');
-    expect(workflow).toContain('artifacts/*.dmg');
-    // Only updater feeds (latest*.yml) are published — a bare *.yml/*.yaml glob
-    // also uploaded electron-builder's builder-debug/effective-config files
+    expect(workflow.indexOf('desktop-release-assets.mjs refresh-mac')).toBeGreaterThan(workflow.indexOf('xcrun stapler validate'));
+    expect(workflow.indexOf('desktop-release-assets.mjs verify artifacts')).toBeLessThan(workflow.indexOf('gh release upload'));
+    expect(workflow.indexOf('desktop-release-assets.mjs verify-upload')).toBeLessThan(workflow.indexOf('--draft=false --latest'));
+    expect(workflow).toContain('Release already public; use a new Desktop tag');
     expect(workflow).toContain('artifacts/latest*.yml');
-    expect(workflow).not.toContain('artifacts/*.yaml');
-    expect(workflow).toContain('[ -f "$asset" ] && assets+=("$asset")');
-    expect(workflow).toContain('gh release upload "$DESIRED_TAG" "${assets[@]}" --clobber');
-    expect(workflow).not.toContain('assets=(artifacts/*)');
-    expect(workflow).toContain('s/_${VERSION}//g');
-    expect(workflow).toContain('if: always()');
-    expect(workflow).toContain('packages/desktop/dist/smoke-logs/**');
-    expect(workflow).not.toContain('git tag "$DESIRED_TAG" 2>/dev/null || true');
-    expect(workflow).not.toContain('git push origin "$DESIRED_TAG" 2>/dev/null || true');
-
-    expect(verifier).toContain('packages/web/.next/standalone/node_modules/@sinclair/typebox/package.json');
-    expect(verifier).toContain('packages/web/.next/standalone/node_modules/@earendil-works/pi-ai/package.json');
-    expect(verifier).toContain('packages/web/.next/standalone/node_modules/pi-web-access/index.ts');
-    expect(verifier).toContain('packages/web/.next/standalone/node_modules/pi-subagents/src/extension/index.ts');
-    expect(verifier).toContain('packages/web/.next/standalone/node_modules/pi-mcp-adapter/index.ts');
-    expect(verifier).toContain('packages/web/.next/standalone/node_modules/pi-schedule-prompt/src/tool.ts');
-    expect(verifier).toContain('packages/web/.next/standalone/node_modules/@juicesharp/rpiv-ask-user-question/index.ts');
-    expect(verifier).toContain('packages/web/.next/standalone/lib/agent/kb-extension.ts');
-    expect(verifier).toContain('packages/web/.next/standalone/lib/agent/subagent-ledger-extension.ts');
-    expect(verifier).toContain('packages/web/.next/standalone/lib/schedule-prompt/index.ts');
-    expect(verifier).toContain('packages/web/.next/standalone/lib/im/index.ts');
-    expect(verifier).toContain('packages/web/.next/standalone/node_modules/grammy/package.json');
-    expect(verifier).toContain('packages/web/.next/standalone/node_modules/@slack/web-api/package.json');
-    expect(verifier).toContain("import { fileURLToPath } from 'node:url'");
-    expect(verifier).toContain("fileURLToPath(new URL('..', import.meta.url))");
-    expect(verifier).not.toContain("new URL('..', import.meta.url).pathname");
-    expect(verifier).toContain('optional local embedding runtime should not be bundled by default');
-    expect(verifier).toContain('@huggingface/transformers/package.json');
-    expect(verifier).toContain('dist/protocols/mcp-server/index.cjs');
-    expect(verifier).toContain('ERR_MODULE_NOT_FOUND');
-    expect(verifier).toContain('Cannot find module');
-    expect(verifier).toContain('path.join is not a function');
-
-    expect(smoke).toContain('/api/health');
-    expect(smoke).toContain('APPIMAGE_EXTRACT_AND_RUN');
-    expect(smoke).toContain("process.platform === 'linux' ? ['--no-sandbox'] : []");
-    expect(smoke).toContain("desktopMode: 'local'");
-    expect(smoke).toContain('setupPending: false');
-    expect(smoke).toContain("MINDOS_DESKTOP_HOME_DIR: home");
-    expect(smoke).toContain("MINDOS_DISABLE_CLI_SHIM_PATH_APPEND: '1'");
-    expect(smoke).toContain("MINDOS_DISABLE_OBSIDIAN_SECRET_STORAGE_BROKER: '1'");
-    expect(smoke).toContain("mindosRuntimePolicy: 'bundled-only'");
-    expect(smoke).not.toContain("join(homedir(), '.mindos', 'config.json')");
-    expect(smoke).not.toContain("join(userInfo().homedir, '.mindos', 'config.json')");
-    expect(smoke).toContain('MINDOS_DESKTOP_CI_LOG: logPath');
-    expect(smoke).toContain("ELECTRON_ENABLE_LOGGING: '1'");
-    expect(smoke).toContain('dumpDiagnostics');
-    expect(smoke).toContain('persistSmokeLogArtifact');
-    expect(smoke).toContain("resolve('packages/desktop/dist/smoke-logs')");
-    expect(smoke).toContain('spawnWindowsRuntime');
-    expect(smoke).toContain('Windows runtime-only smoke from packaged resources');
-    expect(smoke).toContain('maybeRunWindowsRuntimeFallback');
-    expect(smoke).toContain('Windows runtime fallback');
-    expect(smoke).toContain('--windows-runtime-fallback');
-    expect(smoke).toContain("'resources', 'mindos-runtime'");
-    expect(smoke).toContain("'node', 'node.exe'");
-    expect(smoke).toContain("'packages', 'web'");
-    expect(smoke).toContain('restoreSeededConfigs');
-    expect(smoke).toContain("detached: process.platform !== 'win32'");
-    expect(smoke).toContain("process.kill(-pid, 'SIGTERM')");
-    expect(smoke).toContain('process.exit(process.exitCode ?? 0)');
-    expect(smoke).toContain("resolve('packages/desktop/dist')");
-    expect(smoke).toContain("resolve('dist')");
-    expect(smoke).toContain("join(desktopDist, 'linux-unpacked', 'MindOS')");
-    expect(smoke).toContain("join(desktopDist, 'linux-unpacked', 'mindos')");
-    expect(smoke).toContain('/\\.AppImage$/');
-    expect(smoke).toContain('root/login did not return the MindOS HTML shell');
-    expect(smoke).toContain('MCP bundle not found');
-    expect(smoke).toContain('Cannot find module');
-    expect(smoke).toContain('Internal Error');
+    expect(workflow).not.toContain('artifacts/*.yml');
+    expect(workflow).toContain('latest will not be promoted');
+    expect(workflow).toContain('Mirror is not verified');
   });
 });

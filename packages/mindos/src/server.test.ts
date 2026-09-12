@@ -1996,7 +1996,8 @@ hidden: true
               nextCursor: null,
             };
           },
-          listThreads: async () => {
+          listThreads: async (input) => {
+            expect(input.cwd).toBe(calls.includes('all-projects') ? undefined : root);
             calls.push('thread/list');
             return {
               data: [{
@@ -2108,6 +2109,9 @@ hidden: true
         'close',
       ]);
       expect(calls).not.toContain('turn/start');
+      calls.push('all-projects');
+      const allProjects = await fetch(`${base}/api/agent-runtimes/codex/threads?scope=all&cwd=ignored`, { headers: auth });
+      expect(allProjects.status).toBe(200);
     } finally {
       await new Promise<void>((resolve, reject) => app.server.close((error) => error ? reject(error) : resolve()));
     }

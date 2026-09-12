@@ -174,7 +174,7 @@ export function createMindosKbExtension(host: MindosKbExtensionHost): (pi: Exten
 // process-global slot (webpack module graph) and the entry reads it back at
 // extension-execution time (jiti module graph).
 
-type MindosKbExtensionHostSlot = { host: MindosKbExtensionHost | undefined };
+type MindosKbExtensionHostSlot = { host: MindosKbExtensionHost | undefined; storage?: AsyncLocalStorage<MindosKbExtensionHost> };
 
 function getHostSlot(): MindosKbExtensionHostSlot {
   return getProcessGlobal<MindosKbExtensionHostSlot>(KB_EXTENSION_HOST_KEY, () => ({ host: undefined }));
@@ -185,9 +185,17 @@ export function registerMindosKbExtensionHost(host: MindosKbExtensionHost): void
   getHostSlot().host = host;
 }
 
+/** Isolate concurrent hosts during extension loading without duplicating the global registry. */
+export function runWithMindosKbExtensionHost<T>(host: MindosKbExtensionHost, fn: () => T): T {
+  const slot = getHostSlot();
+  slot.storage ??= new AsyncLocalStorage<MindosKbExtensionHost>();
+  return slot.storage.run(host, fn);
+}
+
 /** The toolkit registered by the host runtime, if any. */
 export function getMindosKbExtensionHost(): MindosKbExtensionHost | undefined {
-  return getHostSlot().host;
+  const slot = getHostSlot();
+  return slot.storage?.getStore() ?? slot.host;
 }
 
 /**

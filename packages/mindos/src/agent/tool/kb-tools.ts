@@ -19,7 +19,7 @@ import {
 import { withAgentFileWriteLock, withAgentFileWriteLocks } from './file-write-lock.js';
 import { getCurrentAgentRunContext } from '../agent-run-context.js';
 import { appendAgentRunEvent } from '../run-ledger.js';
-import { buildLineDiff, collapseDiffContext, type DiffLine } from './line-diff.js';
+import { tryBuildLineDiff, collapseDiffContext, type DiffLine } from './line-diff.js';
 import { extractRelevantContent } from './paragraph-extract.js';
 import { assertSafeAgentWriteContent } from '../../knowledge/content-integrity.js';
 
@@ -383,16 +383,16 @@ export function buildMindosKnowledgeBaseTools(host: MindosKbToolsHost): MindosAg
     if (before === after) return '';
     const beforeLines = before.split('\n').length;
     const afterLines = after.split('\n').length;
-    // For very large files, skip sync LCS (O(n*m) would block) and offload to the host worker.
-    if (beforeLines <= 2000 && afterLines <= 2000) {
-      return formatDiff(buildLineDiff(before, after));
-    }
-    const raw = host.computeDiffAsync ? await host.computeDiffAsync(before, after) : null;
+    // The shared algorithm has CPU/input budgets; a failed diff must never
+    // turn an already successful file write into a tool error.
+    const raw = beforeLines <= 2000 && afterLines <= 2000
+      ? tryBuildLineDiff(before, after)
+      : host.computeDiffAsync ? await host.computeDiffAsync(before, after).catch(() => null) : tryBuildLineDiff(before, after);
     if (!raw) {
       // Worker failed/timed out — fallback to line count summary
       const added = Math.max(0, afterLines - beforeLines);
       const removed = Math.max(0, beforeLines - afterLines);
-      return `(~+${added} ~−${removed}, ${afterLines} lines total)\n\n--- changes ---\n  (diff timed out)`;
+      return `(~+${added} ~−${removed}, ${afterLines} lines total)\n\n--- changes ---\n  (diff exceeded its computation limit)`;
     }
     return formatDiff(raw);
   }

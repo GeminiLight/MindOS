@@ -1319,3 +1319,5 @@ export {
   type MindosMcpRestartServices,
   type MindosMcpRestartSettings,
 } from './handlers/mcp-restart.js';
+
+export { readPluginData, writePluginData, type PluginDataBinding, type PluginDataSnapshot } from './plugin-data-store.js';

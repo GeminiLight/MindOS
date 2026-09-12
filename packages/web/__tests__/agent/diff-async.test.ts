@@ -79,3 +79,23 @@ describe('computeDiffAsync worker recycling', () => {
     await expect(next).resolves.toEqual([]);
   });
 });
+
+it('reports worker failure as unavailable rather than an empty diff', async () => {
+  const worker = makeFakeWorker();
+  __setDiffWorkerFactoryForTest(() => worker as never);
+  const result = computeDiffAsync('old', 'new'); worker.emit('error', new Error('failed'));
+  await expect(result).resolves.toBeNull(); terminateDiffWorker(); __setDiffWorkerFactoryForTest(null);
+});
+
+it('does not let a late exit from a timed-out worker discard its replacement result', async () => {
+  vi.useFakeTimers();
+  const first = makeFakeWorker(); const second = makeFakeWorker();
+  first.terminate = () => Promise.resolve(0);
+  const workers = [first, second]; __setDiffWorkerFactoryForTest(() => workers.shift() as never);
+  try {
+    const old = computeDiffAsync('old', 'new'); await vi.advanceTimersByTimeAsync(5100); await expect(old).resolves.toBeNull();
+    const next = computeDiffAsync('a', 'b'); first.emit('exit', 0);
+    second.emit('message', { id: second.posted[0].id, result: [{ type: 'insert', text: 'b' }], error: null });
+    await expect(next).resolves.toEqual([{ type: 'insert', text: 'b' }]);
+  } finally { terminateDiffWorker(); __setDiffWorkerFactoryForTest(null); vi.useRealTimers(); }
+});

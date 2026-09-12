@@ -467,7 +467,7 @@ describe('compatibility report', () => {
     expect(getCompatibilityLevel(report)).toBe('blocked');
   });
 
-  it('classifies third-party bundler leftovers as bundled modules instead of host capability gaps', () => {
+  it('keeps unproven third-party requires blocked rather than assuming bundling', () => {
     const report = analyzePluginCompatibility(`
       const { Plugin } = require('obsidian');
       const equal = require('ajv/dist/runtime/equal');
@@ -476,15 +476,12 @@ describe('compatibility report', () => {
       module.exports = class BundledPlugin extends Plugin {}
     `);
 
-    expect(report.bundledModules).toEqual(expect.arrayContaining([
-      'ajv/dist/runtime/equal',
-      'ajv-formats/dist/formats',
-      'lodash',
-    ]));
-    expect(report.unsupportedModules).toEqual([]);
-    expect(report.blockers).toEqual([]);
-    expect(report.runtimeTier?.unknownModules).toEqual([]);
-    expect(getCompatibilityLevel(report)).toBe('compatible');
+    expect(report.bundledModules).toEqual([]);
+    expect(report.unsupportedModules).toEqual(expect.arrayContaining(['ajv/dist/runtime/equal', 'ajv-formats/dist/formats', 'lodash']));
+    expect(report.blockers.length).toBeGreaterThan(0);
+    expect(report.runtimeTier?.unknownModules).toContain('lodash');
+    expect(report.runtimeTier?.loadsInServerTier).toBe(false);
+    expect(getCompatibilityLevel(report)).toBe('blocked');
   });
 
   it('still routes host-provided and native modules through unsupportedModules', () => {

@@ -97,7 +97,6 @@ describe('Studio automation runtime executor', () => {
       turnPrompt: options.turnPrompt,
       agentRunContextResource: {},
       llmHistoryMessages: [],
-      fallbackTools: [],
       systemPrompt: options.systemPrompt,
       model: {},
       modelName: 'test',
@@ -126,8 +125,8 @@ describe('Studio automation runtime executor', () => {
     ]);
     expect(runtimeOptions.additionalExtensionPaths.join('\n')).not.toContain('packages/web');
     expect(runtimeOptions.permissionMode).toBe('read');
-    expect(prompt).toHaveBeenCalledWith(expect.stringContaining(job.prompt));
-    expect(prompt).toHaveBeenCalledWith(expect.stringContaining('Inbox/todo.md'));
+    expect(prompt).toHaveBeenCalledWith(expect.stringContaining(job.prompt), undefined);
+    expect(prompt).toHaveBeenCalledWith(expect.stringContaining('Inbox/todo.md'), undefined);
   });
 });
 

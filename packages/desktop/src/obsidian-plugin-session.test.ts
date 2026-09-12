@@ -33,6 +33,43 @@ function setup(overrides: Partial<Parameters<typeof prepareObsidianPluginSession
 }
 
 describe('Desktop package and document approval coordinator', () => {
+  it('binds configuration writes to approved code and revokes them after package replacement', async () => {
+    const fixture = setup(); const wire = fixture.options.fetchImpl;
+    let changed = false; let writes = 0;
+    fixture.options.fetchImpl = async (input, init) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith('/data')) {
+        if (init?.method === 'POST') {
+          writes++;
+          expect(JSON.parse(String(init.body))).toMatchObject({ pluginId: manifest.id, vaultId, fingerprint: fixture.data.fingerprint, revision });
+        }
+        return json({ data: { label: '中文' }, revision });
+      }
+      if (changed && url.pathname.endsWith('/package')) return json(packageData('replacement'));
+      return wire(input, init);
+    };
+    const session = (await prepareObsidianPluginSession(fixture.options))!;
+    expect(await session.readPluginData()).toEqual({ label: '中文' });
+    await session.savePluginData({ label: 'saved' });
+    expect(writes).toBe(1);
+    changed = true;
+    await expect(session.savePluginData({ label: 'late' })).rejects.toThrow(/changed/);
+    expect(session.snapshot.status).toBe('closed');
+    changed = false;
+    await expect(session.readPluginData()).rejects.toThrow(/closed/);
+    expect(writes).toBe(1);
+  });
+
+  it('does not send configuration requests after owner revocation', async () => {
+    const fixture = setup();
+    const session = (await prepareObsidianPluginSession(fixture.options))!;
+    const count = fixture.requests.length;
+    fixture.life.abort();
+    await expect(session.readPluginData()).rejects.toThrow(/closed|abort/);
+    await expect(session.savePluginData({})).rejects.toThrow(/closed|abort/);
+    expect(fixture.requests).toHaveLength(count);
+  });
+
   it('never reads other files on ordinary approval and rejects a later read locally', async () => {
     const fixture = setup(); const session = (await prepareObsidianPluginSession(fixture.options))!;
     expect(session.vault).toBeUndefined();
@@ -68,7 +105,7 @@ describe('Desktop package and document approval coordinator', () => {
     expect(fixture.approve).toHaveBeenCalledWith(expect.objectContaining({
       pluginId: manifest.id, pluginName: manifest.name, pluginVersion: manifest.version,
       filePath: defaults.filePath, revision, vaultId, fingerprint: fixture.data.fingerprint,
-      capabilities: ['document:read', 'document:write'],
+      capabilities: ['document:read', 'document:write', 'plugin-data:read', 'plugin-data:write'],
     }));
     const binding = fixture.approve.mock.calls[0][0];
     expect(Object.isFrozen(binding)).toBe(true);

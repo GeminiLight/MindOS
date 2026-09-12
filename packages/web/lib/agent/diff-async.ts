@@ -15,7 +15,7 @@ export interface DiffWorkerLike {
 
 let _worker: DiffWorkerLike | null = null;
 let _nextId = 0;
-const _pending = new Map<number, { resolve: (result: DiffLine[]) => void; reject: (err: Error) => void; timer: ReturnType<typeof setTimeout> }>();
+const _pending = new Map<number, { worker: DiffWorkerLike; resolve: (result: DiffLine[]) => void; reject: (err: Error) => void; timer: ReturnType<typeof setTimeout> }>();
 
 const DIFF_TIMEOUT_MS = 5_000; // 5 second timeout for worker computation
 
@@ -23,8 +23,8 @@ let _workerFactory: (() => DiffWorkerLike) | null = null;
 
 /** Test hook: substitute the worker construction. Pass null to restore. */
 export function __setDiffWorkerFactoryForTest(factory: (() => DiffWorkerLike) | null): void {
+  terminateDiffWorker();
   _workerFactory = factory;
-  _worker = null;
 }
 
 function createWorker(): DiffWorkerLike {
@@ -41,14 +41,14 @@ function getWorker(): DiffWorkerLike | null {
     const worker = createWorker();
     worker.on('message', (({ id, result, error }: { id: number; result: DiffLine[] | null; error: string | null }) => {
       const pending = _pending.get(id);
-      if (!pending) return;
+      if (!pending || pending.worker !== worker) return;
       _pending.delete(id);
       clearTimeout(pending.timer);
       if (error) pending.reject(new Error(error));
       else pending.resolve(result!);
     }) as never);
-    worker.on('error', () => { if (_worker === worker) _worker = null; drainPending(); });
-    worker.on('exit', () => { if (_worker === worker) _worker = null; drainPending(); });
+    worker.on('error', () => { if (_worker === worker) _worker = null; drainPending(worker); });
+    worker.on('exit', () => { if (_worker === worker) _worker = null; drainPending(worker); });
     _worker = worker;
     return _worker;
   } catch {
@@ -73,26 +73,30 @@ export function computeDiffAsync(before: string, after: string): Promise<DiffLin
       // behind the stuck computation.
       if (_worker === worker) _worker = null;
       void worker.terminate();
+      drainPending(worker);
       resolve(null); // Timeout — caller will use fallback
     }, DIFF_TIMEOUT_MS);
 
     _pending.set(id, {
+      worker,
       resolve: (result) => resolve(result),
       reject: () => resolve(null),
       timer,
     });
 
-    worker.postMessage({ id, before, after });
+    try { worker.postMessage({ id, before, after }); }
+    catch { clearTimeout(timer); _pending.delete(id); resolve(null); }
   });
 }
 
 /** Resolve all pending requests and clear timers (worker died or was terminated). */
-function drainPending(): void {
-  for (const [, p] of _pending) {
+function drainPending(worker?: DiffWorkerLike): void {
+  for (const [id, p] of _pending) {
+    if (worker && p.worker !== worker) continue;
+    _pending.delete(id);
     clearTimeout(p.timer);
-    p.resolve([]);
+    p.reject(new Error('Diff worker unavailable'));
   }
-  _pending.clear();
 }
 
 /** Terminate the worker (for cleanup/tests). */

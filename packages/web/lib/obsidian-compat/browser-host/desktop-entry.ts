@@ -1,11 +1,9 @@
+import { createPluginDataBridge } from './data-bridge';
+import { createBrowserModuleRegistry } from './modules';
 import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { basicSetup } from 'codemirror';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
-import * as state from '@codemirror/state';
-import * as view from '@codemirror/view';
-import * as language from '@codemirror/language';
-import * as commands from '@codemirror/commands';
 import { BrowserPluginHost } from './plugin-host';
 import { createBrowserVault, type BrowserFileStat } from './vault';
 import { assertIsolatedPluginRealm } from './realm';
@@ -62,7 +60,14 @@ window.addEventListener('message', async event => {
       files: vault.files.map(file => ({ path: file.path, stat: file.stat,
         data: Uint8Array.from(atob(file.base64), character => character.charCodeAt(0)) })) });
     const vault = payload.vault ? createBrowserVault(decodeVault(payload.vault)) : undefined;
-    const host = new BrowserPluginHost({ editor, container, filePath: payload.document.filePath, vault });
+    const dataBridge = createPluginDataBridge();
+    window.addEventListener('pagehide', () => dataBridge.close(), { once: true });
+    const host = new BrowserPluginHost({ editor, container, filePath: payload.document.filePath, vault,
+      dataAdapter: {
+        load: id => { if (id !== payload.package.manifest.id) throw new Error('Foreign plugin configuration.'); return dataBridge.load(); },
+        save: (id, data) => { if (id !== payload.package.manifest.id) throw new Error('Foreign plugin configuration.'); return dataBridge.save(data); },
+      },
+    });
     window.addEventListener('message', event => {
       if (event.source !== window.parent || event.data?.kind !== 'vault' || !vault) return;
       try { vault.applySnapshot(decodeVault(event.data.vault)); invalidatePreview(); }
@@ -73,8 +78,7 @@ window.addEventListener('message', async event => {
       preview.hidden = true;
       void host.markdown.clear(preview).catch(error => send('error', String(error)));
     };
-    const modules: Record<string, unknown> = { obsidian: host.api, '@codemirror/state': state, '@codemirror/view': view,
-      '@codemirror/language': language, '@codemirror/commands': commands };
+    const modules: Record<string, unknown> = createBrowserModuleRegistry(host.api);
     const text = (path: string) => {
       const file = payload.package.files.find(file => file.path === path);
       if (!file) return '';

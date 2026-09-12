@@ -1,0 +1,41 @@
+name: Prepare CI dependencies
+description: Set up pinned tooling and restore a shared pnpm store without saving from PRs
+inputs:
+  lookup-only:
+    description: Only check whether the cache exists (for the designated writer)
+    default: 'false'
+outputs:
+  cache-hit:
+    description: Whether the exact dependency cache was restored
+    value: ${{ steps.restore.outputs.cache-hit }}
+  cache-key:
+    description: OS, architecture, toolchain and dependency fingerprint
+    value: ${{ steps.store.outputs.key }}
+  cache-path:
+    description: pnpm content-addressed store
+    value: ${{ steps.store.outputs.path }}
+runs:
+  using: composite
+  steps:
+    - uses: pnpm/action-setup@v4
+      with:
+        version: 10.18.3
+        run_install: false
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '22.19.0'
+        # Do not enable setup-node's implicit post-job cache writer.
+    - id: store
+      shell: bash
+      run: |
+        echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+        echo "key=ci-pnpm-v1-${{ runner.os }}-${{ runner.arch }}-node22.19.0-pnpm10.18.3-${{ hashFiles('pnpm-lock.yaml', 'pnpm-workspace.yaml') }}" >> "$GITHUB_OUTPUT"
+    - id: restore
+      uses: actions/cache/restore@v4
+      continue-on-error: true
+      env:
+        SEGMENT_DOWNLOAD_TIMEOUT_MINS: '1'
+      with:
+        lookup-only: ${{ inputs.lookup-only == 'true' }}
+        path: ${{ steps.store.outputs.path }}
+        key: ci-pnpm-v1-${{ runner.os }}-${{ runner.arch }}-node22.19.0-pnpm10.18.3-${{ hashFiles('pnpm-lock.yaml', 'pnpm-workspace.yaml') }}

@@ -20,7 +20,7 @@ vi.mock('@/lib/stores/locale-store', async () => {
 });
 
 vi.mock('@/components/changes/line-diff', () => ({
-  buildLineDiff: (...args: unknown[]) => buildLineDiffMock(...args),
+  tryBuildLineDiff: (...args: unknown[]) => buildLineDiffMock(...args),
   collapseDiffContext: (rows: unknown[]) => rows,
 }));
 

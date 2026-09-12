@@ -14,6 +14,8 @@ import {
   existsSync,
   readFileSync,
   appendFileSync,
+  renameSync,
+  unlinkSync,
 } from 'fs';
 import { getDefaultBundledMindOsDirectory } from './mindos-runtime-path';
 import { resolveCliPath } from './mindos-runtime-layout';
@@ -192,7 +194,7 @@ export function buildWindowsCmdShimScript(cliJs: string, home: string): string {
     '',
     ':no_cli',
     'echo mindos: MindOS Desktop has been removed. Reinstall: npm install -g @geminilight/mindos >&2',
-    'echo To clean up residuals: "%USERPROFILE%\\.mindos\\uninstall.bat" >&2',
+    'echo To clean up residuals: "%USERPROFILE%\\.mindos\\uninstall.bat" --purge >&2',
     'exit /b 127',
     '',
     ':have_cli',
@@ -468,6 +470,8 @@ async function appendMindosBinToShellRc(): Promise<boolean> {
 export function buildWindowsUninstallScript(): string {
   return [
     '@echo off',
+    'rem MindOS upgrade-safe cleanup v2',
+    'if /I not "%~1"=="--purge" exit /b 0',
     'setlocal',
     'echo MindOS Cleanup',
     'echo.',
@@ -657,26 +661,26 @@ echo "To also remove it: rm -rf ~/MindOS/mind"
 
 /** Generate ~/.mindos/uninstall.sh/.bat for cleanup after app deletion */
 function writeUninstallScript(): void {
-  const home = getDesktopHome();
-  if (process.platform === 'win32') {
-    const scriptPath = path.join(home, '.mindos', 'uninstall.bat');
-    if (existsSync(scriptPath)) return;
-    try {
-      mkdirSync(path.dirname(scriptPath), { recursive: true });
-      writeFileSync(scriptPath, buildWindowsUninstallScript(), 'utf-8');
-    } catch { /* best effort */ }
-    return;
+  const isWin = process.platform === 'win32';
+  const scriptPath = path.join(getDesktopHome(), '.mindos', isWin ? 'uninstall.bat' : 'uninstall.sh');
+  const content = isWin ? buildWindowsUninstallScript() : buildUnixUninstallScript();
+  const existing = existsSync(scriptPath) ? readFileSync(scriptPath) : null;
+  if (existing?.equals(Buffer.from(content))) return;
+  mkdirSync(path.dirname(scriptPath), { recursive: true });
+  // Preserve custom and old generated scripts before migration. Hash naming
+  // makes retries idempotent, and failure to back up must stop replacement.
+  if (existing !== null) {
+    const hash = createHash('sha256').update(existing).digest('hex').slice(0, 16);
+    const backup = `${scriptPath}.backup-${hash}`;
+    if (!existsSync(backup)) writeFileSync(backup, existing, { flag: 'wx', mode: 0o600 });
   }
-
-  const script = buildUnixUninstallScript();
-
-  const scriptPath = path.join(home, '.mindos', 'uninstall.sh');
-  if (existsSync(scriptPath)) return; // idempotent — only create once
+  const temp = `${scriptPath}.${process.pid}.tmp`;
   try {
-    mkdirSync(path.dirname(scriptPath), { recursive: true });
-    writeFileSync(scriptPath, script, 'utf-8');
-    chmodSync(scriptPath, 0o755);
-  } catch { /* best effort */ }
+    writeFileSync(temp, content, { mode: 0o755 });
+    renameSync(temp, scriptPath);
+  } finally {
+    if (existsSync(temp)) unlinkSync(temp);
+  }
 }
 
 const NOTIFY_FLAG = 'desktop-cli-path-notify-v1';
@@ -753,6 +757,12 @@ export async function ensureMindosCliShim(opts?: {
   }
   const stamp = buildCliShimStamp(cliJs, doAppend, scripts);
 
+  try {
+    writeUninstallScript();
+  } catch (error) {
+    return { ok: false, error: `Could not safely update the cleanup script: ${error instanceof Error ? error.message : String(error)}` };
+  }
+
   if (!opts?.force && isCliShimUpToDate(stamp, scripts)) {
     return { ok: true, pathAppended: false, skipped: true };
   }
@@ -775,8 +785,6 @@ export async function ensureMindosCliShim(opts?: {
   }
 
   if (appended) notifyPathAppendedOnce();
-
-  writeUninstallScript();
 
   try {
     writeFileSync(cliShimStampPath(), stamp, 'utf-8');

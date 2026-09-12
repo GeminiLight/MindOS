@@ -20,6 +20,11 @@ vi.mock('fs', () => ({
   readFileSync: (...args: unknown[]) => readFileSyncMock(...args),
 }));
 
+vi.mock('./desktop-home', () => ({
+  getDesktopHome: () => '/fake-home',
+  getDesktopConfigDir: () => '/fake-home/.mindos',
+}));
+
 import { ProcessManager } from './process-manager';
 
 function makeFakeProcess(): EventEmitter & { killed: boolean; kill: () => void; pid: number; stdout: EventEmitter; stderr: EventEmitter } {
@@ -52,6 +57,7 @@ describe('ProcessManager hostname binding', () => {
     });
 
     (pm as any).waitForReady = vi.fn().mockResolvedValue(true);
+    (pm as any).checkMcpHealth = vi.fn().mockResolvedValue(false);
 
     try {
       await pm.start();
@@ -94,6 +100,7 @@ describe('ProcessManager hostname binding', () => {
     });
 
     (pm as any).waitForReady = vi.fn().mockResolvedValue(true);
+    (pm as any).checkMcpHealth = vi.fn().mockResolvedValue(false);
 
     try {
       await pm.start();
@@ -132,6 +139,7 @@ describe('ProcessManager hostname binding', () => {
     });
 
     (pm as any).waitForReady = vi.fn().mockResolvedValue(true);
+    (pm as any).checkMcpHealth = vi.fn().mockResolvedValue(false);
 
     try {
       await pm.start();
@@ -170,6 +178,7 @@ describe('ProcessManager hostname binding', () => {
     });
 
     (pm as any).waitForReady = vi.fn().mockResolvedValue(true);
+    (pm as any).checkMcpHealth = vi.fn().mockResolvedValue(false);
 
     try {
       await pm.start();
@@ -211,6 +220,7 @@ describe('ProcessManager hostname binding', () => {
     });
 
     (pm as any).waitForReady = vi.fn().mockResolvedValue(true);
+    (pm as any).checkMcpHealth = vi.fn().mockResolvedValue(false);
 
     try {
       await pm.start();

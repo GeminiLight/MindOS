@@ -196,3 +196,14 @@ describe('KB extension host registration bridge', () => {
     );
   });
 });
+
+it('isolates KB toolkits while concurrent runtime resource loaders initialize', async () => {
+  const { runWithMindosKbExtensionHost } = await import('./kb-extension.js');
+  const first = { getToolsForPolicy: () => [] };
+  const second = { getToolsForPolicy: () => [] };
+  const results = await Promise.all([
+    runWithMindosKbExtensionHost(first, async () => { await Promise.resolve(); return getMindosKbExtensionHost(); }),
+    runWithMindosKbExtensionHost(second, async () => { await Promise.resolve(); return getMindosKbExtensionHost(); }),
+  ]);
+  expect(results[0]).toBe(first); expect(results[1]).toBe(second);
+});

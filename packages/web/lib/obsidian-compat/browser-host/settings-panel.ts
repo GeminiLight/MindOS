@@ -8,12 +8,12 @@ export function createPluginSettingsPanel(host: BrowserPluginHost, pluginId: str
   button.type = 'button'; button.textContent = 'Plugin settings'; button.setAttribute('aria-expanded', 'false');
   const status = toolbar.appendChild(document.createElement('span')); status.setAttribute('role', 'status');
   const panel = document.createElement('section'); panel.id = 'plugin-settings'; panel.hidden = true;
-  panel.className = 'plugin-settings-panel'; panel.setAttribute('role', 'region'); panel.setAttribute('aria-label', 'Plugin settings (this session)');
+  panel.className = 'plugin-settings-panel'; panel.setAttribute('role', 'region'); panel.setAttribute('aria-label', host.hasPersistentData ? 'Plugin settings (saved)' : 'Plugin settings (this session)');
   button.setAttribute('aria-controls', panel.id);
   const header = panel.appendChild(document.createElement('header'));
   const title = header.appendChild(document.createElement('h2')); title.textContent = 'Plugin settings';
   const close = header.appendChild(document.createElement('button')); close.type = 'button'; close.textContent = 'Close plugin settings';
-  const note = panel.appendChild(document.createElement('p')); note.textContent = 'Settings apply only to this editor session and are cleared when this window closes.';
+  const note = panel.appendChild(document.createElement('p')); note.textContent = host.hasPersistentData ? 'Settings are saved to this plugin in the current knowledge base. Changes from another session are protected against overwriting.' : 'Settings apply only to this editor session and are cleared when this window closes.';
   const content = panel.appendChild(document.createElement('div'));
   toolbar.after(panel);
   let generation = 0;

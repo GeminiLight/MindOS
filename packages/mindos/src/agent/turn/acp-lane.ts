@@ -475,15 +475,11 @@ async function openAcpTurnSession(
     } catch (error) {
       // A cancelled turn must not fall through to a fresh session.
       if (options.signal?.aborted) throw error;
-      options.send({
-        type: 'status',
-        runtime: 'acp',
-        visible: true,
-        message: 'Could not resume the previous ACP session, so MindOS started a fresh ACP session.',
-      });
+      throw new Error(`Could not resume the original ACP session: ${error instanceof Error ? error.message : 'session unavailable'}. Retry or explicitly start a new conversation.`);
     }
   }
 
+  if (externalSessionId) throw new Error('This Agent cannot resume the original session. Start a new conversation explicitly.');
   return {
     session: await options.createSession(options.agentId, sessionOptions),
     resumed: false,

@@ -484,6 +484,7 @@ function mindosOrchestrationPlanFromParams(params: unknown, ctx?: Record<string,
     permissionMode: subagentPermissionMode(ctx),
     timeoutMs: positiveNumber(params.timeoutMs ?? params.maxRuntimeMs),
     contextBudget: positiveNumber(params.contextBudget),
+    concurrency: (params.globalConcurrencyLimit ?? params.concurrency) as number | undefined,
     tasks: tasks as SubagentSubtaskPlan[],
   };
 }

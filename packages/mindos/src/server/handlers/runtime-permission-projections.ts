@@ -1,3 +1,4 @@
+import { RUNTIME_APPROVAL_CAPABILITIES, runtimeApprovalRequirements } from '../../agent/runtime/approval-capabilities.js';
 import {
   createMindosAgentPermissionPolicy,
   type MindosAgentPermissionPolicy,
@@ -80,7 +81,7 @@ export type AgentRuntimePermissionProjection = {
   interactiveApproval: {
     supported: boolean;
     route: AgentRuntimePermissionApprovalRoute;
-    scope: 'turn-policy' | 'in-process-run' | 'runtime-native' | 'adapter-specific' | 'none' | 'unknown';
+    scope: 'turn-policy' | 'cross-process-run' | 'runtime-native' | 'adapter-specific' | 'none' | 'unknown';
     summary: string;
   };
   unattendedApproval: {
@@ -200,7 +201,7 @@ function buildNativePermissionProjection(
   const blockers: string[] = [];
   if (runtime.status !== 'available') blockers.push('runtime-available');
   if (!supportsApprovals) blockers.push('runtime-approval-contract');
-  blockers.push('durable-approval-queue', 'approval-timeout-recovery');
+  blockers.push(...RUNTIME_APPROVAL_CAPABILITIES.blockers);
   const status: AgentRuntimePermissionProjectionStatus = runtime.status !== 'available'
     ? 'blocked'
     : supportsApprovals ? 'interactive-only' : 'unknown';
@@ -218,7 +219,7 @@ function buildNativePermissionProjection(
     interactiveApproval: {
       supported: supportsApprovals,
       route: supportsApprovals ? 'runtime-permission-bridge' : 'external-runtime',
-      scope: supportsApprovals ? 'in-process-run' : 'runtime-native',
+      scope: supportsApprovals ? RUNTIME_APPROVAL_CAPABILITIES.scope : 'runtime-native',
       summary: supportsApprovals
         ? 'MindOS can surface native runtime permission prompts while the run is active, using the runtime permission bridge.'
         : 'MindOS does not have a declared interactive permission bridge for this runtime.',
@@ -226,8 +227,8 @@ function buildNativePermissionProjection(
     unattendedApproval: {
       status: runtime.status === 'available' && supportsApprovals ? 'limited' : 'unknown',
       supported: false,
-      summary: 'Native runtime approvals are currently interactive and in-process; unattended work needs a durable approval queue and timeout recovery.',
-      blockers: ['durable-approval-queue', 'approval-timeout-recovery'],
+      summary: RUNTIME_APPROVAL_CAPABILITIES.recoverySummary,
+      blockers: [...RUNTIME_APPROVAL_CAPABILITIES.blockers],
     },
     reasons: [
       runtimeAvailableReason(runtime, PERMISSION_AVAILABILITY_WORDING),
@@ -239,8 +240,8 @@ function buildNativePermissionProjection(
           ? `${runtime.name} declares permission events that MindOS can bridge into the product stream.`
           : `${runtime.name} has not declared a bridgeable permission event stream.`,
       ),
-      reason('mindos-permission-bridge', supportsApprovals ? 'satisfied' : 'unknown', 'mindos', 'MindOS routes supported native permission requests through an in-process run bridge.'),
-      reason('durable-approval-queue', 'missing', 'mindos', 'Approvals are not persisted in a durable queue for headless or resumed runs yet.'),
+      reason('mindos-permission-bridge', supportsApprovals ? 'satisfied' : 'unknown', 'mindos', RUNTIME_APPROVAL_CAPABILITIES.summary),
+      ...runtimeApprovalRequirements(),
     ],
     blockers: uniqSorted(blockers),
   };
@@ -257,7 +258,7 @@ function buildAcpPermissionProjection(
   const supportsApprovals = runtime.capabilities.supportsApprovals && hasPermissionStream;
   const blockers: string[] = [];
   if (runtime.status !== 'available') blockers.push('runtime-available');
-  if (supportsApprovals) blockers.push('durable-approval-queue');
+  if (supportsApprovals) blockers.push(...RUNTIME_APPROVAL_CAPABILITIES.blockers);
   else blockers.push('adapter-approval-contract');
   const status: AgentRuntimePermissionProjectionStatus = runtime.status !== 'available'
     ? 'blocked'
@@ -285,9 +286,9 @@ function buildAcpPermissionProjection(
       status: runtime.status === 'available' && supportsApprovals ? 'limited' : 'unknown',
       supported: false,
       summary: supportsApprovals
-        ? 'ACP approvals are interactive and in-process; unattended work needs a durable approval queue before prompts can outlive the session.'
+        ? RUNTIME_APPROVAL_CAPABILITIES.recoverySummary
         : 'ACP unattended approval readiness depends on adapter-specific permission semantics.',
-      blockers: supportsApprovals ? ['durable-approval-queue'] : ['adapter-approval-contract'],
+      blockers: supportsApprovals ? [...RUNTIME_APPROVAL_CAPABILITIES.blockers] : ['adapter-approval-contract'],
     },
     reasons: [
       runtimeAvailableReason(runtime, PERMISSION_AVAILABILITY_WORDING),
@@ -302,7 +303,7 @@ function buildAcpPermissionProjection(
       ...(supportsApprovals
         ? [
             reason('mindos-permission-bridge', 'satisfied', 'mindos', 'MindOS resolves ACP permission requests through the ACP client bridge and surfaces them in the session projection.'),
-            reason('durable-approval-queue', 'missing', 'mindos', 'Approvals are not persisted in a durable queue for headless or resumed runs yet.'),
+            ...runtimeApprovalRequirements(),
           ]
         : []),
     ],
@@ -326,7 +327,7 @@ function mindosUnattendedApproval(
       status: 'limited',
       supported: false,
       summary: 'Ask mode is safe for interactive work, but unattended use needs a durable approval queue before user decisions can survive background execution.',
-      blockers: ['durable-approval-queue'],
+      blockers: [...RUNTIME_APPROVAL_CAPABILITIES.blockers],
     };
   }
   const highRisk = [

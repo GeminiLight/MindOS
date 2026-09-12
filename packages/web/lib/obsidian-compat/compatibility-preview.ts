@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { buildBlockedReasons, buildDesktopImportPreview } from './compatibility-preview-policy';
 import {
   buildObsidianCapabilityCoverage,
   summarizeObsidianCapabilitySurfaces,
@@ -143,12 +144,13 @@ export function buildObsidianCompatibilityPreview(
   const support = options.support ?? getObsidianImportSupport(plugin, { hasEnabledList: options.hasEnabledList });
   const coverage = options.coverage ?? buildObsidianCapabilityCoverage(plugin.compatibility);
   const packagePath = buildPackagePath(plugin, options);
+  const desktop = buildDesktopImportPreview(plugin, support, packagePath.targetPath);
   const settingsMappings = buildSettingsMappings(plugin);
-  const blockedReasons = buildBlockedReasons(plugin, support);
+  const blockedReasons = desktop?.blockedReasons ?? buildBlockedReasons(plugin, support);
   const runtimeCapabilityLedger = buildPredictedRuntimeCapabilityLedger(plugin, coverage);
   const surfaceCatalog = buildSurfaceCatalog(plugin, coverage, runtimeCapabilityLedger);
-  const workflowOutcomes = buildWorkflowOutcomes(plugin, support, coverage, settingsMappings);
-  const importDecision = buildObsidianImportDecision({
+  const workflowOutcomes = desktop?.workflowOutcomes ?? buildWorkflowOutcomes(plugin, support, coverage, settingsMappings);
+  const importDecision = desktop?.importDecision ?? buildObsidianImportDecision({
     support,
     blockedReasons,
     surfaceCatalog,
@@ -156,6 +158,7 @@ export function buildObsidianCompatibilityPreview(
     runtimeCapabilityLedger,
   });
   const warnings = unique([
+    ...(desktop?.warnings ?? []),
     ...settingsMappings.flatMap((mapping) => mapping.warnings),
     ...workflowOutcomes
       .filter((outcome) => outcome.status === 'native-replacement' || outcome.status === 'not-available')
@@ -175,7 +178,7 @@ export function buildObsidianCompatibilityPreview(
     importDecision,
     workflowOutcomes,
     runtimeCapabilityLedger,
-    nextSteps: buildNextSteps(plugin, support, coverage, packagePath, settingsMappings, blockedReasons),
+    nextSteps: desktop?.nextSteps ?? buildNextSteps(plugin, support, coverage, packagePath, settingsMappings, blockedReasons),
   };
 }
 
@@ -398,20 +401,6 @@ function readRegularPluginFile(pluginDir: string, fileName: string): string | nu
   } catch {
     return null;
   }
-}
-
-function buildBlockedReasons(plugin: ScannedObsidianPlugin, support: ObsidianImportSupport): string[] {
-  const reasons = [
-    ...(support.kind === 'blocked' ? [support.reason] : []),
-    ...plugin.compatibility.blockers,
-    ...(plugin.compatibility.unsupportedApis.length > 0
-      ? [`Unsupported Obsidian APIs: ${plugin.compatibility.unsupportedApis.join(', ')}`]
-      : []),
-    ...(plugin.compatibility.unsupportedModules.length > 0
-      ? [`Unsupported runtime modules: ${plugin.compatibility.unsupportedModules.join(', ')}`]
-      : []),
-  ];
-  return unique(reasons);
 }
 
 function buildSurfaceCatalog(

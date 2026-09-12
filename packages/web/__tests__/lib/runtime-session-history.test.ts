@@ -20,7 +20,7 @@ describe('runtime session history adapters', () => {
     vi.unstubAllGlobals();
   });
 
-  it('exposes Codex and ACP session adapters while leaving Claude unsupported until it provides a list/history API', () => {
+  it('exposes list and history adapters for Codex, Claude and ACP', () => {
     expect(getRuntimeSessionAdapterCapabilities({ id: 'codex', name: 'Codex', kind: 'codex' })).toMatchObject({
       supportsList: true,
       supportsReadHistory: true,
@@ -29,8 +29,8 @@ describe('runtime session history adapters', () => {
     });
 
     expect(getRuntimeSessionAdapterCapabilities({ id: 'claude', name: 'Claude Code', kind: 'claude' })).toMatchObject({
-      supportsList: false,
-      supportsReadHistory: false,
+      supportsList: true,
+      supportsReadHistory: true,
       supportsFork: false,
       supportsArchive: false,
     });
@@ -44,7 +44,7 @@ describe('runtime session history adapters', () => {
     });
   });
 
-  it('skips unsupported bound runtime history without calling attach', async () => {
+  it('imports Claude history while preserving the original session id and directory', async () => {
     const claudeRuntime: AgentRuntimeIdentity = { id: 'claude', name: 'Claude Code', kind: 'claude' };
     const session: ChatSession = {
       id: 's-claude',
@@ -63,12 +63,9 @@ describe('runtime session history adapters', () => {
       },
     };
     const attach = vi.fn(() => true);
-
-    await expect(importBoundRuntimeSessionHistory(session, claudeRuntime, attach)).resolves.toEqual({
-      status: 'skipped',
-      reason: 'unsupported-runtime',
-    });
-    expect(attach).not.toHaveBeenCalled();
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ sessions: [{ id: 'session_123', cwd: '/original', turns: [{ role: 'user', content: 'Earlier work' }] }] })));
+    await expect(importBoundRuntimeSessionHistory(session, claudeRuntime, attach)).resolves.toMatchObject({ status: 'imported', messageCount: 1 });
+    expect(attach).toHaveBeenCalledWith(claudeRuntime, expect.objectContaining({ externalSessionId: 'session_123', cwd: '/original' }), expect.objectContaining({ messages: expect.arrayContaining([expect.objectContaining({ content: 'Earlier work' })]) }));
   });
 
   it('lists ACP runtime sessions by agent id and cwd', async () => {

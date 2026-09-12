@@ -6,6 +6,7 @@ import {
   issueLongitudinalAccess,
   listLongitudinal,
   adminLongitudinal,
+  exportLongitudinalBundle,
   exportLongitudinalReviewPacket,
   exportLongitudinalReviewKey,
   reviewLongitudinalMethod,
@@ -25,6 +26,8 @@ export async function GET(req: NextRequest) {
     const id = params.get("id");
     const packet = params.get("packet");
     if (packet && !id) return json({ code: "invalid" }, 400);
+    if (packet === "bundle")
+      return json(exportLongitudinalBundle(getMindRoot(), id!));
     if (packet === "review")
       return json(exportLongitudinalReviewPacket(getMindRoot(), id!));
     if (packet === "key")

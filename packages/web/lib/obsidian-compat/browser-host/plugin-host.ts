@@ -1,3 +1,4 @@
+import { createDiagnosticObsidianModule, type ObsidianApiSurfaceMiss } from '../api-surface';
 import { ensureSyntaxTree } from '@codemirror/language';
 import { EditorView } from '@codemirror/view';
 import { Compartment, StateEffect, type Extension } from '@codemirror/state';
@@ -166,7 +167,7 @@ class BrowserPlugin extends Component {
   }
   async loadData(): Promise<unknown> { this.assertActive(); return this.host.getPluginData(this.manifest.id); }
   async saveData(data: unknown): Promise<void> {
-    this.assertActive(); this.host.savePluginData(this.manifest.id, data);
+    this.assertActive(); await this.host.savePluginData(this.manifest.id, data);
   }
 }
 
@@ -198,13 +199,20 @@ export class BrowserPluginHost {
   #vaultController?: BrowserVaultController;
   #container: HTMLElement;
   #editorContext = new Compartment();
+  readonly apiMisses: ObsidianApiSurfaceMiss[] = [];
+  #dataAdapter?: { load(id: string): Promise<unknown>; save(id: string, data: unknown): Promise<void> };
+  #dataLoads = new Map<string, Promise<unknown>>();
+  #dataSaves = new Map<string, Promise<void>>();
+  #queuedDataSaves = 0;
   get isLayoutReady(): boolean { return !this.destroyed && this.leaves.includes(this.editorLeaf); }
 
   constructor(options: { editor: EditorView; container: HTMLElement; filePath: string; lifecycleTimeoutMs?: number;
     /** Ownership transfers to this host; destroy revokes its read facet. */
-    vault?: BrowserVaultController }) {
+    vault?: BrowserVaultController;
+    dataAdapter?: { load(id: string): Promise<unknown>; save(id: string, data: unknown): Promise<void> } }) {
     options = { ...options };
     this.#container = options.container;
+    this.#dataAdapter = options.dataAdapter;
     const file = options.vault?.vault.getFileByPath(options.filePath);
     if (options.vault && !file) throw new Error('The active editor file is outside the approved Vault snapshot.');
     installBrowserDomApi();
@@ -238,7 +246,7 @@ export class BrowserPluginHost {
       await this.markdown.render(source, target, sourcePath, component);
     };
     const app = this.app;
-    this.api = {
+    this.api = createDiagnosticObsidianModule({
       Component, Events, debounce, Plugin: BrowserPlugin, MarkdownView: BrowserMarkdownView, MarkdownRenderChild: BrowserMarkdownRenderChild,
       editorInfoField, editorEditorField, editorLivePreviewField, editorViewField: editorInfoField,
       MarkdownRenderer: class extends BrowserMarkdownRenderChild {
@@ -268,7 +276,7 @@ export class BrowserPluginHost {
         hide(): void { this.noticeEl.remove(); }
         setMessage(message: string): this { this.noticeEl.setText(message); return this; }
       },
-    };
+    }, miss => { this.apiMisses.push(miss); }, undefined, 'browser');
   }
 
   adopt(plugin: BrowserPlugin): void {
@@ -311,6 +319,8 @@ export class BrowserPluginHost {
     const errors: unknown[] = [];
     // Revoke UI/command/extension entry points even if user onunload subsequently throws.
     this.plugins.delete(id);
+    this.#dataLoads.delete(id);
+    if (this.#dataAdapter) this.data.delete(id);
     try { this.extensions.remove(id); } catch (error) { errors.push(error); }
     for (const [key, entry] of this.commands) if (entry.owner === plugin) this.commands.delete(key);
     for (const [key, entry] of this.views) if (entry.owner === plugin) this.views.delete(key);
@@ -400,17 +410,49 @@ export class BrowserPluginHost {
     const owner = this.plugins.get(id);
     return owner ? this.settings.hide(owner) : Promise.resolve();
   }
-  getPluginData(id: string): unknown { return structuredClone(this.data.get(id) ?? null); }
+  get hasPersistentData(): boolean { return !!this.#dataAdapter; }
+  async getPluginData(id: string): Promise<unknown> {
+    if (!this.plugins.has(id) || this.destroyed) throw new Error('Plugin has been unloaded.');
+    if (!this.data.has(id) && this.#dataAdapter) {
+      let loading = this.#dataLoads.get(id);
+      if (!loading) {
+        const owner = this.plugins.get(id);
+        loading = this.#dataAdapter.load(id).then(data => {
+          if (this.destroyed || this.plugins.get(id) !== owner) throw new Error('Plugin has been unloaded.');
+          this.data.set(id, structuredClone(data));
+        }).finally(() => { if (this.#dataLoads.get(id) === loading) this.#dataLoads.delete(id); });
+        this.#dataLoads.set(id, loading);
+      }
+      await loading;
+    }
+    return structuredClone(this.data.get(id) ?? null);
+  }
   async renderMarkdown(source: string, element: HTMLElement, sourcePath = this.markdownView.file.path): Promise<void> {
     if (this.destroyed) throw new Error('Browser plugin host is destroyed.');
     await this.markdown.render(source, element, sourcePath);
   }
-  savePluginData(id: string, data: unknown): void {
-    // Session-local JSON only. Disk persistence requires the still-pending permission broker.
+  async savePluginData(id: string, data: unknown): Promise<void> {
+    const owner = this.plugins.get(id);
+    if (!owner || this.destroyed) throw new Error('Plugin has been unloaded.');
     const json = JSON.stringify(data);
-    if (!json || json.length > 1_000_000) throw new Error('Plugin settings exceed the session data limit.');
-    this.data.set(id, JSON.parse(json));
+    if (json === undefined || new TextEncoder().encode(json).length > 1024 * 1024) throw new Error('Plugin configuration JSON size limit exceeded.');
+    const snapshot = JSON.parse(json);
+    if (this.#queuedDataSaves >= 32) throw new Error('Too many pending plugin configuration writes.');
+    this.#queuedDataSaves++;
+    const saving = (this.#dataSaves.get(id) ?? Promise.resolve()).catch(() => {}).then(async () => {
+      if (this.destroyed || this.plugins.get(id) !== owner) throw new Error('Plugin has been unloaded.');
+      if (this.#dataAdapter) {
+        await this.getPluginData(id);
+        if (this.destroyed || this.plugins.get(id) !== owner) throw new Error('Plugin has been unloaded.');
+        await this.#dataAdapter.save(id, snapshot);
+      }
+      if (this.destroyed || this.plugins.get(id) !== owner) throw new Error('Plugin has been unloaded.');
+      this.data.set(id, snapshot);
+    });
+    this.#dataSaves.set(id, saving);
+    try { await saving; } finally { this.#queuedDataSaves--; if (this.#dataSaves.get(id) === saving) this.#dataSaves.delete(id); }
   }
+
   async destroy(): Promise<void> {
     if (this.destroyed) return;
     this.destroyed = true;

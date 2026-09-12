@@ -102,7 +102,7 @@ export function ResearchWorkspace({ locale, hub }: { locale: StudyLocale; hub?: 
     <header className="space-y-3">
       <Link href="/echo/growth" className={buttonVariants({ variant: 'ghost' }) + ' min-h-11 -ml-2 w-fit'}>{p.back}</Link>
       <h1 id="research-title" className="font-display text-3xl">{p.title}</h1>
-      <p className={studyNote}>{p.lead}</p><p className={studyNote}>{p.limit}</p>
+      <p className={studyNote}>{hub && !study ? (locale === "zh" ? "选择研究设计，准备任务材料，再通过私有链接邀请参与者。" : "Choose a study design, prepare the materials, then invite participants through private links.") : p.lead}</p><details className="text-sm text-muted-foreground"><summary className="min-h-11 w-fit cursor-pointer rounded py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{locale === "zh" ? "当前支持与试跑说明" : "Scope and pilot guidance"}</summary><p className="max-w-2xl pb-2 leading-6">{p.limit}</p></details>
     </header>
     {error ? <div role="alert" className="space-y-2 rounded-lg border border-error p-4"><p className="text-sm leading-6">{errorCopy}</p>
       {study || new URLSearchParams(typeof window === 'undefined' ? '' : window.location.search).has('study') ? <Button variant="outline" className={studyControl} disabled={busy} onClick={() => { if (canLeave()) void load(study?.id ?? new URLSearchParams(window.location.search).get('study')!); }}>{p.refresh}</Button> : <Button variant="outline" className={studyControl} disabled={busy} onClick={() => void load()}>{p.retry}</Button>}

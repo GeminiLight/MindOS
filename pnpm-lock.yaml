@@ -51,6 +51,9 @@ importers:
       vitest:
         specifier: ^5.0.0
         version: 5.0.0(@opentelemetry/api@1.9.0)(@types/node@22.19.17)(@vitest/coverage-v8@5.0.0)(jsdom@29.0.2(@noble/hashes@2.4.0))(vite@8.0.10(@types/node@22.19.17)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.46.1)(tsx@4.21.0)(yaml@2.9.0))
+      yaml:
+        specifier: 2.9.0
+        version: 2.9.0
 
   examples:
     dependencies:
@@ -175,6 +178,9 @@ importers:
       chokidar:
         specifier: ^5.0.0
         version: 5.0.0
+      diff:
+        specifier: ^8.0.4
+        version: 8.0.4
       hono:
         specifier: ^4.12.14
         version: 4.12.14
@@ -477,6 +483,9 @@ importers:
       '@base-ui/react':
         specifier: ^1.2.0
         version: 1.4.1(@types/react@19.2.14)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@codemirror/autocomplete':
+        specifier: 6.20.1
+        version: 6.20.1
       '@codemirror/commands':
         specifier: ^6.10.3
         version: 6.10.3
@@ -486,6 +495,12 @@ importers:
       '@codemirror/language':
         specifier: ^6.12.3
         version: 6.12.3
+      '@codemirror/lint':
+        specifier: 6.9.5
+        version: 6.9.5
+      '@codemirror/search':
+        specifier: 6.7.0
+        version: 6.7.0
       '@codemirror/state':
         specifier: 6.6.0
         version: 6.6.0
@@ -516,6 +531,15 @@ importers:
       '@larksuiteoapi/node-sdk':
         specifier: ^1.60.0
         version: 1.61.1
+      '@lezer/common':
+        specifier: 1.5.2
+        version: 1.5.2
+      '@lezer/highlight':
+        specifier: 1.2.3
+        version: 1.2.3
+      '@lezer/lr':
+        specifier: 1.4.10
+        version: 1.4.10
       '@milkdown/crepe':
         specifier: ^7.20.0
         version: 7.20.0(prosemirror-model@1.25.4)(prosemirror-state@1.4.4)(prosemirror-view@1.41.8)(typescript@5.9.3)

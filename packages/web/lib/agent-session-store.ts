@@ -18,7 +18,8 @@
  * store's own test reset nulls the slots.
  */
 
-import { useSyncExternalStore } from 'react';
+import { useStore } from 'zustand';
+import { createStore } from 'zustand/vanilla';
 import type {
   AgentIdentity,
   AgentRuntimeIdentity,
@@ -80,16 +81,15 @@ export interface SessionLaneContext {
 const EMPTY_SESSIONS: ChatSession[] = [];
 
 let sessions: ChatSession[] = EMPTY_SESSIONS;
-const sessionsListeners = new Set<() => void>();
-const activeListeners = new Set<() => void>();
+const viewStore = createStore<{ sessions: ChatSession[]; activeId: string | null }>(() => ({ sessions: EMPTY_SESSIONS, activeId: null }));
 
 function emitSessions(next: ChatSession[]) {
   sessions = next;
-  sessionsListeners.forEach((fn) => fn());
+  viewStore.setState({ sessions: next });
 }
 
 function emitActive() {
-  activeListeners.forEach((fn) => fn());
+  viewStore.setState({ activeId: runStoreGetActiveSession() });
 }
 
 function getProjectSessionDefaults(projectId: string | undefined, updatedAt: number): {
@@ -794,25 +794,11 @@ export function clearSessions(ids?: string[], ctx: SessionLaneContext = {}) {
 // React subscriptions
 
 export function useSessions(): ChatSession[] {
-  return useSyncExternalStore(
-    (fn) => {
-      sessionsListeners.add(fn);
-      return () => sessionsListeners.delete(fn);
-    },
-    () => sessions,
-    () => EMPTY_SESSIONS,
-  );
+  return useStore(viewStore, state => state.sessions);
 }
 
 export function useActiveSessionId(): string | null {
-  return useSyncExternalStore(
-    (fn) => {
-      activeListeners.add(fn);
-      return () => activeListeners.delete(fn);
-    },
-    () => runStoreGetActiveSession(),
-    () => null,
-  );
+  return useStore(viewStore, state => state.activeId);
 }
 
 // ---------------------------------------------------------------------------
@@ -821,8 +807,7 @@ export function resetAgentSessionStoreForTests() {
   sessions = EMPTY_SESSIONS;
   pendingFetchMerge = null;
   sessionsLoaded = false;
-  sessionsListeners.clear();
-  activeListeners.clear();
+  viewStore.setState({ sessions: EMPTY_SESSIONS, activeId: null });
   // resetAgentRunStoreForTests() nulls the bridge slots — restore them so the
   // next test (and the app after an HMR reload) keeps slot-free persistence.
   wireRunStoreBridges();

@@ -1,3 +1,5 @@
+import { exportLongitudinal } from './export.js';
+export * from './export.js';
 import {
   createHmac,
   randomBytes,
@@ -108,15 +110,14 @@ export function issueLongitudinalAccess(
     return { token, participantId: p.id };
   });
 }
-function authorized(r: LongitudinalRecord, token: unknown, now: Date) {
+function authorized(r: LongitudinalRecord, token: unknown) {
   if (typeof token !== "string" || !/^[a-f0-9]{64}$/.test(token))
     throw new StudyAccessError();
   const digest = Buffer.from(hash(token));
   const p = r.participants.find((p) =>
     timingSafeEqual(Buffer.from(p.tokenHash), digest),
   );
-  if (!p || Date.parse(p.expiresAt) <= now.getTime())
-    throw new StudyAccessError();
+  if (!p) throw new StudyAccessError();
   return p;
 }
 function access(root: string, id: string, token: unknown, now: Date) {
@@ -126,7 +127,7 @@ function access(root: string, id: string, token: unknown, now: Date) {
   } catch {
     throw new StudyAccessError();
   }
-  return { r, p: authorized(r, token, now) };
+  return { r, p: authorized(r, token) };
 }
 export function readLongitudinal(
   root: string,
@@ -171,19 +172,23 @@ export function useLongitudinal(
   if (!parsed.success) return invalid();
   const c = parsed.data;
   return mutate(root, id, now, (r) => {
-    const p = authorized(r, token, now),
+    const p = authorized(r, token),
       old = p.commands.find((x) => x.id === c.requestId);
     if (old) {
       if (old.hash !== hash(c)) return conflict();
       return participantView(r, p, now);
     }
-    if (c.version !== p.version || p.withdrawnAt) return conflict();
+    if (p.erasedAt && c.action === "withdraw" && c.erase) return participantView(r, p, now);
+    if (c.version !== p.version) return conflict();
+    const unavailable = !!p.withdrawnAt || Date.parse(p.expiresAt) <= now.getTime();
+    if (unavailable && c.action !== "withdraw") return conflict();
+    if (p.withdrawnAt && c.action === "withdraw" && !c.erase) return conflict();
     const view = participantView(r, p, now),
       round = p.rounds.at(-1);
     if (c.action === "withdraw") {
-      p.withdrawnAt = at(now);
+      p.withdrawnAt ??= at(now);
       if (c.erase) {
-        p.erasedAt = at(now);
+        p.erasedAt ??= at(now);
         p.rounds = [];
         p.commands = [];
       } else
@@ -292,7 +297,7 @@ export function beginLongitudinalHelp(
     .safeParse(input);
   if (!c.success) return invalid();
   return mutate(root, id, now, (r) => {
-    const p = authorized(r, token, now),
+    const p = authorized(r, token),
       view = participantView(r, p, now),
       round = p.rounds.at(-1);
     if (p.withdrawnAt || view.stage !== "coaching" || !round) return conflict();
@@ -406,20 +411,6 @@ export function finishLongitudinalHelp(
       }
   });
 }
-export function exportLongitudinal(root: string, id: string) {
-  const r = load(root, id);
-  return {
-    schemaVersion: r.schemaVersion,
-    id: r.id,
-    protocol: r.protocol,
-    protocolHash: r.protocolHash,
-    createdAt: r.createdAt,
-    updatedAt: r.updatedAt,
-    participants: r.participants.map(
-      ({ tokenHash, issueHash, commands, ...p }) => p,
-    ),
-  };
-}
 function participantProgress(
   r: LongitudinalRecord,
   p: LongitudinalParticipant,
@@ -472,7 +463,7 @@ function summarize(r: LongitudinalRecord, progress: LongitudinalProgress[]) {
     capacity: r.protocol.capacity,
     consented: count((p) => !!p.consentAt),
     active: count(
-      (p) => !!p.consentAt && !p.withdrawnAt && p.status !== "complete",
+      (p) => !!p.consentAt && !p.withdrawnAt && p.status !== "complete" && p.status !== "expired",
     ),
     complete: count((p) => p.status === "complete"),
     withdrawn: count((p) => !!p.withdrawnAt),
@@ -492,83 +483,6 @@ export function adminLongitudinal(root: string, id: string, now = new Date()) {
   };
 }
 export type LongitudinalAdminView = ReturnType<typeof adminLongitudinal>;
-function packetEntries(r: LongitudinalRecord) {
-  const entries = [];
-  for (const p of r.participants) {
-    if (p.erasedAt) continue;
-    for (const [n, round] of p.rounds.entries())
-      for (const a of round.answers)
-        entries.push({
-          // Salted ordering hides enrollment order, which alternates strategies.
-          sort: createHmac("sha256", r.salt)
-            .update(`review-packet:v1:${p.id}:${n}:${a.stage}`)
-            .digest("hex"),
-          participantId: p.id,
-          strategy: p.strategy,
-          round: n + 1,
-          stage: a.stage,
-          task: r.protocol.rounds[n]![a.stage],
-          answer: a.answer,
-          reference: r.protocol.rounds[n]!.reference,
-          submittedAt: a.at,
-          methodFromRound: round.methodFromRound,
-          methodHash: round.methodHash,
-          withdrawn: !!p.withdrawnAt,
-        });
-  }
-  entries.sort((a, b) => a.sort.localeCompare(b.sort));
-  return entries.map((e, i) => ({
-    ...e,
-    code: "W" + String(i + 1).padStart(3, "0"),
-  }));
-}
-/** Numbered work items for independent scoring: task, answer and reference only. No identity, group or method text. */
-export function exportLongitudinalReviewPacket(root: string, id: string) {
-  const r = load(root, id);
-  return {
-    schemaVersion: 2 as const,
-    kind: "review-packet" as const,
-    studyId: r.id,
-    protocolHash: r.protocolHash,
-    title: r.protocol.title,
-    rubric: r.protocol.rubric,
-    roundCount: r.protocol.rounds.length,
-    generatedAt: new Date().toISOString(),
-    items: packetEntries(r).map((e) => ({
-      code: e.code,
-      round: e.round,
-      stage: e.stage,
-      task: e.task,
-      answer: e.answer,
-      reference: e.reference,
-    })),
-  };
-}
-export type LongitudinalReviewPacket = ReturnType<
-  typeof exportLongitudinalReviewPacket
->;
-/** Researcher-only mapping from packet codes back to participants, groups and method versions. */
-export function exportLongitudinalReviewKey(root: string, id: string) {
-  const r = load(root, id);
-  return {
-    schemaVersion: 2 as const,
-    kind: "review-key" as const,
-    studyId: r.id,
-    protocolHash: r.protocolHash,
-    generatedAt: new Date().toISOString(),
-    items: packetEntries(r).map((e) => ({
-      code: e.code,
-      participantId: e.participantId,
-      strategy: e.strategy,
-      round: e.round,
-      stage: e.stage,
-      submittedAt: e.submittedAt,
-      methodFromRound: e.methodFromRound,
-      methodHash: e.methodHash,
-      withdrawn: e.withdrawn,
-    })),
-  };
-}
 export function listLongitudinal(root: string, now = new Date()) {
   const studies: {
     id: string;

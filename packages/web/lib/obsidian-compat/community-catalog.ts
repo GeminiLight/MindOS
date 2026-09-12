@@ -1,3 +1,5 @@
+import { planObsidianExecution } from './runtime-plan';
+import { readObsidianPackageText } from './package-asset-reader';
 import { createHash } from 'node:crypto';
 import { ErrorCodes, MindOSError } from '@/lib/errors';
 import {
@@ -36,7 +38,7 @@ const OBSIDIAN_COMMUNITY_PACKAGE_FETCH_ATTEMPTS = 3;
 const OBSIDIAN_COMMUNITY_PACKAGE_FETCH_RETRY_DELAY_MS = 250;
 export const OBSIDIAN_COMMUNITY_MANIFEST_MAX_CHARS = 64 * 1024;
 export const OBSIDIAN_COMMUNITY_VERSIONS_MAX_CHARS = 128 * 1024;
-export const OBSIDIAN_COMMUNITY_MAIN_JS_MAX_CHARS = 2 * 1024 * 1024;
+export const OBSIDIAN_COMMUNITY_MAIN_JS_MAX_CHARS = 8 * 1024 * 1024;
 
 export interface ObsidianCommunityCatalogEntry {
   id: string;
@@ -462,7 +464,7 @@ export async function fetchObsidianCommunityPluginPackage(
     ...manifestIdMismatchReasons(options.pluginId, manifest.id),
     ...manifestVersionMismatchReasons(source.resolvedVersion, manifest.version),
     ...targetAppVersionMismatchReasons(targetAppVersion, manifest.minAppVersion),
-    ...compatibilityReport.blockers,
+    ...(planObsidianExecution(compatibilityReport).desktopCandidate ? [] : compatibilityReport.blockers),
   ];
   const installable = installBlockedReasons.length === 0;
   const supportInput = {
@@ -673,17 +675,7 @@ async function fetchRequiredTextAsset(
     throw new MindOSError(ErrorCodes.INTERNAL_ERROR, `Failed to fetch Obsidian plugin ${label}: ${response.status}`);
   }
 
-  const contentLength = Number(response.headers.get('content-length'));
-  if (Number.isFinite(contentLength) && contentLength > maxChars) {
-    throw new MindOSError(ErrorCodes.INTERNAL_ERROR, `Obsidian plugin ${label} is too large to preflight.`);
-  }
-
-  const text = await response.text();
-  if (text.length > maxChars) {
-    throw new MindOSError(ErrorCodes.INTERNAL_ERROR, `Obsidian plugin ${label} is too large to preflight.`);
-  }
-
-  return text;
+  return readObsidianPackageText(response, maxChars, timeoutMs, label);
 }
 
 async function fetchOptionalTextAsset(
@@ -703,17 +695,7 @@ async function fetchOptionalTextAsset(
       return undefined;
     }
 
-    const contentLength = Number(response.headers.get('content-length'));
-    if (Number.isFinite(contentLength) && contentLength > maxChars) {
-      throw new MindOSError(ErrorCodes.INTERNAL_ERROR, `Obsidian plugin ${label} is too large to preflight.`);
-    }
-
-    const text = await response.text();
-    if (text.length > maxChars) {
-      throw new MindOSError(ErrorCodes.INTERNAL_ERROR, `Obsidian plugin ${label} is too large to preflight.`);
-    }
-
-    return text;
+    return await readObsidianPackageText(response, maxChars, timeoutMs, label);
   } catch (err) {
     if (err instanceof MindOSError && err.message.includes('is too large')) {
       throw err;

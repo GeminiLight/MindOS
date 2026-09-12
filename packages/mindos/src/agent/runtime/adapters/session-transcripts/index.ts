@@ -26,3 +26,4 @@ export {
   resolveRuntimeSessionTranscriptTarget,
   RUNTIME_SESSION_TRANSCRIPT_ADAPTERS,
 } from './registry.js';
+export { browseNativeSessions, NativeSessionBrowserError, type NativeSessionBrowserOptions, type NativeSessionPage } from './native-browser.js';

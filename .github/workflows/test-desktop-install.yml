@@ -1,0 +1,50 @@
+name: Test Desktop Installation
+on:
+  pull_request:
+    paths:
+      - 'packages/desktop/**'
+      - 'scripts/*desktop*'
+      - 'tests/desktop-*.test.ts'
+      - '.github/workflows/build-desktop.yml'
+      - '.github/workflows/test-desktop-install.yml'
+      - 'package.json'
+      - 'pnpm-workspace.yaml'
+      - 'pnpm-lock.yaml'
+      - 'scripts/ci/setup/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: desktop-install-tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./scripts/ci/setup
+        timeout-minutes: 5
+
+      - run: pnpm install --frozen-lockfile
+      - name: Installer ownership and legacy data migration
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./packages/desktop/build/installer-safety.test.ps1
+      - name: Compile installer hooks
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install nsis --yes --no-progress
+          if ($LASTEXITCODE -ne 0) { throw "Could not install NSIS compiler" }
+          ./packages/desktop/build/installer-compile.test.ps1
+      - name: Desktop tests
+        run: pnpm --filter @mindos/desktop exec vitest run --maxWorkers=2
+      - name: Release integrity and failure paths
+        run: pnpm exec vitest run tests/desktop-release-contract.test.ts tests/desktop-install-hardening.test.ts tests/desktop-release-assets.test.ts tests/desktop-mirror-upload.test.ts --maxWorkers=2
+      - run: pnpm --filter @mindos/desktop typecheck
+      - run: pnpm --filter @mindos/desktop build

@@ -1,11 +1,9 @@
 import { MindOSError, apiError, ErrorCodes } from '@/lib/errors';
 import { metrics } from '@/lib/metrics';
-import { readBaseUrlCompat, writeBaseUrlCompat, type ServerSettings } from '@/lib/settings';
-import { resolveAgentTurnCompatMode } from '@/lib/agent/agent-turn-compat';
+import { type ServerSettings } from '@/lib/settings';
 import type { MindosAgentModeContract } from '@geminilight/mindos/agent/mode';
 import {
   resolveMindosAgentTimeoutMs,
-  runMindosNonStreamingFallback,
   type MindosUiAgentMessage,
 } from '@geminilight/mindos/agent/turn';
 import {
@@ -27,10 +25,6 @@ type PermissionPolicy = ReturnType<typeof createMindosAgentPermissionPolicy>;
 
 type MindosPiTurnLocalization = {
   agentTimeout: string;
-  proxyCompatMode: string;
-  proxyCompatDetecting: string;
-  proxyCompatFailed(message: string): string;
-  proxyCompatAlsoFailed(message: string): string;
 };
 
 export type RunMindosPiTurnInput = {
@@ -71,10 +65,10 @@ export type RunMindosPiTurnInput = {
  * (spec-runtime-lane-contract 方案 2). The runtime is created BEFORE the SSE
  * shell so initialization failures stay JSON apiErrors (never half-opened
  * streams); the ledger / capsule / grace / terminal lifecycle lives in
- * `runRuntimeLaneTurn`, and pre-run frames + compat fallback wiring live in
+ * `runRuntimeLaneTurn`, and pre-run frames and runtime adaptation live in
  * the core adapter with the web host deps injected below.
  *
- * `runMindosPiAgentTurnSession` / `runMindosNonStreamingFallback` are imported
+ * `runMindosPiAgentTurnSession` is imported
  * from the package BARRELS and injected as deps so host vi.mock barrel
  * contracts keep intercepting (known-pitfalls barrel-mock rule).
  */
@@ -120,21 +114,8 @@ export async function runMindosPiTurn(input: RunMindosPiTurnInput): Promise<Resp
       cwd: input.executionCwd,
       stepLimit: input.stepLimit,
       thinkingLevel: input.agentConfig.thinkingLevel,
-      proxyMessages: {
-        proxyCompatMode: input.t.proxyCompatMode,
-        proxyCompatDetecting: input.t.proxyCompatDetecting,
-        proxyCompatFailed: input.t.proxyCompatFailed,
-        proxyCompatAlsoFailed: input.t.proxyCompatAlsoFailed,
-      },
     }, {
       runPiSession: runMindosPiAgentTurnSession,
-      runNonStreamingFallback: runMindosNonStreamingFallback,
-      readCompatCache: () => readBaseUrlCompat(),
-      resolveCompatMode: (compatInput) => resolveAgentTurnCompatMode(compatInput),
-      writeCompat: (key, mode) => {
-        writeBaseUrlCompat(key, mode);
-        console.log(`[agent-turn] Proxy compat detected: ${key} → ${mode} (cached)`);
-      },
       recordToolExecution: () => metrics.recordToolExecution(),
       recordTokens: (inputTokens, outputTokens) => metrics.recordTokens(inputTokens, outputTokens),
       onStep: (step, maxSteps) => {

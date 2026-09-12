@@ -1,8 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
-import {
-  buildMindosCompatEndpointCandidates,
-  parseMindosOpenAICompatResponse,
-} from '@geminilight/mindos/agent/turn/openai-compat-fallback';
+import OpenAI from 'openai';
+import { createOpenAIProxyFetch } from '@geminilight/mindos/agent/mindos-pi';
 import { effectiveAiConfig } from '@/lib/settings';
 import {
   getDefaultBaseUrl,
@@ -131,35 +129,9 @@ async function completeOpenAICompatible(input: {
   signal?: AbortSignal;
 }): Promise<string> {
   if (!input.baseUrl) throw new Error(`AI provider ${input.provider} is missing a base URL.`);
-  const endpoints = buildMindosCompatEndpointCandidates(input.baseUrl, '/chat/completions', 'openai-completions');
-  let lastError = '';
-
-  for (const endpoint of endpoints) {
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(input.apiKey ? { Authorization: `Bearer ${input.apiKey}` } : {}),
-      },
-      body: JSON.stringify({
-        model: input.model,
-        messages: input.messages,
-        stream: false,
-      }),
-      signal: input.signal,
-    });
-
-    const text = await response.text();
-    if (response.ok) {
-      const completion = parseMindosOpenAICompatResponse(text);
-      const content = completion?.choices?.[0]?.message?.content;
-      if (typeof content === 'string') return content.trim();
-      throw new Error('OpenAI-compatible response did not contain assistant text.');
-    }
-
-    lastError = `HTTP ${response.status} @ ${endpoint}: ${text.slice(0, 200)}`;
-    if (response.status !== 404) break;
-  }
-
-  throw new Error(`OpenAI-compatible AI task failed: ${lastError || 'all endpoint candidates failed'}`);
+  const client = new OpenAI({ apiKey: input.apiKey || 'local-runtime', baseURL: input.baseUrl, maxRetries: 0, fetch: createOpenAIProxyFetch() });
+  const stream = await client.chat.completions.create({ model: input.model, messages: input.messages, stream: true }, { signal: input.signal });
+  let content = '';
+  for await (const chunk of stream) content += chunk.choices[0]?.delta.content ?? '';
+  return content.trim();
 }

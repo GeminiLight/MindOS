@@ -30,7 +30,7 @@ import { encodePath } from '@/lib/utils';
 import { useLocale } from '@/lib/stores/locale-store';
 import CustomSelect from '@/components/CustomSelect';
 import { ContentPageShell } from '@/components/shared/ContentPageShell';
-import { collapseDiffContext, buildLineDiff } from './line-diff';
+import { collapseDiffContext, tryBuildLineDiff } from './line-diff';
 
 export type SourceFilter = 'all' | 'agent' | 'user' | 'system';
 type ViewMode = 'review' | 'activity';
@@ -238,10 +238,10 @@ function DiffPreview({
   event: ChangeEvent;
   t: ReturnType<typeof useLocale>['t'];
 }) {
-  const rawDiff = useMemo(() => buildLineDiff(event.before ?? '', event.after ?? ''), [event.after, event.before]);
-  const rows = useMemo(() => collapseDiffContext(rawDiff), [rawDiff]);
-  const inserts = useMemo(() => rawDiff.filter(row => row.type === 'insert').length, [rawDiff]);
-  const deletes = useMemo(() => rawDiff.filter(row => row.type === 'delete').length, [rawDiff]);
+  const rawDiff = useMemo(() => tryBuildLineDiff(event.before ?? '', event.after ?? ''), [event.after, event.before]);
+  const rows = useMemo(() => collapseDiffContext(rawDiff ?? []), [rawDiff]);
+  const inserts = useMemo(() => (rawDiff ?? []).filter(row => row.type === 'insert').length, [rawDiff]);
+  const deletes = useMemo(() => (rawDiff ?? []).filter(row => row.type === 'delete').length, [rawDiff]);
 
   let oldLine = 1;
   let newLine = 1;
@@ -255,6 +255,7 @@ function DiffPreview({
           {deletes > 0 && <span className="font-mono font-semibold text-error">-{deletes}</span>}
         </div>
       )}
+      {rawDiff === null && <p className="px-4 py-3 text-sm text-muted-foreground">{t.changes.diffLimitReached}</p>}
       <div className="max-h-96 overflow-y-auto">
         {rows.map((row, idx) => {
           if (row.type === 'gap') {

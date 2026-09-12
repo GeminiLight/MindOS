@@ -1,49 +1,62 @@
-name: Test Reliability Boundaries
-
+name: Test PR Regressions
 on:
   pull_request:
-    paths:
-      - 'packages/mindos/src/**'
-      - 'packages/mobile/**'
-      - 'packages/web/components/agents/AgentActivitySection.tsx'
-      - 'packages/web/lib/agent/active-recall.ts'
-      - 'packages/web/__tests__/agent/active-recall-receipt.test.ts'
-      - 'packages/web/__tests__/components/agent-run-observatory.test.tsx'
-      - '**/package.json'
-      - 'pnpm-lock.yaml'
-      - '.github/workflows/test-reliability.yml'
-      - 'tests/reliability-workflow.test.ts'
   workflow_dispatch:
-
 permissions:
   contents: read
-
 concurrency:
-  group: reliability-${{ github.event.pull_request.number || github.ref }}
+  group: pr-regressions-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
-
 jobs:
-  reliability:
-    timeout-minutes: 20
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      channel: ${{ steps.plan.outputs.channel }}
+      reliability: ${{ steps.plan.outputs.reliability }}
+      contracts: ${{ steps.plan.outputs.contracts }}
+      required: ${{ steps.plan.outputs.required }}
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: plan
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/ci/change-plan.mjs
+  regression:
+    needs: plan
+    if: needs.plan.outputs.required == 'true'
+    timeout-minutes: 30
     strategy:
       fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.18.3
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22.19.0'
-          cache: pnpm
-      - name: Install locked dependencies
+      - uses: ./scripts/ci/setup
+        timeout-minutes: 5
+      - name: Install locked dependencies once
         run: pnpm install --frozen-lockfile
-      - name: Build product and protocol runtimes
-        run: pnpm --filter @geminilight/mindos build
+      - name: Build product and protocol runtimes once
+        run: pnpm --filter @geminilight/mindos run build
+      - name: Run channel regression tests
+        if: needs.plan.outputs.channel == 'true'
+        run: >-
+          pnpm --filter @mindos/web exec vitest run
+          __tests__/channel-cli-layers.test.ts
+          __tests__/channel-command-env.test.ts
+          __tests__/channel-mgmt.test.js
+          __tests__/channel-prompts.test.ts
+          __tests__/channel-cli-subprocess.test.ts
+          __tests__/api/channels-verify.test.ts
+          __tests__/im/dingtalk.test.ts
+          __tests__/im/qq.test.ts
+          __tests__/im/wechat.test.ts
       - name: Test durable ownership and recovery boundaries
+        if: needs.plan.outputs.reliability == 'true'
         run: >-
           pnpm --filter @geminilight/mindos exec vitest run
           src/server/connections src/agent/capsules
@@ -52,13 +65,20 @@ jobs:
           src/server.product-ops.test.ts
           src/server/automations/events.test.ts
       - name: Test mobile persistence and API compatibility
+        if: needs.plan.outputs.reliability == 'true'
         run: pnpm --filter @mindos/mobile test
-      - name: Typecheck mobile
-        run: pnpm --filter @mindos/mobile typecheck
       - name: Test Web recovery observability and context eligibility
+        if: needs.plan.outputs.reliability == 'true'
         run: >-
           pnpm --filter @mindos/web exec vitest run
           __tests__/components/agent-run-observatory.test.tsx
           __tests__/agent/active-recall-receipt.test.ts
-      - name: Typecheck Web
-        run: pnpm --filter @mindos/web typecheck
+      - name: Typecheck Web once
+        if: matrix.os == 'ubuntu-latest' && (needs.plan.outputs.channel == 'true' || needs.plan.outputs.reliability == 'true')
+        run: pnpm --filter @mindos/web run typecheck
+      - name: Typecheck mobile once
+        if: matrix.os == 'ubuntu-latest' && needs.plan.outputs.reliability == 'true'
+        run: pnpm --filter @mindos/mobile typecheck
+      - name: Root contracts and CLI regressions
+        if: matrix.os == 'ubuntu-latest' && needs.plan.outputs.contracts == 'true'
+        run: pnpm run test:quick

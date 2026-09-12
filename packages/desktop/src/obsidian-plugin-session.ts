@@ -1,3 +1,4 @@
+import { createObsidianDataClient } from './obsidian-data-client';
 import { createObsidianDocumentSession, type DocumentApproval } from './obsidian-document-session';
 import { assertSamePackage, createObsidianPackageClient, type VerifiedPackage } from './obsidian-package-client';
 import { untilAbort } from './obsidian-response';
@@ -7,7 +8,7 @@ export type PluginApprovalDecision = boolean | 'read-vault';
 
 export type PluginSessionApproval = DocumentApproval & Readonly<{
   pluginName: string; pluginVersion: string; fingerprint: string;
-  capabilities: readonly ('document:read' | 'document:write' | 'vault:read')[];
+  capabilities: readonly ('document:read' | 'document:write' | 'vault:read' | 'plugin-data:read' | 'plugin-data:write')[];
   optionalCapabilities?: readonly ['vault:read'];
 }>;
 export type PluginSessionOptions = {
@@ -65,7 +66,7 @@ export async function prepareObsidianPluginSession(options: PluginSessionOptions
         if (binding.vaultId !== preview.vaultId) throw new Error('Plugin package and document vault changed.');
         const subject: PluginSessionApproval = Object.freeze({ ...binding, fingerprint: preview.fingerprint,
           pluginName: preview.manifest.name, pluginVersion: preview.manifest.version,
-          capabilities: Object.freeze(['document:read', 'document:write'] as const),
+          capabilities: Object.freeze(['document:read', 'document:write', 'plugin-data:read', 'plugin-data:write'] as const),
           optionalCapabilities: Object.freeze(['vault:read'] as const),
         });
         const decision = await untilAbort(options.approve(subject), lifetime.signal);
@@ -74,7 +75,7 @@ export async function prepareObsidianPluginSession(options: PluginSessionOptions
         captured = await client.download(preview);
         assertCurrent();
         approved = decision === 'read-vault' ? Object.freeze({ ...subject,
-          capabilities: Object.freeze(['document:read', 'document:write', 'vault:read'] as const) }) : subject;
+          capabilities: Object.freeze(['document:read', 'document:write', 'plugin-data:read', 'plugin-data:write', 'vault:read'] as const) }) : subject;
         if (decision === 'read-vault') {
           vaultClient = createObsidianVaultClient({ ...options, vaultId: preview.vaultId, fingerprint: preview.fingerprint, signal: lifetime.signal });
           vault = await vaultClient.read(); assertCurrent();
@@ -85,6 +86,12 @@ export async function prepareObsidianPluginSession(options: PluginSessionOptions
     if (!document) { close(); return null; }
     assertCurrent();
     const activeDocument = document;
+    const dataClient = createObsidianDataClient({ ...options, ...approved!, signal: lifetime.signal });
+    const checkDataApproval = async () => {
+      assertCurrent();
+      try { assertSamePackage(await client.preview(), preview); assertCurrent(); }
+      catch (error) { close(); throw error; }
+    };
     return Object.freeze({
       binding: approved!, package: captured!, vault,
       get snapshot() { return activeDocument.snapshot; },
@@ -97,6 +104,8 @@ export async function prepareObsidianPluginSession(options: PluginSessionOptions
           .catch(error => { close(); throw error; }).finally(() => { reading = undefined; });
         return reading;
       },
+      async readPluginData() { await checkDataApproval(); const data = await dataClient.read(); assertCurrent(); return data; },
+      async savePluginData(data: unknown) { await checkDataApproval(); await dataClient.save(data); assertCurrent(); },
       setDraft(content: string) { assertCurrent(); activeDocument.setDraft(content); },
       async save() {
         assertCurrent();

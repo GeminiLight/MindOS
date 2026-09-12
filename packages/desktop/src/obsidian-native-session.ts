@@ -21,6 +21,8 @@ export async function prepareNativeObsidianPluginSession(options: NativeSessionO
       },
       get snapshot() { return session.snapshot; },
       setDraft: session.setDraft,
+      readPluginData: session.readPluginData,
+      savePluginData: session.savePluginData,
       async save() {
         try { await session.save(); }
         finally { if (session.snapshot.status === 'closed') owner.dispose(); }

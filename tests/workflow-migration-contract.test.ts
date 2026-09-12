@@ -54,7 +54,7 @@ describe('GitHub workflow migration contract', () => {
       '.github/workflows/publish-clipper.yml',
       '.github/workflows/publish-npm.yml',
       '.github/workflows/publish-runtime.yml',
-      '.github/workflows/test-channel-cross-platform.yml',
+      '.github/workflows/test-reliability.yml',
       'scripts/hooks/pre-push',
       'scripts/prepare-standalone.mjs',
       'scripts/release.sh',
@@ -349,10 +349,10 @@ describe('GitHub workflow migration contract', () => {
   });
 
   it('keeps the channel regression workflow on active paths', () => {
-    const yml = workflow('test-channel-cross-platform.yml');
+    const yml = workflow('test-reliability.yml');
 
-    expect(yml).toContain('packages/web/app/api/channels/verify/route.ts');
-    expect(yml).toContain('packages/web/lib/im/config.ts');
+    expect(yml).toContain('__tests__/api/channels-verify.test.ts');
+    expect(yml).toContain('__tests__/im/qq.test.ts');
     expect(yml.indexOf('pnpm --filter @geminilight/mindos run build')).toBeLessThan(
       yml.indexOf('pnpm --filter @mindos/web run typecheck'),
     );

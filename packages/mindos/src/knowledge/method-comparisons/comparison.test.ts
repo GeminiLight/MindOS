@@ -49,7 +49,7 @@ it('records the exact isolated request and recovers the same reservation without
   expect(beginMethodComparisonRun(root, c.id, command).execute).toBe(false);
 });
 it('retains interrupted reservations and failures while allowing explicit bounded retries', () => {
-  const now = new Date(); const c = create();
+  const c = create(); const now = new Date();
   const r = beginMethodComparisonRun(root, c.id, { version: c.version, slot: 0, requestId: 'first' }, now);
   const expired = getMethodComparison(root, c.id, new Date(now.getTime() + 121000))!;
   expect(expired.runs[0].status).toBe('unknown');

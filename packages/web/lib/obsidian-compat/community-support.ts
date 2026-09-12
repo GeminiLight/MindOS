@@ -149,6 +149,10 @@ export function buildObsidianCommunityPreflightSupport(
     };
   }
 
+  const plannedSupport = getObsidianImportSupport({ compatibilityLevel: input.compatibility.level, compatibility: input.compatibility.report });
+  if (input.compatibility.level === 'blocked' && plannedSupport.importable) {
+    return { kind: plannedSupport.kind, label: plannedSupport.label, reason: plannedSupport.reason, installable: true };
+  }
   if (input.compatibility.report.platformRequirements?.desktop) {
     return {
       kind: 'review',

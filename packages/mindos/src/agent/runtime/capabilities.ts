@@ -72,6 +72,8 @@ export const codexCapabilities: AgentRuntimeCapabilities = {
 
 export const claudeCapabilities: AgentRuntimeCapabilities = {
   ...nativeBaseCapabilities,
+  supportsListSessions: true,
+  supportsAttachExisting: true,
 };
 
 export const mindosHarnessCapabilities: AgentRuntimeHarnessCapabilities = {

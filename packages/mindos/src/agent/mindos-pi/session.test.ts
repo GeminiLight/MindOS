@@ -13,13 +13,6 @@ import {
 
 type Listener = (event: unknown) => void;
 
-const proxyMessages = {
-  proxyCompatMode: 'proxy mode',
-  proxyCompatDetecting: 'detecting',
-  proxyCompatFailed: (message: string) => `failed: ${message}`,
-  proxyCompatAlsoFailed: (message: string) => `also failed: ${message}`,
-};
-
 function modelErrorEvent(errorMessage: string): unknown {
   return {
     type: 'agent_end',
@@ -50,8 +43,6 @@ function baseOptions(session: MindosPiAgentSessionAdapter, events: unknown[]): M
     send: (event) => events.push(event),
     signal: new AbortController().signal,
     provider: 'anthropic',
-    runFallback: async () => {},
-    proxyMessages,
     sleep: async () => {},
   };
 }
@@ -101,70 +92,11 @@ describe('runMindosPiAgentTurnSession terminal state', () => {
     expect(events).not.toContainEqual({ type: 'done' });
   });
 
-  it('returns status error when the cached proxy fallback fails before streaming', async () => {
-    const events: unknown[] = [];
-    const session = createSession(async () => {
-      throw new Error('prompt must not run when the cached fallback is used');
-    });
 
-    const result = await runMindosPiAgentTurnSession({
-      ...baseOptions(session, events),
-      provider: 'openai',
-      baseUrl: 'https://proxy.example/v1',
-      compatMode: 'non-streaming',
-      runFallback: async () => { throw new Error('boom'); },
-    });
 
-    expect(result).toMatchObject({ status: 'error', message: 'failed: boom' });
-    expect(events).toEqual([
-      { type: 'status', message: 'proxy mode' },
-      { type: 'error', message: 'failed: boom' },
-    ]);
-  });
 
-  it('returns status error when the after-stream proxy fallback also fails', async () => {
-    const events: unknown[] = [];
-    const session = createSession(async (emit) => {
-      emit(modelErrorEvent('stream failed'));
-    });
 
-    const result = await runMindosPiAgentTurnSession({
-      ...baseOptions(session, events),
-      provider: 'openai',
-      baseUrl: 'https://proxy.example/v1',
-      runFallback: async () => { throw new Error('boom'); },
-    });
 
-    expect(result).toMatchObject({ status: 'error', message: 'also failed: boom' });
-    expect(events).toEqual([
-      { type: 'status', message: 'detecting' },
-      { type: 'error', message: 'also failed: boom' },
-    ]);
-  });
-
-  it('returns status completed when the after-stream proxy fallback recovers the turn', async () => {
-    const events: unknown[] = [];
-    const cached: string[] = [];
-    const session = createSession(async (emit) => {
-      emit(modelErrorEvent('stream failed'));
-    });
-
-    const result = await runMindosPiAgentTurnSession({
-      ...baseOptions(session, events),
-      provider: 'openai',
-      baseUrl: 'https://proxy.example/v1',
-      effectiveBaseUrlKey: 'proxy-key',
-      runFallback: async () => {},
-      writeCompat: (key, mode) => { cached.push(`${key}:${mode}`); },
-    });
-
-    expect(result).toMatchObject({ status: 'completed', lastModelError: 'stream failed' });
-    expect(cached).toEqual(['proxy-key:non-streaming']);
-    expect(events).toEqual([
-      { type: 'status', message: 'detecting' },
-      { type: 'done' },
-    ]);
-  });
 
   it('propagates a thrown prompt error unchanged', async () => {
     const events: unknown[] = [];
@@ -204,4 +136,24 @@ describe('runMindosPiAgentTurnSession subscription lifecycle', () => {
 
     await expect(runMindosPiAgentTurnSession(baseOptions(session, []))).resolves.toMatchObject({ status: 'completed' });
   });
+});
+
+it('reports budget exhaustion as failure and releases its subscription', async () => {
+  const events: unknown[] = [];
+  const unsubscribe = vi.fn();
+  const session = createSession(async emit => { emit({ type: 'turn_end', toolResults: [{ toolName: 'read_file', content: [] }] }); }, { unsubscribe });
+  const abort = vi.spyOn(session, 'abort');
+  const result = await runMindosPiAgentTurnSession({ ...baseOptions(session, events), stepLimit: 1 });
+  expect(result.status).toBe('error');
+  expect(events).toEqual([{ type: 'error', message: expect.stringMatching(/step limit/) }]);
+  expect(abort).toHaveBeenCalledOnce();
+  expect(unsubscribe).toHaveBeenCalledOnce();
+});
+
+it('does not start a prompt when the owner has already canceled', async () => {
+  const session = createSession(async () => {});
+  const prompt = vi.spyOn(session, 'prompt');
+  const owner = new AbortController(); owner.abort();
+  await expect(runMindosPiAgentTurnSession({ ...baseOptions(session, []), signal: owner.signal })).rejects.toThrow();
+  expect(prompt).not.toHaveBeenCalled();
 });

@@ -10,6 +10,8 @@ import AgentModeCapsule from '@/components/ask/AgentModeCapsule';
 import ModeCapsule, {
   getPersistedPermissionMode,
 } from '@/components/ask/ModeCapsule';
+import { useRuntimeSessionAction } from '@/hooks/useRuntimeSessionAction';
+import { useExternalSessionHistory } from '@/hooks/useExternalSessionHistory';
 import { useAskSession } from '@/hooks/useAskSession';
 import { useFileUpload } from '@/hooks/useFileUpload';
 import { useImageUpload } from '@/hooks/useImageUpload';
@@ -82,7 +84,6 @@ import {
   forkRuntimeSession,
   getRuntimeSessionAdapterCapabilities,
   importBoundRuntimeSessionHistory,
-  listRuntimeSessions,
   readRuntimeSessionHistory,
 } from '@/lib/runtime-session-history';
 import {
@@ -198,10 +199,6 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
   const [showHistory, setShowHistory] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
-  const [runtimeSessions, setRuntimeSessions] = useState<RuntimeSessionEntry[]>([]);
-  const [runtimeSessionsLoading, setRuntimeSessionsLoading] = useState(false);
-  const [runtimeSessionsError, setRuntimeSessionsError] = useState<string | null>(null);
-  const [runtimeSessionActionId, setRuntimeSessionActionId] = useState<string | null>(null);
   const attachButtonRef = useRef<HTMLButtonElement>(null);
   const attachMenuRef = useRef<HTMLDivElement>(null);
   const [attachMenuPos, setAttachMenuPos] = useState<{ top: number; left: number } | null>(null);
@@ -214,7 +211,6 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
   const [queueDrainSignal, setQueueDrainSignal] = useState(0);
   const queuedFollowUpsRef = useRef<QueuedFollowUp[]>([]);
   const drainingQueuedFollowUpRef = useRef(false);
-  const runtimeSessionsRequestSeqRef = useRef(0);
   const chatContentRootRef = useRef<HTMLDivElement>(null);
   const [homeHistoryMinHeight, setHomeHistoryMinHeight] = useState<number | null>(null);
 
@@ -506,40 +502,15 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     () => getRuntimeSessionAdapterCapabilities(selectedAgentRuntime),
     [selectedAgentRuntime?.id, selectedAgentRuntime?.kind, selectedAgentRuntime?.name],
   );
-  const loadRuntimeSessions = useCallback(async () => {
-    const runtime = selectedAgentRuntimeRef.current;
-    const capabilities = getRuntimeSessionAdapterCapabilities(runtime);
-    if (!runtime || !capabilities.supportsList) {
-      setRuntimeSessions([]);
-      setRuntimeSessionsError(null);
-      setRuntimeSessionsLoading(false);
-      setRuntimeSessionActionId(null);
-      return;
-    }
-
-    const seq = runtimeSessionsRequestSeqRef.current + 1;
-    runtimeSessionsRequestSeqRef.current = seq;
-    setRuntimeSessionsLoading(true);
-    setRuntimeSessionsError(null);
-
-    try {
-      const entries = await listRuntimeSessions(runtime, { cwd: runtimeSessionListCwd(sessionRef.current.activeSession) });
-      if (runtimeSessionsRequestSeqRef.current === seq) {
-        setRuntimeSessions(entries);
-      }
-    } catch (error) {
-      if (runtimeSessionsRequestSeqRef.current === seq) {
-        const message = error instanceof Error && error.message
-          ? error.message
-          : 'Failed to load runtime sessions.';
-        setRuntimeSessionsError(message);
-      }
-    } finally {
-      if (runtimeSessionsRequestSeqRef.current === seq) {
-        setRuntimeSessionsLoading(false);
-      }
-    }
-  }, []);
+  const externalHistory = useExternalSessionHistory(
+    selectedAgentRuntime, runtimeSessionListCwd(session.activeSession),
+    visible && showHistory && runtimeSessionCapabilities.supportsList,
+  );
+  const { actionId: runtimeSessionActionId, execute: executeRuntimeSessionAction } = useRuntimeSessionAction(
+    `${selectedAgentRuntime?.kind}:${selectedAgentRuntime?.id}:${session.activeSessionId}:${visible}:${showHistory}`,
+  );
+  const { entries: runtimeSessions, setEntries: setRuntimeSessions, loading: runtimeSessionsLoading,
+    error: runtimeSessionsError, setError: setRuntimeSessionsError, refresh: loadRuntimeSessions } = externalHistory;
 
   const imageUploadRef = useRef(imageUploadRuntime);
   const mentionRef = useRef(mention);
@@ -561,17 +532,6 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     queuedFollowUpsRef.current = queuedFollowUps;
   }, [queuedFollowUps]);
 
-  useEffect(() => {
-    if (!visible || !showHistory) return;
-    if (runtimeSessionCapabilities.supportsList) {
-      void loadRuntimeSessions();
-      return;
-    }
-    setRuntimeSessions([]);
-    setRuntimeSessionsError(null);
-    setRuntimeSessionsLoading(false);
-    setRuntimeSessionActionId(null);
-  }, [loadRuntimeSessions, runtimeSessionCapabilities.supportsList, selectedAgentRuntime?.id, selectedAgentRuntime?.kind, showHistory, visible]);
 
   const resetInputState = useCallback(() => {
     setComposerValueWithAgentModeSync('');
@@ -1414,10 +1374,8 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     const runtime = selectedAgentRuntimeRef.current;
     if (!runtime || runtime.kind !== entry.runtime.kind || runtime.id !== entry.runtime.id) return;
 
-    setRuntimeSessionActionId(entry.id);
     setRuntimeSessionsError(null);
-    try {
-      const { entry: readEntry, messages: importedMessages } = await readRuntimeSessionHistory(entry);
+    await executeRuntimeSessionAction(entry.id, () => readRuntimeSessionHistory(entry), ({ entry: readEntry, messages: importedMessages }) => {
       const attachRuntime = compactAgentRuntimeIdentity(readEntry.runtime) ?? readEntry.runtime;
       const attached = sessionRef.current.attachRuntimeSession(attachRuntime, runtimeSessionEntryAttachBinding(readEntry), {
         title: runtimeSessionEntryTitle(readEntry, 42),
@@ -1432,24 +1390,15 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
       setRuntimeSessions((prev) => [readEntry, ...prev.filter((item) => item.id !== readEntry.id)]);
       updateSelectedAgentRuntime(attachRuntime);
       clearTransientComposerState();
-    } catch (error) {
-      const message = error instanceof Error && error.message
-        ? error.message
-        : 'Failed to load runtime session history.';
-      setRuntimeSessionsError(message);
-    } finally {
-      setRuntimeSessionActionId(null);
-    }
-  }, [chat.isLoadingRef, clearTransientComposerState, runtimeSessionActionId, t.ask.sessionRunningRetry, updateSelectedAgentRuntime]);
+    }, setRuntimeSessionsError);
+  }, [executeRuntimeSessionAction, chat.isLoadingRef, clearTransientComposerState, runtimeSessionActionId, t.ask.sessionRunningRetry, updateSelectedAgentRuntime]);
 
   const handleForkRuntimeSession = useCallback(async (entry: RuntimeSessionEntry) => {
     if (chat.isLoadingRef.current || runtimeSessionActionId) return;
     const runtime = selectedAgentRuntimeRef.current;
     if (!runtime || runtime.kind !== entry.runtime.kind || runtime.id !== entry.runtime.id) return;
-    setRuntimeSessionActionId(entry.id);
     setRuntimeSessionsError(null);
-    try {
-      const forked = await forkRuntimeSession(entry);
+    await executeRuntimeSessionAction(entry.id, () => forkRuntimeSession(entry), (forked) => {
       setRuntimeSessions((prev) => [forked, ...prev.filter((item) => item.id !== forked.id)]);
       const attachRuntime = compactAgentRuntimeIdentity(forked.runtime) ?? forked.runtime;
       const attached = sessionRef.current.attachRuntimeSession(attachRuntime, runtimeSessionEntryAttachBinding(forked), {
@@ -1461,24 +1410,15 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
       }
       updateSelectedAgentRuntime(attachRuntime);
       clearTransientComposerState();
-    } catch (error) {
-      const message = error instanceof Error && error.message
-        ? error.message
-        : 'Failed to fork runtime session.';
-      setRuntimeSessionsError(message);
-    } finally {
-      setRuntimeSessionActionId(null);
-    }
-  }, [chat.isLoadingRef, clearTransientComposerState, runtimeSessionActionId, t.ask.sessionRunningRetry, updateSelectedAgentRuntime]);
+    }, setRuntimeSessionsError);
+  }, [executeRuntimeSessionAction, chat.isLoadingRef, clearTransientComposerState, runtimeSessionActionId, t.ask.sessionRunningRetry, updateSelectedAgentRuntime]);
 
   const handleArchiveRuntimeSession = useCallback(async (entry: RuntimeSessionEntry) => {
     if (chat.isLoadingRef.current || runtimeSessionActionId) return;
     const runtime = selectedAgentRuntimeRef.current;
     if (!runtime || runtime.kind !== entry.runtime.kind || runtime.id !== entry.runtime.id) return;
-    setRuntimeSessionActionId(entry.id);
     setRuntimeSessionsError(null);
-    try {
-      await archiveRuntimeSession(entry);
+    await executeRuntimeSessionAction(entry.id, () => archiveRuntimeSession(entry), () => {
       setRuntimeSessions((prev) => prev.filter((item) => item.id !== entry.id));
       const activeBinding = getMatchingRuntimeSessionBinding(sessionRef.current.activeSession, runtime);
       if (activeBinding?.externalSessionId === entry.id) {
@@ -1490,15 +1430,8 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
           updatedAt: Date.now(),
         });
       }
-    } catch (error) {
-      const message = error instanceof Error && error.message
-        ? error.message
-        : 'Failed to archive runtime session.';
-      setRuntimeSessionsError(message);
-    } finally {
-      setRuntimeSessionActionId(null);
-    }
-  }, [chat.isLoadingRef, runtimeSessionActionId]);
+    }, setRuntimeSessionsError);
+  }, [executeRuntimeSessionAction, chat.isLoadingRef, runtimeSessionActionId]);
 
   const captureHomeHistoryHeight = useCallback(() => {
     if (!isHome || maximized) return;
@@ -1706,9 +1639,18 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
           onClose={closeHistory}
           onNewChat={handleResetSession}
           onRefreshRuntimeSessions={loadRuntimeSessions}
+          externalScope={externalHistory.scope}
+          onExternalScopeChange={externalHistory.setScope}
+          externalProjectAvailable={Boolean(runtimeSessionListCwd(session.activeSession))}
+          onExternalQueryChange={externalHistory.setQuery}
+          externalQuery={externalHistory.query}
+          externalHasMore={Boolean(externalHistory.cursor)}
+          onLoadMoreExternal={externalHistory.loadMore}
+          externalArchived={externalHistory.archived}
+          onExternalArchivedChange={externalHistory.setArchived}
           onAttachRuntimeSession={handleAttachRuntimeSession}
-          onForkRuntimeSession={handleForkRuntimeSession}
-          onArchiveRuntimeSession={handleArchiveRuntimeSession}
+          onForkRuntimeSession={runtimeSessionCapabilities.supportsFork ? handleForkRuntimeSession : undefined}
+          onArchiveRuntimeSession={runtimeSessionCapabilities.supportsArchive ? handleArchiveRuntimeSession : undefined}
         />
       )}
 

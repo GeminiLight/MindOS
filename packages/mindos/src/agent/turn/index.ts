@@ -21,23 +21,6 @@ export {
   sanitizeToolArgs,
   sanitizeToolOutput,
 } from './tool-event-safety.js';
-export {
-  buildMindosCompatEndpointCandidates,
-  mindosPiMessagesToOpenAI,
-  parseMindosOpenAICompatResponse,
-  reassembleMindosOpenAISse,
-  runMindosNonStreamingFallback,
-  runMindosOpenAICompatFallback,
-} from './openai-compat-fallback.js';
-export type {
-  MindosNonStreamingFallbackOptions,
-  MindosOpenAICompatChoice,
-  MindosOpenAICompatCompletion,
-  MindosOpenAICompatFallbackEvent,
-  MindosOpenAICompatFallbackOptions,
-  MindosOpenAIMessage,
-  MindosOpenAIToolCall,
-} from './openai-compat-fallback.js';
 // Turn-execution control (retry / timeout) and the ACP lane live in sibling
 // modules; re-exported here so the barrel stays the single import surface.
 export {
@@ -161,11 +144,9 @@ export function createMindosAgentEventReducer(options: MindosAgentEventReducerOp
   const stepHistory: MindosAgentStepEntry[] = [];
   let stepCount = 0;
   let loopCooldown = 0;
-  let finalAnswerSteered = false;
   let lastModelError = '';
   const loopWarningMessage = options.loopWarningMessage
     ?? '[SYSTEM WARNING] You appear to be in a loop — repeating the same tool calls in a cycle. Try a completely different approach or ask the user for clarification.';
-  const finalAnswerWarningMessage = '[SYSTEM WARNING] You have reached the tool step budget. Stop using tools and provide a concise final answer from the evidence already gathered.';
 
   return {
     get lastModelError() {
@@ -226,12 +207,7 @@ export function createMindosAgentEventReducer(options: MindosAgentEventReducerOp
           effect.steerMessage = loopWarningMessage;
         }
 
-        if (stepCount >= options.stepLimit) {
-          if (toolResults.length > 0 && !finalAnswerSteered && !effect.steerMessage) {
-            finalAnswerSteered = true;
-            effect.steerMessage = finalAnswerWarningMessage;
-            return effect;
-          }
+        if (stepCount >= options.stepLimit && toolResults.length > 0) {
           effect.shouldAbort = true;
         }
 
@@ -592,3 +568,6 @@ export {
   mindosRetryDelay as retryDelay,
   sleepMindos as sleep,
 } from './retry.js';
+
+export { executeAgentTurn, executeMindosPiRuntimeTurn } from './execute.js';
+export type { AgentTurnResult } from './execute.js';

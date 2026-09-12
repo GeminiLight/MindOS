@@ -52,6 +52,11 @@ beforeEach(() => {
     'utf-8',
   );
   execFileMock.mockReset();
+  execFileMock.mockImplementation(
+    (_file: string, _args: string[], _opts: unknown, cb: (e: Error | null, out: string, err: string) => void) => {
+      cb(null, 'CHANGED\n', '');
+    },
+  );
 });
 
 afterEach(() => {
@@ -275,5 +280,26 @@ describe('deferred shim install scheduling', () => {
     expect(scheduleCliShimInstall(null, install2, s2)).toBe('deferred');
     q2.forEach(({ fn }) => fn());
     expect(install2).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('managed uninstall script repair', () => {
+  it('restores a missing cleanup script even when the CLI stamp is current', async () => {
+    const { ensureMindosCliShim } = await import('./install-cli-shim');
+    await ensureMindosCliShim({appendPath:false});
+    const file = path.join(home,'.mindos',process.platform === 'win32' ? 'uninstall.bat' : 'uninstall.sh');
+    fs.rmSync(file);
+    await ensureMindosCliShim({appendPath:false});
+    expect(fs.existsSync(file)).toBe(true);
+  });
+  it('backs up an existing custom cleanup script before replacing it', async () => {
+    const { ensureMindosCliShim } = await import('./install-cli-shim');
+    const file = path.join(home,'.mindos',process.platform === 'win32' ? 'uninstall.bat' : 'uninstall.sh');
+    fs.writeFileSync(file,'custom cleanup\n');
+    await ensureMindosCliShim({appendPath:false});
+    expect(fs.readFileSync(file,'utf8')).not.toBe('custom cleanup\n');
+    const backup = fs.readdirSync(path.dirname(file)).find(n => n.startsWith(path.basename(file)+'.backup-'));
+    expect(backup).toBeTruthy();
+    expect(fs.readFileSync(path.join(path.dirname(file),backup!),'utf8')).toBe('custom cleanup\n');
   });
 });

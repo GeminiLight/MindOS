@@ -24,11 +24,19 @@ import fs from 'fs';
 import { execFileSync } from 'child_process';
 
 describe('SSH Tunnel', () => {
+  let testHome: string;
+  beforeEach(() => {
+    testHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ssh-home-'));
+    vi.stubEnv('MINDOS_DESKTOP_HOME_DIR', testHome);
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    fs.rmSync(testHome, { recursive: true, force: true });
+  });
   describe('parseSshConfig', () => {
     it('returns empty array when ~/.ssh/config does not exist', () => {
       const result = parseSshConfig();
-      // May be empty if file doesn't exist, which is valid
-      expect(Array.isArray(result)).toBe(true);
+      expect(result).toEqual([]);
     });
 
     it('parses basic SSH config correctly', () => {

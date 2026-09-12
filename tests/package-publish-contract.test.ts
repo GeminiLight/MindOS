@@ -174,18 +174,16 @@ describe('product npm publish contract', () => {
       types: './dist/agent/capsules/index.d.ts',
       import: './dist/agent/capsules/index.js',
     });
-    expect(pkg.exports?.['./agent/capsules/*']).toEqual({
-      types: './dist/agent/capsules/*.d.ts',
-      import: './dist/agent/capsules/*.js',
+    expect(pkg.exports?.['./agent/capsules/*']).toBeUndefined();
+    expect(pkg.exports?.['./agent/capsules/store']).toEqual({
+      types: './dist/agent/capsules/store.d.ts',
+      import: './dist/agent/capsules/store.js',
     });
     expect(pkg.exports?.['./agent/prompt']).toEqual({
       types: './dist/agent/prompt/index.d.ts',
       import: './dist/agent/prompt/index.js',
     });
-    expect(pkg.exports?.['./agent/prompt/*']).toEqual({
-      types: './dist/agent/prompt/*.d.ts',
-      import: './dist/agent/prompt/*.js',
-    });
+    expect(pkg.exports?.['./agent/prompt/*']).toBeUndefined();
     expect(pkg.exports?.['./agent/mindos-pi']).toEqual({
       types: './dist/agent/mindos-pi/index.d.ts',
       import: './dist/agent/mindos-pi/index.js',
@@ -194,18 +192,12 @@ describe('product npm publish contract', () => {
       types: './dist/agent/mindos-pi/extension/index.d.ts',
       import: './dist/agent/mindos-pi/extension/index.js',
     });
-    expect(pkg.exports?.['./agent/mindos-pi/extension/*']).toEqual({
-      types: './dist/agent/mindos-pi/extension/*.d.ts',
-      import: './dist/agent/mindos-pi/extension/*.js',
-    });
+    expect(pkg.exports?.['./agent/mindos-pi/extension/*']).toBeUndefined();
     expect(pkg.exports?.['./agent/tool']).toEqual({
       types: './dist/agent/tool/index.d.ts',
       import: './dist/agent/tool/index.js',
     });
-    expect(pkg.exports?.['./agent/tool/*']).toEqual({
-      types: './dist/agent/tool/*.d.ts',
-      import: './dist/agent/tool/*.js',
-    });
+    expect(pkg.exports?.['./agent/tool/*']).toBeUndefined();
 
     // Modules sunk from packages/web/lib/agent (spec-agent-core-consolidation).
     // A missing source file here means the web shim re-exports a dangling

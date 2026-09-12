@@ -11,13 +11,8 @@ import {
   type MindosAcpSessionUpdate,
 } from '../turn/acp-lane.js';
 import {
-  runMindosNonStreamingFallback,
-  type MindosNonStreamingFallbackOptions,
-} from '../turn/openai-compat-fallback.js';
-import {
   runMindosPiAgentTurnSession,
   type MindosPiAgentRuntime,
-  type MindosPiAgentTurnProxyFallbackMessages,
   type MindosPiAgentTurnSessionOptions,
   type MindosPiAgentTurnSessionResult,
 } from '../mindos-pi/session.js';
@@ -418,17 +413,12 @@ export type MindosPiRuntimeLaneConfig = {
   cwd: string;
   stepLimit: number;
   thinkingLevel: string;
-  proxyMessages: MindosPiAgentTurnProxyFallbackMessages;
+
 };
 
 export type MindosPiRuntimeLaneDeps = {
   /** Defaults to the leaf `../mindos-pi/session.js`; hosts pass the barrel reference. */
   runPiSession?(options: MindosPiAgentTurnSessionOptions): Promise<MindosPiAgentTurnSessionResult>;
-  /** Defaults to the leaf `../turn/openai-compat-fallback.js`; hosts pass the barrel reference. */
-  runNonStreamingFallback?(options: MindosNonStreamingFallbackOptions): Promise<void>;
-  readCompatCache(): Record<string, string>;
-  resolveCompatMode(input: { provider: string; baseUrl?: string; cachedMode?: string }): string | undefined;
-  writeCompat(key: string, mode: 'non-streaming'): void;
   recordToolExecution?(): void;
   recordTokens?(inputTokens: number, outputTokens: number): void;
   onStep?(step: number, maxSteps: number): void;
@@ -436,10 +426,9 @@ export type MindosPiRuntimeLaneDeps = {
 
 export function createMindosPiRuntimeLane(
   config: MindosPiRuntimeLaneConfig,
-  deps: MindosPiRuntimeLaneDeps,
+  deps: MindosPiRuntimeLaneDeps = {},
 ): RuntimeLane {
   const runPiSession = deps.runPiSession ?? runMindosPiAgentTurnSession;
-  const runNonStreamingFallback = deps.runNonStreamingFallback ?? runMindosNonStreamingFallback;
 
   return {
     kind: 'mindos',
@@ -514,26 +503,6 @@ export function createMindosPiRuntimeLane(
         });
       }
 
-      const compatCache = deps.readCompatCache();
-      const effectiveBaseUrlKey = runtime.baseUrl || 'default';
-      const compatMode = deps.resolveCompatMode({
-        provider: runtime.provider,
-        baseUrl: runtime.baseUrl,
-        cachedMode: compatCache[effectiveBaseUrlKey],
-      });
-      const runProxyFallback = () => runNonStreamingFallback({
-        baseUrl: runtime.baseUrl ?? '',
-        apiKey: runtime.apiKey,
-        model: runtime.modelName,
-        systemPrompt: runtime.systemPrompt,
-        historyMessages: runtime.llmHistoryMessages,
-        userContent: turnPrompt,
-        tools: runtime.fallbackTools,
-        send: sink.send,
-        signal: turn.signal,
-        maxSteps: config.stepLimit,
-      });
-
       const piSession = runtime.session;
       const sessionResult = await runPiSession({
         session: {
@@ -549,15 +518,10 @@ export function createMindosPiRuntimeLane(
         signal: turn.signal,
         provider: runtime.provider,
         baseUrl: runtime.baseUrl,
-        effectiveBaseUrlKey,
-        compatMode,
         send: sink.send,
-        runFallback: runProxyFallback,
-        proxyMessages: config.proxyMessages,
         ...(deps.recordToolExecution ? { onToolExecution: () => deps.recordToolExecution!() } : {}),
         ...(deps.recordTokens ? { onTokens: (inputTokens: number, outputTokens: number) => deps.recordTokens!(inputTokens, outputTokens) } : {}),
         ...(deps.onStep ? { onStep: deps.onStep } : {}),
-        writeCompat: (key, mode) => deps.writeCompat(key, mode),
       });
 
       if (sessionResult.status === 'error') {

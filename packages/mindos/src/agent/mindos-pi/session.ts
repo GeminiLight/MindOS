@@ -1,7 +1,5 @@
 import {
   collectMindosPiRegisteredToolSummaries,
-  collectMindosPiRuntimeToolsForFallback,
-  createMindosHeadlessExtensionContext,
   type MindosRuntimeToolSummary,
 } from './extension/extension-tools.js';
 import type {
@@ -10,7 +8,6 @@ import type {
   MindosPiResourceLoaderAdapter,
 } from './resource-types.js';
 import type { MindosPermissionMode } from '../permission/index.js';
-import type { MindosExecutableTool } from '../tool/executable-tool.js';
 import {
   prepareMindosPiContextBudget,
   type MindosPiContextUsageEvent,
@@ -22,6 +19,7 @@ import {
 } from './thinking.js';
 import {
   createMindosAgentEventReducer,
+  getTurnEndData,
   resolveMindosAgentTimeoutMs,
   runMindosAgentTurnWithRetry,
   runMindosWithTimeout,
@@ -51,12 +49,7 @@ export type MindosPiAgentTurnSessionOptions = {
   signal?: AbortSignal;
   provider: string;
   baseUrl?: string;
-  effectiveBaseUrlKey?: string;
-  compatMode?: string;
   send(event: MindOSSSEvent): void;
-  runFallback(): Promise<void>;
-  proxyMessages: MindosPiAgentTurnProxyFallbackMessages;
-  writeCompat?(key: string, mode: 'non-streaming'): void;
   onToolExecution?(): void;
   onTokens?(input: number, output: number): void;
   onStep?(step: number, stepLimit: number): void;
@@ -67,7 +60,7 @@ export type MindosPiAgentTurnSessionOptions = {
 
 /**
  * Structured terminal state of a Pi turn. `status: 'error'` means the model
- * (or the proxy fallback) reported a failure: the session already sent the
+ * reported a failure: the session already sent the
  * SSE `error` frame and deliberately did not send `done`, mirroring the
  * native lanes, so the host must record the run as failed.
  */
@@ -102,7 +95,7 @@ async function runMindosAbortable<T>(
   let removeAbortListener: (() => void) | undefined;
   const abortPromise = new Promise<never>((_resolve, reject) => {
     const abort = () => {
-      void Promise.resolve(onAbort()).finally(() => reject(abortReason()));
+      void Promise.resolve().then(onAbort).then(() => reject(abortReason()), () => reject(abortReason()));
     };
     signal.addEventListener('abort', abort, { once: true });
     removeAbortListener = () => signal.removeEventListener('abort', abort);
@@ -118,7 +111,7 @@ async function runMindosAbortable<T>(
 export async function runMindosPiAgentTurnSession(options: MindosPiAgentTurnSessionOptions): Promise<MindosPiAgentTurnSessionResult> {
   let hasContent = false;
   let lastModelError = '';
-  const effectiveBaseUrlKey = options.effectiveBaseUrlKey ?? options.baseUrl ?? 'default';
+  let budgetExceeded = false;
   const reducer = createMindosAgentEventReducer({ stepLimit: options.stepLimit });
 
   const unsubscribe = options.session.subscribe((event) => {
@@ -128,29 +121,15 @@ export async function runMindosPiAgentTurnSession(options: MindosPiAgentTurnSess
     if (effect.toolExecutions) options.onToolExecution?.();
     if (effect.tokenUsage) options.onTokens?.(effect.tokenUsage.input, effect.tokenUsage.output);
     if (effect.steerMessage) void options.session.steer(effect.steerMessage);
-    if (effect.shouldAbort) void options.session.abort();
+    if (effect.shouldAbort) {
+      budgetExceeded = Boolean(effect.stepCount && effect.stepCount >= options.stepLimit && getTurnEndData(event).toolResults.length);
+      void options.session.abort();
+    }
     if (effect.lastModelError) lastModelError = effect.lastModelError;
     if (effect.stepCount) options.onStep?.(effect.stepCount, options.stepLimit);
   });
 
-  const toResult = (outcome: MindosPiAgentTurnProxyFallbackOutcome): MindosPiAgentTurnSessionResult => (
-    outcome.handled && outcome.status === 'error'
-      ? { status: 'error', message: outcome.message, hasContent, lastModelError }
-      : { status: 'completed', hasContent, lastModelError }
-  );
-
   try {
-    const cachedProxyFallback = await runMindosPiAgentTurnProxyFallback({
-      phase: 'before-stream',
-      provider: options.provider,
-      baseUrl: options.baseUrl,
-      compatMode: options.compatMode,
-      send: options.send,
-      messages: options.proxyMessages,
-      runFallback: options.runFallback,
-    });
-    if (cachedProxyFallback.handled) return toResult(cachedProxyFallback);
-
     const timeoutMs = options.timeoutMs ?? resolveMindosAgentTimeoutMs();
     const lastPromptError = await runMindosAgentTurnWithRetry({
       signal: options.signal,
@@ -158,7 +137,9 @@ export async function runMindosPiAgentTurnSession(options: MindosPiAgentTurnSess
       send: options.send,
       sleep: options.sleep,
       retryDelay: options.retryDelay,
+      onAttemptError: async error => { if ((error as Error & { code?: string }).code === 'TIMEOUT') await options.session.abort(); },
       execute: async () => {
+        options.signal?.throwIfAborted();
         await runMindosWithTimeout(
           runMindosAbortable(
             options.session.prompt(options.prompt, options.promptOptions),
@@ -173,21 +154,13 @@ export async function runMindosPiAgentTurnSession(options: MindosPiAgentTurnSess
     });
     if (lastPromptError) throw lastPromptError;
 
-    const afterStreamFallback = await runMindosPiAgentTurnProxyFallback({
-      phase: 'after-stream',
-      provider: options.provider,
-      baseUrl: options.baseUrl,
-      effectiveBaseUrlKey,
-      hasContent,
-      lastModelError,
-      send: options.send,
-      messages: options.proxyMessages,
-      runFallback: options.runFallback,
-      writeCompat: options.writeCompat,
-    });
-    if (!afterStreamFallback.handled) options.send({ type: 'done' });
-
-    return toResult(afterStreamFallback);
+    if (budgetExceeded) lastModelError = 'Agent tool step limit reached before completion.';
+    if (lastModelError) {
+      options.send({ type: 'error', message: lastModelError });
+      return { status: 'error', message: lastModelError, hasContent, lastModelError };
+    }
+    options.send({ type: 'done' });
+    return { status: 'completed', hasContent, lastModelError };
   } finally {
     // The pi AgentSession keeps every listener until dispose(); a turn-scoped
     // listener left behind would keep receiving the next turn's events.
@@ -373,7 +346,6 @@ export type MindosPiAgentRuntime = {
   session: MindosPiAgentSessionAdapter;
   agentRunContextResource: object;
   llmHistoryMessages: unknown[];
-  fallbackTools: MindosExecutableTool[];
   systemPrompt: string;
   turnPrompt: string;
   contextUsage?: MindosPiContextUsageEvent;
@@ -381,6 +353,7 @@ export type MindosPiAgentRuntime = {
   modelName: string;
   apiKey: string;
   provider: string;
+  thinkingLevel?: MindosThinkingLevel;
   baseUrl?: string;
   lastUserContent: string;
   lastUserImages?: MindosUiImagePart[];
@@ -539,8 +512,7 @@ export async function createMindosPiAgentRuntime(options: MindosPiAgentRuntimeOp
   if (runtimeToolSummary) runtimeSystemPromptSections.push(runtimeToolSummary);
 
   if (runtimeSystemPromptSections.length > 0) {
-    // Keep the returned prompt (used by the non-streaming fallback) in sync
-    // with what the streaming session sees. The SDK loader cached its system
+    // Keep the returned prompt in sync with what the session sees. The SDK loader cached its system
     // prompt during the reload above (before the sections existed); the
     // session reads it through `sessionResourceLoader` below, which appends
     // the sections lazily, so a second full reload (every extension loaded
@@ -615,32 +587,19 @@ export async function createMindosPiAgentRuntime(options: MindosPiAgentRuntimeOp
     // request permission policy allows terminal access. MindOS KB tools are not
     // passed as SDK customTools: by-name SDK custom tools override extension
     // wrappers and would strip kb-extension write-protection + audit logging.
-    // The non-streaming fallback is derived from the same extension registry.
     noTools: 'builtin',
     customTools,
-  });
-  const fallbackTools = collectMindosPiRuntimeToolsForFallback({
-    resourceLoader,
-    extensionContext: createMindosHeadlessExtensionContext({
-      cwd: workDir,
-      model: modelConfig.model,
-      modelRegistry: extensionModelRegistry,
-      sessionManager,
-      settingsManager,
-      resourceLoader,
-      permissionMode: options.permissionMode,
-    }),
   });
 
   return {
     session,
     agentRunContextResource: sessionManager as object,
     llmHistoryMessages,
-    fallbackTools,
     systemPrompt,
     turnPrompt,
     contextUsage,
     model: modelConfig.model,
+    thinkingLevel,
     modelName: modelConfig.modelName,
     apiKey: modelConfig.apiKey,
     provider: modelConfig.provider,
@@ -744,93 +703,4 @@ function extractMindosUserImages(message: MindosUiAgentMessage | undefined): Min
   if (!message || message.role !== 'user') return undefined;
   const images = message.images?.filter((image) => image.data);
   return images && images.length > 0 ? images : undefined;
-}
-
-export type MindosPiAgentTurnProxyFallbackMessages = {
-  proxyCompatMode: string;
-  proxyCompatDetecting: string;
-  proxyCompatFailed(message: string): string;
-  proxyCompatAlsoFailed(message: string): string;
-};
-
-export type MindosPiAgentTurnProxyFallbackOptions = {
-  phase: 'before-stream' | 'after-stream';
-  provider: string;
-  baseUrl?: string;
-  effectiveBaseUrlKey?: string;
-  compatMode?: string;
-  hasContent?: boolean;
-  lastModelError?: string;
-  send(event: MindOSSSEvent): void;
-  runFallback(): Promise<void>;
-  writeCompat?(key: string, mode: 'non-streaming'): void;
-  messages: MindosPiAgentTurnProxyFallbackMessages;
-};
-
-/**
- * `handled: false` means the caller still owns the terminal frame (`done`).
- * When handled, the fallback already sent `done` or `error`; `status`
- * carries which one so the host can record the run accordingly.
- */
-export type MindosPiAgentTurnProxyFallbackOutcome =
-  | { handled: false }
-  | { handled: true; status: 'completed' }
-  | { handled: true; status: 'error'; message: string };
-
-export async function runMindosPiAgentTurnProxyFallback(
-  options: MindosPiAgentTurnProxyFallbackOptions,
-): Promise<MindosPiAgentTurnProxyFallbackOutcome> {
-  if (options.phase === 'before-stream') {
-    if (options.compatMode !== 'non-streaming' || !isOpenAiCompatibleProxy(options)) return { handled: false };
-    options.send({ type: 'status', message: options.messages.proxyCompatMode });
-    try {
-      await options.runFallback();
-      options.send({ type: 'done' });
-      return { handled: true, status: 'completed' };
-    } catch (error) {
-      const message = options.messages.proxyCompatFailed(errorMessage(error));
-      options.send({ type: 'error', message });
-      return { handled: true, status: 'error', message };
-    }
-  }
-
-  // A model error after visible content is still a failed turn (the answer
-  // is truncated); only the empty-response case may try the proxy fallback.
-  const modelError = options.lastModelError;
-  if (modelError && options.hasContent) {
-    options.send({ type: 'error', message: modelError });
-    return { handled: true, status: 'error', message: modelError };
-  }
-
-  if (options.hasContent) return { handled: false };
-  if (!modelError && !isOpenAiCompatibleProxy(options)) return { handled: false };
-
-  if (isOpenAiCompatibleProxy(options)) {
-    options.send({
-      type: 'status',
-      message: modelError ? options.messages.proxyCompatDetecting : options.messages.proxyCompatMode,
-    });
-    try {
-      await options.runFallback();
-      options.writeCompat?.(options.effectiveBaseUrlKey ?? options.baseUrl ?? 'default', 'non-streaming');
-      options.send({ type: 'done' });
-      return { handled: true, status: 'completed' };
-    } catch (error) {
-      const message = options.messages.proxyCompatAlsoFailed(errorMessage(error));
-      options.send({ type: 'error', message });
-      return { handled: true, status: 'error', message };
-    }
-  }
-
-  if (!modelError) return { handled: false };
-  options.send({ type: 'error', message: modelError });
-  return { handled: true, status: 'error', message: modelError };
-}
-
-function isOpenAiCompatibleProxy(options: Pick<MindosPiAgentTurnProxyFallbackOptions, 'provider' | 'baseUrl'>): boolean {
-  return !!options.baseUrl && options.provider === 'openai';
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

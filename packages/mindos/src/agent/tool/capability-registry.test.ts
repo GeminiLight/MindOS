@@ -325,10 +325,10 @@ describe('runtime capabilities', () => {
           }),
           // Derived: MindOS bridges session/request_permission for every ACP
           // agent, so permission governance is limited (interactive approvals
-          // work, a durable queue is missing) rather than unknown.
+          // work, recovering a lost owner is not supported) rather than unknown.
           'permission-governance': expect.objectContaining({
             level: 'limited',
-            blockers: expect.arrayContaining(['durable-approval-queue']),
+            blockers: expect.arrayContaining(['approval-owner-recovery', 'approval-timeout-recovery']),
           }),
           'artifact-governance': expect.objectContaining({
             level: 'blocked',

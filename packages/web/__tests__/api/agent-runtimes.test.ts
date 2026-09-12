@@ -248,7 +248,7 @@ describe('/api/agent-runtimes', () => {
             }),
             'permission-governance': expect.objectContaining({
               level: 'limited',
-              blockers: expect.arrayContaining(['durable-approval-queue']),
+              blockers: expect.arrayContaining(['approval-owner-recovery', 'approval-timeout-recovery']),
             }),
           }),
         }),

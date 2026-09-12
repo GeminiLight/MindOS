@@ -69,7 +69,9 @@ test.beforeEach(async () => {
 test.afterEach(async () => {
   if (application) {
     // Fixture teardown is forced; normal user-close protection is tested separately.
-    await application.evaluate(({ BrowserWindow }) => { for (const window of BrowserWindow.getAllWindows()) window.destroy(); });
+    // Quit the fixture directly: a deliberately paused renderer must not hold
+    // teardown in BrowserWindow.destroy()/app.quit() after assertions finish.
+    await application.evaluate(({ app }) => { setImmediate(() => app.exit(0)); });
     await application.close();
   }
   application = undefined; await server?.close();
@@ -277,7 +279,7 @@ test('DataviewJS executes only after the original settings enable it and uses ed
   await ui.getByRole('button', { name: 'Render preview', exact: true }).click();
   await expect(preview).toContainText('Dataview JS queries are disabled');
   await ui.getByRole('button', { name: 'Plugin settings', exact: true }).click();
-  const settings = ui.getByRole('region', { name: 'Plugin settings (this session)', exact: true });
+  const settings = ui.getByRole('region', { name: 'Plugin settings (saved)', exact: true });
   // Reaching the final setting also proves the original display() did not stop midway.
   await expect(settings.getByRole('checkbox', { name: 'Recursive sub-task completion', exact: true })).toBeVisible();
   await expect(settings.getByRole('heading', { name: 'Tasks', exact: true })).toBeVisible();
@@ -463,4 +465,25 @@ test('a plugin that refuses capture cannot trap the user in its window', async (
   await expect.poll(() => app.evaluate(() => !!(globalThis as any).forceClosePrompt)).toBe(true);
   await expect.poll(() => app.evaluate(() => (globalThis as any).editorWindow.window.isDestroyed())).toBe(true);
   expect(readFileSync(join(server.root, 'Tables.md'), 'utf8')).toBe(doc);
+});
+
+test('generic plugin loadData/saveData imports settings and persists them across editor windows', async () => {
+  const directory = join(server.root, '.mindos/plugins/table-editor-obsidian');
+  writeFileSync(join(directory, 'data.json'), JSON.stringify({ count: 7, label: '原配置 📚' }));
+  writeFileSync(join(directory, 'main.js'), `const {Plugin,Notice}=require('obsidian');module.exports=class extends Plugin {
+    async onload(){const initial=await this.loadData();
+      this.addCommand({id:'persist',name:'Persist configuration '+initial.count,callback:async()=>{
+        await this.saveData({...initial,count:initial.count+1});new Notice('Configuration persisted');
+      }});
+    }
+  };`);
+  const app = await launch(); expect(await app.evaluate(() => (globalThis as any).editorFailure)).toBeUndefined(); let page = await app.firstWindow();
+  let ui = page.frameLocator('iframe');
+  await expect(ui.getByLabel('Plugin command')).toContainText('Persist configuration 7');
+  await ui.getByRole('button', { name: 'Run command', exact: true }).click();
+  await expect.poll(() => JSON.parse(readFileSync(join(directory, 'data.json'), 'utf8'))).toEqual({ count: 8, label: '原配置 📚' });
+  await app.evaluate(() => (globalThis as any).editorWindow.close());
+  await app.evaluate(() => (globalThis as any).openEditor());
+  page = app.windows()[0]; ui = page.frameLocator('iframe');
+  await expect(ui.getByLabel('Plugin command')).toContainText('Persist configuration 8');
 });
