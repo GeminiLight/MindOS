@@ -3,4 +3,4 @@ export {
   reassembleMindosOpenAISse as reassembleSSE,
   runMindosNonStreamingFallback as runNonStreamingFallback,
   type MindosNonStreamingFallbackOptions as NonStreamingOptions,
-} from '@geminilight/mindos/agent/turn';
+} from '@geminilight/mindos/agent/turn/openai-compat-fallback';

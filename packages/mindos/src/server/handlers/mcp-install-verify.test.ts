@@ -42,7 +42,7 @@ describe('http install verification handshake', () => {
     const calls: FetchCall[] = [];
     const res = await installWith(async (url, init) => {
       calls.push({ url: String(url), init });
-      return new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, result: { serverInfo: { name: 'mindos' } } }), {
+      return new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, result: { protocolVersion: '2025-03-26', capabilities: {}, serverInfo: { name: 'mindos', version: '1' } } }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
@@ -71,7 +71,7 @@ describe('http install verification handshake', () => {
     const res = await installWith(async (_url, init) => {
       const method = (JSON.parse(String(init.body)) as { method?: string }).method;
       if (method === 'initialize') {
-        return new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, result: {} }), { status: 200 });
+        return new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, result: { protocolVersion: '2025-03-26', capabilities: {}, serverInfo: { name: 'test', version: '1' } } }), { status: 200 });
       }
       return new Response(JSON.stringify({ jsonrpc: '2.0', error: { code: -32000, message: 'Bad Request: Missing session ID' } }), { status: 400 });
     });
@@ -101,5 +101,18 @@ describe('http install verification handshake', () => {
       return new Response('{}', { status: 200 });
     });
     expect((calls[0].init.headers as Record<string, string>).Authorization).toBeUndefined();
+  });
+});
+
+ describe('verification is evidence, not just an HTTP status', () => {
+  it.each(['{"jsonrpc":"2.0","id":1,"error":{"code":-32603,"message":"failed"}}', '<html>login</html>', '{}'])(
+    'does not verify a non-handshake response: %s', async (body) => {
+      const res = await installWith(async () => new Response(body, { status: 200 }));
+      expect((res.body as { results: Array<Record<string, unknown>> }).results[0]).toMatchObject({ status: 'ok', verified: false });
+    },
+  );
+  it('accepts an SSE initialize result', async () => {
+    const res = await installWith(async () => new Response('event: message\ndata: {"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-03-26","capabilities":{},"serverInfo":{"name":"test","version":"1"}}}\n\n', { headers: { 'Content-Type': 'text/event-stream' } }));
+    expect((res.body as { results: Array<Record<string, unknown>> }).results[0]).toMatchObject({ verified: true });
   });
 });

@@ -68,6 +68,10 @@
       "types": "./dist/tool.d.ts",
       "import": "./dist/tool.js"
     },
+    "./agent/config/preview": {
+      "types": "./dist/agent/config/preview.d.ts",
+      "import": "./dist/agent/config/preview.js"
+    },
     "./agent": {
       "types": "./dist/agent.d.ts",
       "import": "./dist/agent.js"

@@ -31,7 +31,7 @@ describe('mobile event-driven refresh wiring', () => {
 
   it('keeps manual refresh entry points on the converted hooks for pull-to-refresh', () => {
     for (const file of ['hooks/useRecentAgentActivity.ts', 'hooks/usePendingAgentActions.ts']) {
-      expect(read(file), file).toMatch(/\n\s+refresh,\n/);
+      expect(read(file), file).toMatch(/\r?\n\s+refresh,\r?\n/);
     }
   });
 

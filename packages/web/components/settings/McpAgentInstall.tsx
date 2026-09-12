@@ -25,7 +25,7 @@ export default function AgentInstall({ agents, t, onRefresh, mode = 'mcp', activ
   const [httpTokenTouched, setHttpTokenTouched] = useState(false);
   const [scopes, setScopes] = useState<Record<string, 'project' | 'global'>>({});
   const [installing, setInstalling] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [message, setMessage] = useState<{ type: 'success' | 'warning' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     if (!httpUrlTouched) setHttpUrl(defaultHttpUrl);
@@ -83,7 +83,7 @@ export default function AgentInstall({ agents, t, onRefresh, mode = 'mcp', activ
         transport,
         ...(includeHttpSettings ? { url: httpUrl, token: resolvedHttpToken } : {}),
       };
-      const res = await apiFetch<{ results: Array<{ agent: string; status: string; message?: string }> }>('/api/mcp/install', {
+      const res = await apiFetch<{ results: Array<{ agent: string; status: string; message?: string; verified?: boolean; verifyError?: string; warnings?: string[] }> }>('/api/mcp/install', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -91,6 +91,7 @@ export default function AgentInstall({ agents, t, onRefresh, mode = 'mcp', activ
       const okResults = res.results.filter(r => r.status === 'ok');
       const ok = okResults.length;
       const fail = res.results.filter(r => r.status === 'error');
+      const verificationWarnings = okResults.filter(r => r.verified === false || r.warnings?.length).map(r => `${r.agent}: ${[r.verifyError, ...(r.warnings ?? [])].filter(Boolean).join('; ')}`);
 
       // Link the active skill to each successfully configured, skill-capable agent.
       // MCP config install and skill linking are independent steps: a link failure
@@ -116,9 +117,9 @@ export default function AgentInstall({ agents, t, onRefresh, mode = 'mcp', activ
         }
       }
 
-      if (fail.length > 0 || linkErrors.length > 0) {
-        const parts = [...fail.map(f => `${f.agent}: ${f.message}`), ...linkErrors];
-        setMessage({ type: 'error', text: parts.join('; ') });
+      if (fail.length > 0 || linkErrors.length > 0 || verificationWarnings.length > 0) {
+        const parts = [...fail.map(f => `${f.agent}: ${f.message}`), ...linkErrors, ...verificationWarnings];
+        setMessage({ type: ok > 0 ? 'warning' : 'error', text: `${ok > 0 ? (m?.installSuccess ? m.installSuccess(ok) : `${ok} agent(s) configured`) + ' · ' : ''}${parts.join('; ')}` });
       } else {
         let text = m?.installSuccess ? m.installSuccess(ok) : `${ok} agent(s) configured`;
         if (linkedCount > 0) {
@@ -136,7 +137,6 @@ export default function AgentInstall({ agents, t, onRefresh, mode = 'mcp', activ
       setMessage({ type: 'error', text: m?.installFailed ?? 'Install failed' });
     } finally {
       setInstalling(false);
-      setTimeout(() => setMessage(null), 4000);
     }
   };
 
@@ -270,6 +270,8 @@ export default function AgentInstall({ agents, t, onRefresh, mode = 'mcp', activ
         <div className="flex items-center gap-1.5 text-xs" role="status">
           {message.type === 'success' ? (
             <><CheckCircle2 size={12} className="text-success" /><span className="text-success">{message.text}</span></>
+          ) : message.type === 'warning' ? (
+            <><AlertCircle size={12} className="shrink-0 text-[var(--amber-text)]" /><span className="text-foreground">{message.text}</span></>
           ) : (
             <><AlertCircle size={12} className="text-destructive" /><span className="text-destructive">{message.text}</span></>
           )}

@@ -1,3 +1,4 @@
+import { readMcpInitializeResult } from './mcp-verification.js';
 import { isAbsolute } from 'node:path';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
 import type { MindosServerEventEmitter } from '../events/bus.js';
@@ -7,6 +8,7 @@ import {
   agentConfigPathNeedsProjectRoot,
   assertSafeMcpServerName,
   buildMindosMcpServerEntry,
+  convertMcpServerEntry,
   createAgentConfigAdapters,
   DEFAULT_MINDOS_MCP_PORT,
   installAgentConnection,
@@ -165,6 +167,7 @@ async function verifyHttpConnection(
   mcpUrl: string,
   token: string | undefined,
   fetcher: typeof fetch = fetch,
+  configuredHeaders: Record<string, string> = {},
 ): Promise<{ verified: boolean; verifyError?: string }> {
   try {
     // Streamable HTTP requires the initialize handshake first: a bare
@@ -174,6 +177,7 @@ async function verifyHttpConnection(
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       Accept: 'application/json, text/event-stream',
+      ...configuredHeaders,
     };
     if (token) headers.Authorization = `Bearer ${token}`;
     const controller = new AbortController();
@@ -194,7 +198,10 @@ async function verifyHttpConnection(
         }),
         signal: controller.signal,
       });
-      if (res.ok) return { verified: true };
+      if (res.ok) {
+        const verified = await readMcpInitializeResult(res);
+        return verified ? { verified: true } : { verified: false, verifyError: 'The endpoint did not return a valid MCP initialize response.' };
+      }
       return { verified: false, verifyError: `HTTP ${res.status}` };
     } finally {
       clearTimeout(timeout);
@@ -331,7 +338,7 @@ export async function handleMcpServerCopyPost(
           results.push({ agent: target.key, status: 'error', message: new AgentConfigScopeError(targetAdapter.def.name, scope).message });
           continue;
         }
-        const write = targetAdapter.writeServer(serverName, source.entry, scope, { overwrite: target.overwrite === true });
+        const write = targetAdapter.writeServer(serverName, convertMcpServerEntry(source.entry, sourceAdapter.def, targetAdapter.def), scope, { overwrite: target.overwrite === true });
         if (!write.written) {
           results.push({ agent: target.key, status: 'ok', path: write.configPath, message: 'Already configured' });
           continue;
@@ -393,5 +400,30 @@ export function handleMcpUninstallPost(
     return json({ results });
   } catch (error) {
     return errorResponse(error);
+  }
+}
+
+/** Verify the saved connection without rewriting or launching the external Agent. */
+export async function handleMcpVerifyPost(
+  body: { key?: string; scope?: AgentConfigScope; projectRoot?: string },
+  services: MindosMcpInstallServices,
+): Promise<MindosServerResponse> {
+  if (!body || typeof body.key !== 'string' || !['global', 'project'].includes(body.scope ?? 'global')) return json({ error: 'Invalid agent or scope' }, { status: 400 });
+  const root = resolveRequestProjectRoot(body, services);
+  if ('error' in root) return json(root, { status: 400 });
+  try {
+    const adapter = adaptersFor(services.agents, { homeDir: services.homeDir, ...root }).get(body.key);
+    if (!adapter) return json({ error: 'Unknown agent' }, { status: 404 });
+    const saved = adapter.readServer('mindos', { scope: body.scope ?? 'global', strict: true });
+    if (!saved) return json({ error: 'No MindOS configuration in this scope. Save it first.' }, { status: 404 });
+    if (saved.transport !== 'http' || !saved.url) return json({ transport: saved.transport, verified: false, verifyError: 'Open the Agent and check its MCP tools to verify this stdio connection.' });
+    const headers = saved.entry.http_headers ?? saved.entry.headers ?? {};
+    if (!headers || typeof headers !== 'object' || Array.isArray(headers) || Object.values(headers).some(v => typeof v !== 'string')) return json({ error: 'Invalid MCP headers' }, { status: 400 });
+    if (/\$\{|\{env:/.test(JSON.stringify(headers)) || saved.entry.bearer_token_env_var || saved.entry.env_http_headers || saved.entry.oauth) {
+      return json({ verified: false, verifyError: 'Verify authentication in the Agent; this connection uses Agent-owned credentials.' });
+    }
+    return json({ transport: 'http', ...await verifyHttpConnection(saved.url, undefined, services.fetcher, headers as Record<string, string>) });
+  } catch {
+    return json({ error: 'Could not read the saved MCP configuration. Check the file syntax and permissions.' }, { status: 400 });
   }
 }

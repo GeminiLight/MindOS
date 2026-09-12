@@ -637,9 +637,9 @@ describe('Agent detail content', () => {
     expect(html).toContain(a.skillAssignments);
     expect(html).toContain(a.skillsSearchPlaceholder);
     expect(html).toContain(a.skillsSourceBuiltin);
-    expect(html).toContain(a.mcpManagement);
-    expect(html).toContain(a.mcpCopySnippet);
-    expect(html).toContain(a.mcpReconnect);
+    expect(html).toContain(messages.en.agentsContent.connection.title);
+    expect(html).toContain(messages.en.agentsContent.connection.copy);
+    expect(html).toContain(messages.en.agentsContent.connection.save);
     expect(html).toContain(a.nativeInstalledSkills);
     expect(html).toContain(a.configuredMcpServers);
     expect(html).toContain('github');

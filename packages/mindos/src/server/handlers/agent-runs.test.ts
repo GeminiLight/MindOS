@@ -1,3 +1,4 @@
+import { closeAllMindosDatabases } from '../../foundation/storage/sqlite.js';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -296,6 +297,7 @@ describe('Agent Run Observatory projection', () => {
       });
     } finally {
       setMindRootResolverForTests(null);
+      closeAllMindosDatabases();
       rmSync(mindRoot, { recursive: true, force: true });
     }
   });
@@ -349,6 +351,7 @@ describe('handleAgentRunsGet view=timeline', () => {
       resetAgentRunsForTest();
       setMindRootResolverForTests(null);
       reloadAgentRunsFromDiskForTest();
+      closeAllMindosDatabases();
       rmSync(mindRoot, { recursive: true, force: true });
     }
   });
@@ -372,6 +375,7 @@ describe('handleAgentRunsGet view=timeline', () => {
       resetAgentRunsForTest();
       setMindRootResolverForTests(null);
       reloadAgentRunsFromDiskForTest();
+      closeAllMindosDatabases();
       rmSync(mindRoot, { recursive: true, force: true });
     }
   });
@@ -391,6 +395,7 @@ describe('handleAgentRunsGet view=timeline', () => {
       resetAgentRunsForTest();
       setMindRootResolverForTests(null);
       reloadAgentRunsFromDiskForTest();
+      closeAllMindosDatabases();
       rmSync(mindRoot, { recursive: true, force: true });
     }
   });

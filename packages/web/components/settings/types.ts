@@ -104,6 +104,10 @@ export interface McpStatus {
 }
 
 export interface AgentInfo {
+  /** Configuration exists independently of endpoint health; this is not proof the Agent loaded it. */
+  connection?: { status: 'unverified' | 'reachable' | 'auth-required' | 'unreachable'; checkedAt?: string };
+  projectRoot?: string;
+
   key: string;
   name: string;
   present: boolean;
@@ -118,7 +122,7 @@ export interface AgentInfo {
   format: 'json' | 'toml' | 'yaml';
   configKey: string;
   globalNestedKey?: string;
-  entryStyle?: 'standard' | 'kilo';
+  entryStyle?: 'standard' | 'kilo' | 'codex';
   globalPath: string;
   projectPath?: string | null;
   skillMode?: 'universal' | 'additional' | 'unsupported';

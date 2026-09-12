@@ -103,7 +103,7 @@ describe('Web API route ownership contract', () => {
     for (const route of productOwned) {
       expect(['mindos-app', 'stream'], route.path).toContain(route.adapter);
     }
-    expect(MINDOS_WEB_API_ROUTE_OWNERSHIP.filter((route) => route.adapter === 'mindos-app')).toHaveLength(106);
+    expect(MINDOS_WEB_API_ROUTE_OWNERSHIP.filter((route) => route.adapter === 'mindos-app')).toHaveLength(107);
   });
 
   it('keeps delegated Web routes as one-line hand-offs with no Next-side glue', () => {

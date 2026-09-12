@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { homedir } from 'os';
 import { join, resolve } from 'path';
 import { errorResponse, json, type MindosServerResponse } from '../response.js';
@@ -5,6 +6,7 @@ import {
   createAgentConfigAdapter,
   createAgentConfigAdapters,
   expandHome,
+  writableConfigPath,
   listMcpServerNamesFromText,
   type AgentConfigAdapter,
   type AgentConfigDef,
@@ -68,6 +70,10 @@ export type MindosMcpMindosSkills = {
 };
 
 export type MindosMcpAgentProfile = {
+  /** Configuration exists independently of endpoint health; this is not proof the Agent loaded it. */
+  connection?: { status: 'unverified' | 'reachable' | 'auth-required' | 'unreachable'; checkedAt?: string };
+  projectRoot?: string;
+
   key: string;
   name: string;
   present: boolean;
@@ -82,7 +88,7 @@ export type MindosMcpAgentProfile = {
   format: 'json' | 'toml' | 'yaml';
   configKey: string;
   globalNestedKey?: string;
-  entryStyle?: 'standard' | 'kilo';
+  entryStyle?: 'standard' | 'kilo' | 'codex';
   globalPath: string;
   projectPath?: string | null;
   skillMode: SkillInstallMode;
@@ -210,6 +216,8 @@ export async function handleMcpAgentsGet(
         name: agent.name,
         present,
         installed: status.installed,
+        connection: { status: 'unverified' } as NonNullable<MindosMcpAgentProfile['connection']>,
+        projectRoot: services.projectRoot,
         scope: status.scope,
         transport: status.transport,
         configPath: status.configPath,
@@ -221,8 +229,8 @@ export async function handleMcpAgentsGet(
         configKey: agent.key,
         globalNestedKey: agent.globalNestedKey,
         entryStyle: agent.entryStyle,
-        globalPath: agent.global,
-        projectPath: agent.project,
+        globalPath: writableConfigPath(agent, 'global', path => (services.pathExists ?? existsSync)(adapter.resolveConfigPath(path, 'global'))) ?? agent.global,
+        projectPath: adapter.needsProjectRoot('project') ? agent.project : writableConfigPath(agent, 'project', path => (services.pathExists ?? existsSync)(adapter.resolveConfigPath(path, 'project'))) ?? agent.project,
         skillMode: skillProfile.mode,
         skillAgentName: skillProfile.skillAgentName,
         skillWorkspacePath: skillProfile.workspacePath,
@@ -461,20 +469,24 @@ async function verifyHttpAgentInstallations(
 ): Promise<void> {
   const fetchHead = services.fetchHead ?? defaultFetchHead;
   await Promise.all(agents.map(async (agent) => {
+    agent.connection ??= { status: 'unverified' };
     if (!agent.installed || !agent.url || !agent.transport?.startsWith('http')) return;
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 1000);
       try {
         const response = await fetchHead(agent.url, { signal: controller.signal });
-        if (response.status >= 300 && response.status !== 405) {
-          agent.installed = false;
-        }
+        agent.connection = {
+          status: response.status === 401 || response.status === 403 ? 'auth-required'
+            : response.status === 405 ? 'unverified'
+              : response.status >= 200 && response.status < 300 ? 'reachable' : 'unreachable',
+          checkedAt: (services.now ?? (() => new Date()))().toISOString(),
+        };
       } finally {
         clearTimeout(timeout);
       }
     } catch {
-      agent.installed = false;
+      agent.connection = { status: 'unreachable', checkedAt: (services.now ?? (() => new Date()))().toISOString() };
     }
   }));
 }

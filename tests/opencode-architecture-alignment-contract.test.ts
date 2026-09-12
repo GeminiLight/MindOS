@@ -359,10 +359,10 @@ describe('OpenCode architecture alignment', () => {
     expect(streamConsumer).toContain("from '@geminilight/mindos/agent/stream/stream-consumer'");
 
     expect(readText('packages/web/lib/agent/prompt.ts')).toContain("from '@geminilight/mindos/agent'");
-    expect(readText('packages/web/lib/agent/retry.ts')).toContain("from '@geminilight/mindos/agent/turn'");
-    expect(readText('packages/web/lib/agent/reconnect.ts')).toContain("from '@geminilight/mindos/agent/turn'");
+    expect(readText('packages/web/lib/agent/retry.ts')).toContain("from '@geminilight/mindos/agent/turn/retry-policy'");
+    expect(readText('packages/web/lib/agent/reconnect.ts')).toContain("from '@geminilight/mindos/agent/turn/retry-policy'");
     expect(readText('packages/web/lib/agent/loop-detection.ts')).toContain("from '@geminilight/mindos/agent/turn'");
-    expect(readText('packages/web/lib/agent/non-streaming.ts')).toContain("from '@geminilight/mindos/agent/turn'");
-    expect(toAgentMessages).toContain("from '@geminilight/mindos/agent/turn'");
+    expect(readText('packages/web/lib/agent/non-streaming.ts')).toContain("from '@geminilight/mindos/agent/turn/openai-compat-fallback'");
+    expect(toAgentMessages).toContain("from '@geminilight/mindos/agent/turn/ui-messages'");
   });
 });

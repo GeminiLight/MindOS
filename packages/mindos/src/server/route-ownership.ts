@@ -171,6 +171,7 @@ export const MINDOS_WEB_API_ROUTE_OWNERSHIP: MindosWebApiRouteOwnership[] = [
   delegated('/api/mcp/direct-tools', 'medium'),
   delegated('/api/mcp/install-skill', 'high'),
   delegated('/api/mcp/install', 'high'),
+  delegated('/api/mcp/verify', 'medium'),
   delegated('/api/mcp/restart', 'high'),
   delegated('/api/mcp/status'),
   delegated('/api/mcp/token/reveal', 'high'),

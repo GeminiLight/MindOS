@@ -48,9 +48,9 @@ export function handleBootstrapGet(
   };
 
   if (targetDir) {
-    payload.target_readme = tryRead(services, path.join(targetDir, 'README.md'));
-    payload.target_instruction = tryRead(services, path.join(targetDir, 'INSTRUCTION.md'));
-    payload.target_config_json = tryRead(services, path.join(targetDir, 'CONFIG.json'));
+    payload.target_readme = tryRead(services, path.posix.join(targetDir, 'README.md'));
+    payload.target_instruction = tryRead(services, path.posix.join(targetDir, 'INSTRUCTION.md'));
+    payload.target_config_json = tryRead(services, path.posix.join(targetDir, 'CONFIG.json'));
   }
 
   return json(payload, {

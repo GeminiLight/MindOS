@@ -14,6 +14,7 @@ import {
   entryLocation,
   expandHome,
   primaryConfigPath,
+  writableConfigPath,
   resolveAgentConfigPath,
 } from './paths.js';
 import { detectAgentPresence } from './presence.js';
@@ -35,7 +36,7 @@ import type {
   SkillWorkspaceProfile,
 } from './types.js';
 
-/** The agent has no config file for the requested scope (Codex has no project scope, for example). */
+/** The agent has no config file for the requested scope. */
 export class AgentConfigScopeError extends Error {
   readonly status = 400;
 
@@ -116,7 +117,7 @@ export type AgentConfigAdapter = {
   /** The `mindos` row itself: never an install or skill-link target. */
   isSelf: boolean;
   hasScope(scope: AgentConfigScope): boolean;
-  /** Config spellings for `scope`, writable primary first. */
+  /** Config spellings for `scope`, primary first; writes reuse the first existing candidate. */
   configPaths(scope: AgentConfigScope): string[];
   /** True when `scope` has a relative config path and no project root is known. */
   needsProjectRoot(scope: AgentConfigScope): boolean;
@@ -218,7 +219,7 @@ export function createAgentConfigAdapter(
 
     readServer(serverName, options = {}) {
       assertSafeMcpServerName(serverName);
-      for (const file of adapter.readableConfigs(options.scope ? [options.scope] : ALL_SCOPES)) {
+      for (const file of adapter.readableConfigs(options.scope ? [options.scope] : ['project', 'global'])) {
         let entry: Record<string, unknown> | null;
         try {
           entry = readMcpServerEntryFromText(file.text, entryLocation(def, file.scope), serverName);
@@ -241,7 +242,9 @@ export function createAgentConfigAdapter(
 
     writeServer(serverName, entry, scope, options = {}) {
       assertSafeMcpServerName(serverName);
-      const configPath = primaryConfigPath(def, scope);
+      // Edit the existing scope file (including JSONC alternatives), so a new
+      // preferred filename cannot accidentally shadow a user's active config.
+      const configPath = writableConfigPath(def, scope, candidate => existsSync(resolveAgentConfigPath(candidate, scope, pathServices)));
       if (!configPath) throw new AgentConfigScopeError(def.name, scope);
       const absPath = resolveAgentConfigPath(configPath, scope, pathServices);
       const location = entryLocation(def, scope);

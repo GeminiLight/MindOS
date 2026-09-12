@@ -12,9 +12,25 @@ import {
   bareOrQuotedKey,
   collapseBlankLines,
   parseScalarLiteral,
-  quotedConfigString,
   trimTrailingBlankLines,
 } from './text.js';
+
+/** Remove comments only outside quoted values; hashes in tokens and URLs are data. */
+function withoutTomlComment(line: string): string {
+  let quote: string | null = null;
+  let escaped = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+    if (quote === '"' && char === '\\' && !escaped) { escaped = true; continue; }
+    if (!escaped) {
+      if (quote && char === quote) quote = null;
+      else if (!quote && (char === '"' || char === "'")) quote = char;
+      else if (!quote && char === '#') return line.slice(0, index).trim();
+    }
+    escaped = false;
+  }
+  return line.trim();
+}
 
 function tomlTablePath(sectionKey: string, serverName: string, ...suffixes: string[]): string {
   return [
@@ -56,8 +72,10 @@ function stripTomlServerTables(existing: string, sectionKey: string, serverName:
   let inRootSection = false;
 
   for (const line of existing.split('\n')) {
-    const trimmed = line.trim();
-    if (headers.has(trimmed)) {
+    const trimmed = withoutTomlComment(line);
+    const parts = trimmed.startsWith('[') && trimmed.endsWith(']') ? splitTomlHeaderPath(trimmed.slice(1, -1)) : [];
+    const target = [...sectionKey.split('.'), serverName];
+    if (headers.has(trimmed) || (parts.length >= target.length && target.every((part, index) => parts[index] === part))) {
       skipping = true;
       inRootSection = false;
       continue;
@@ -109,7 +127,7 @@ export function listTomlServerNames(existing: string, sectionKey: string): strin
   let inRootSection = false;
 
   for (const line of existing.split('\n')) {
-    const trimmed = line.trim();
+    const trimmed = withoutTomlComment(line);
     if (!trimmed || trimmed.startsWith('#')) continue;
     if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
       const segments = splitTomlHeaderPath(trimmed.slice(1, -1));
@@ -131,19 +149,25 @@ export function listTomlServerNames(existing: string, sectionKey: string): strin
   return [...names].sort((a, b) => a.localeCompare(b));
 }
 
+function tomlValue(value: unknown): string {
+  if (typeof value === 'string') return JSON.stringify(value);
+  if (typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value))) return String(value);
+  if (Array.isArray(value)) return `[${value.map(tomlValue).join(', ')}]`;
+  if (value && typeof value === 'object') return `{ ${Object.entries(value).map(([key, item]) => `${bareOrQuotedKey(key)} = ${tomlValue(item)}`).join(', ')} }`;
+  throw new Error('MCP configuration contains a value TOML cannot represent.');
+}
+
 export function buildTomlEntry(sectionKey: string, serverName: string, entry: Record<string, unknown>): string {
-  const lines: string[] = [`[${tomlTablePath(sectionKey, serverName)}]`];
-  if (entry.type) lines.push(`type = ${quotedConfigString(entry.type)}`);
-  if (entry.command) lines.push(`command = ${quotedConfigString(entry.command)}`);
-  if (entry.url) lines.push(`url = ${quotedConfigString(entry.url)}`);
-  if (Array.isArray(entry.args)) lines.push(`args = [${entry.args.map(quotedConfigString).join(', ')}]`);
-  if (entry.env && typeof entry.env === 'object') {
-    lines.push('', `[${tomlTablePath(sectionKey, serverName, 'env')}]`);
-    for (const [key, value] of Object.entries(entry.env)) lines.push(`${bareOrQuotedKey(key)} = ${quotedConfigString(value)}`);
+  const lines = [`[${tomlTablePath(sectionKey, serverName)}]`];
+  const nested: Array<[string, Record<string, unknown>]> = [];
+  for (const [key, value] of Object.entries(entry)) {
+    if (value == null) continue;
+    if (value && typeof value === 'object' && !Array.isArray(value)) nested.push([key, value as Record<string, unknown>]);
+    else lines.push(`${bareOrQuotedKey(key)} = ${tomlValue(value)}`);
   }
-  if (entry.headers && typeof entry.headers === 'object') {
-    lines.push('', `[${tomlTablePath(sectionKey, serverName, 'headers')}]`);
-    for (const [key, value] of Object.entries(entry.headers)) lines.push(`${bareOrQuotedKey(key)} = ${quotedConfigString(value)}`);
+  for (const [key, value] of nested) {
+    lines.push('', `[${tomlTablePath(sectionKey, serverName, key)}]`);
+    for (const [name, item] of Object.entries(value)) lines.push(`${bareOrQuotedKey(name)} = ${tomlValue(item)}`);
   }
   return lines.join('\n');
 }
@@ -161,7 +185,13 @@ export function removeTomlEntry(existing: string, sectionKey: string, serverName
 }
 
 function parseTomlValue(rawValue: string): unknown {
-  return parseScalarLiteral(rawValue.trim().replace(/,$/, ''));
+  const raw = rawValue.trim().replace(/,$/, '');
+  if (raw.startsWith('"')) {
+    try { return JSON.parse(raw); } catch { throw new Error('Invalid TOML string'); }
+  }
+  if (raw.startsWith('{')) return parseTomlInlineObject(raw);
+  if (raw.startsWith('[') && raw.endsWith(']')) return splitTopLevelTomlItems(raw.slice(1, -1)).map(parseTomlValue);
+  return parseScalarLiteral(raw);
 }
 
 function splitTopLevelTomlItems(body: string): string[] {
@@ -175,9 +205,9 @@ function splitTopLevelTomlItems(body: string): string[] {
     const prev = body[i - 1];
     if ((ch === '"' || ch === "'") && prev !== '\\') {
       quote = quote === ch ? null : quote ?? ch;
-    } else if (!quote && ch === '[') {
+    } else if (!quote && (ch === '[' || ch === '{')) {
       bracketDepth += 1;
-    } else if (!quote && ch === ']') {
+    } else if (!quote && (ch === ']' || ch === '}')) {
       bracketDepth = Math.max(0, bracketDepth - 1);
     } else if (!quote && bracketDepth === 0 && ch === ',') {
       if (current.trim()) parts.push(current.trim());
@@ -198,11 +228,12 @@ function parseTomlInlineObject(rawValue: string): Record<string, unknown> | null
 
   const result: Record<string, unknown> = {};
   for (const part of splitTopLevelTomlItems(body)) {
-    const match = part.match(/^\s*([A-Za-z0-9_-]+)\s*=\s*(.+?)\s*$/);
+    const match = part.match(/^\s*("(?:[^"\\]|\\.)*"|[A-Za-z0-9_-]+)\s*=\s*(.+?)\s*$/);
     if (!match) continue;
-    const key = match[1];
+    const key = match[1]?.startsWith('"') ? JSON.parse(match[1]) as string : match[1];
     const value = match[2];
     if (!key || value == null) continue;
+    if (['__proto__', 'constructor', 'prototype'].includes(key)) throw new Error('Invalid TOML key');
     result[key] = parseTomlValue(value);
   }
   return result;
@@ -214,48 +245,36 @@ function parseTomlInlineObject(rawValue: string): Record<string, unknown> | null
  * inline table `name = { ... }` directly under `[section]`.
  */
 export function parseTomlMcpServerEntry(existing: string, sectionKey: string, serverName: string): Record<string, unknown> | null {
-  const targetSection = tomlTablePath(sectionKey, serverName);
-  const envSection = tomlTablePath(sectionKey, serverName, 'env');
-  const headersSection = tomlTablePath(sectionKey, serverName, 'headers');
-  const legacyTargetSection = `${sectionKey}.${serverName}`;
-  const legacyEnvSection = `${sectionKey}.${serverName}.env`;
-  const legacyHeadersSection = `${sectionKey}.${serverName}.headers`;
+  const target = [...sectionKey.split('.'), serverName];
   const entry: Record<string, unknown> = {};
-  let current: 'entry' | 'env' | 'headers' | 'root' | null = null;
-
+  let current: Record<string, unknown> | null = null;
+  let root = false;
   for (const line of existing.split('\n')) {
-    const trimmed = line.trim();
+    const trimmed = withoutTomlComment(line);
     if (!trimmed || trimmed.startsWith('#')) continue;
     if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
-      const section = trimmed.slice(1, -1).trim();
-      if (section === targetSection || section === legacyTargetSection) current = 'entry';
-      else if (section === envSection || section === legacyEnvSection) current = 'env';
-      else if (section === headersSection || section === legacyHeadersSection) current = 'headers';
-      else if (section === sectionKey) current = 'root';
-      else current = null;
+      let parts = splitTomlHeaderPath(trimmed.slice(1, -1));
+      const legacy = `${sectionKey}.${serverName}`;
+      const header = trimmed.slice(1, -1);
+      if (header === legacy || header.startsWith(`${legacy}.`)) parts = [...target, ...header.slice(legacy.length).split('.').filter(Boolean)];
+      root = trimmed === `[${sectionKey}]`;
+      current = null;
+      if (target.every((part, index) => parts[index] === part)) {
+        current = entry;
+        for (const part of parts.slice(target.length)) {
+          if (['__proto__', 'constructor', 'prototype'].includes(part)) throw new Error('Invalid TOML key');
+          current[part] ??= {};
+          current = current[part] as Record<string, unknown>;
+        }
+      }
       continue;
     }
-
-    const match = trimmed.match(/^([A-Za-z0-9_-]+)\s*=\s*(.+)$/);
+    const match = trimmed.match(/^("(?:[^"\\]|\\.)*"|[A-Za-z0-9_-]+)\s*=\s*(.+)$/);
     if (!match) continue;
-    const key = match[1];
-    const rawValue = match[2];
-    if (!key || !rawValue) continue;
-
-    if (current === 'entry') {
-      entry[key] = parseTomlValue(rawValue);
-    } else if (current === 'env' || current === 'headers') {
-      const nestedKey = current;
-      const nested = entry[nestedKey] && typeof entry[nestedKey] === 'object'
-        ? entry[nestedKey] as Record<string, unknown>
-        : {};
-      nested[key] = parseTomlValue(rawValue);
-      entry[nestedKey] = nested;
-    } else if (current === 'root' && key === serverName) {
-      const inline = parseTomlInlineObject(rawValue);
-      if (inline) return inline;
-    }
+    const key = match[1]!.startsWith('"') ? JSON.parse(match[1]!) as string : match[1]!;
+    if (['__proto__', 'constructor', 'prototype'].includes(key)) throw new Error('Invalid TOML key');
+    if (current) current[key] = parseTomlValue(match[2]!);
+    else if (root && key === serverName) return parseTomlInlineObject(match[2]!);
   }
-
-  return Object.keys(entry).length > 0 ? entry : null;
+  return Object.keys(entry).length ? entry : null;
 }

@@ -2,6 +2,7 @@
 
 import { create } from 'zustand';
 import { apiFetch } from '@/lib/api';
+import { revealMcpAuthToken } from '@/lib/mcp-token';
 import { subscribeServerEvents } from '@/lib/server-events';
 import type { McpStatus, AgentInfo, SkillInfo } from '@/components/settings/types';
 
@@ -120,6 +121,9 @@ export const useMcpStore = create<McpStoreState>((set, get) => ({
     if (!agent) return false;
 
     try {
+      const transport = opts?.transport ?? agent.preferredTransport;
+      const status = get().status;
+      const token = transport === 'http' && status?.authConfigured ? await revealMcpAuthToken() : undefined;
       const res = await apiFetch<{ results: Array<{ agent?: string; status?: string; ok?: boolean; error?: string }> }>('/api/mcp/install', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -129,9 +133,10 @@ export const useMcpStore = create<McpStoreState>((set, get) => ({
             // Global unless the user explicitly chose project scope: a project
             // install needs a root the caller picked, never an implicit one.
             scope: opts?.scope ?? 'global',
-            transport: opts?.transport ?? agent.preferredTransport,
+            transport,
           }],
           transport: 'auto',
+          ...(transport === 'http' ? { url: status?.endpoint ?? `http://127.0.0.1:${status?.port ?? 8781}/mcp`, token } : {}),
         }),
       });
 

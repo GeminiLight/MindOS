@@ -13,6 +13,14 @@ export function withConnectionRegistryLock<T>(lock: string, operation: () => T):
   try {
     writeFileSync(join(pending, owner), '', { flag: 'wx', mode: 0o600 });
     recoverOrphan(lock);
+    // Windows can replace a legacy file with a directory during rename. Preserve
+    // every unrecovered owner explicitly; rename still arbitrates new contenders.
+    try {
+      lstatSync(lock);
+      throw new Error('Connection registry is busy; retry the operation.');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
     // Publish a NONEMPTY directory atomically: there is no ownerless acquisition window.
     // rename cannot replace another nonempty directory, including a new owner's lock.
     renameSync(pending, lock);

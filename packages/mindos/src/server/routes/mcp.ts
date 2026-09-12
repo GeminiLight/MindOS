@@ -2,6 +2,7 @@ import { getLocalIPv4 } from '../handlers/connect.js';
 import { handleMcpAgentsGet, type MindosMcpAgentRegistryDef, type MindosMcpAgentsServices } from '../handlers/mcp-agents.js';
 import {
   handleMcpInstallPost,
+  handleMcpVerifyPost,
   handleMcpServerCopyPost,
   handleMcpUninstallPost,
   type MindosMcpInstallRequest,
@@ -38,6 +39,8 @@ export const mcpRoutes = defineRoutes([
     ) },
   { id: 'mcp.install', method: 'POST', path: '/api/mcp/install', auth: 'required',
     handler: async ({ readJsonBody, services }) => handleMcpInstallPost(await readJsonBody() as MindosMcpInstallRequest, createHttpMcpInstallServices(services)) },
+  { id: 'mcp.verify', method: 'POST', path: '/api/mcp/verify', auth: 'required',
+    handler: async ({ readJsonBody, services }) => handleMcpVerifyPost(await readJsonBody() as Parameters<typeof handleMcpVerifyPost>[0], createHttpMcpInstallServices(services)) },
   { id: 'mcp.copy-server', method: 'POST', path: '/api/mcp/copy-server', auth: 'required',
     handler: async ({ readJsonBody, services }) => handleMcpServerCopyPost(await readJsonBody() as MindosMcpServerCopyRequest, createHttpMcpInstallServices(services)) },
   { id: 'mcp.install-skill', method: 'POST', path: '/api/mcp/install-skill', auth: 'required',

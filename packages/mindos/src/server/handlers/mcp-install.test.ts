@@ -200,7 +200,7 @@ describe('MCP install writes third-party agent configs atomically', () => {
     });
     const afterCopy = readFileSync(join(kiloDir, 'kilo.jsonc'), 'utf-8');
     expect(afterCopy).toContain('/* kilo */');
-    expect(parseJsonc(afterCopy)).toEqual({ mcp: { other: { command: 'other' } } });
+    expect(parseJsonc(afterCopy)).toEqual({ mcp: { other: { type: 'local', command: ['other'] } } });
     expect(backups(kiloDir)).toEqual([]);
     expect(leftovers(kiloDir)).toEqual([]);
   });

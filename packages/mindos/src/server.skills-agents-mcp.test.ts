@@ -1013,7 +1013,7 @@ describe('MindOS server contract: skills, custom agents, MCP management', () => 
     });
   });
 
-  it('marks installed HTTP MCP agents inactive when endpoint verification fails', async () => {
+  it('keeps HTTP MCP configuration present when endpoint verification fails', async () => {
     const response = await handleMcpAgentsGet({
       agents: {
         'claude-code': {
@@ -1036,7 +1036,8 @@ describe('MindOS server contract: skills, custom agents, MCP management', () => 
     expect(response.status).toBe(200);
     expect(response.body.agents[0]).toMatchObject({
       key: 'claude-code',
-      installed: false,
+      installed: true,
+      connection: { status: 'unreachable' },
     });
   });
 

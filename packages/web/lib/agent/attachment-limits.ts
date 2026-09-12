@@ -4,7 +4,7 @@ import {
   MINDOS_AGENT_ATTACHMENT_MAX_FILE_BYTES,
   MINDOS_AGENT_ATTACHMENT_MAX_FILE_COUNT,
   MINDOS_AGENT_ATTACHMENT_MAX_TOTAL_BYTES,
-} from '@geminilight/mindos/agent/turn';
+} from '@geminilight/mindos/agent/turn/attachment-limits';
 
 /**
  * The per-turn attachment budget lives in core (`agent/turn`) so the Product

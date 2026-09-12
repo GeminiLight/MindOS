@@ -27,6 +27,14 @@ export function configPathCandidates(def: AgentConfigLocationDef, scope: AgentCo
   return [primary, ...(readAlso ?? [])].filter((entry): entry is string => !!entry);
 }
 
+/** Reuse an equivalent JSON/JSONC file, but never write a legacy discovery path owned by another client. */
+export function writableConfigPath(def: AgentConfigLocationDef, scope: AgentConfigScope, exists: (path: string) => boolean): string | null {
+  const primary = primaryConfigPath(def, scope);
+  if (!primary) return null;
+  const stem = (path: string) => path.replace(/\.jsonc?$/, '.json');
+  return configPathCandidates(def, scope).find(path => stem(path) === stem(primary) && exists(path)) ?? primary;
+}
+
 /** The single config file installs write for `scope`; null when the agent has no such scope. */
 export function primaryConfigPath(def: AgentConfigLocationDef, scope: AgentConfigScope): string | null {
   return (scope === 'global' ? def.global : def.project) || null;

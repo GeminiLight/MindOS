@@ -13,8 +13,8 @@
 ## 单一事实来源（Source of Truth）
 
 ### MCP 配置定义
-- `app/lib/mcp-agents.ts`（Web / App API 运行时）
-- `bin/lib/mcp-agents.js`（CLI / onboard 运行时）
+- `packages/mindos/src/agent/config/registry.ts`（产品核心注册表，Web / CLI 共同消费）
+- `packages/mindos/src/agent/config/adapter.ts`（路径、格式、检测与写入）
 
 ### Skill 安装映射
 - `SKILL_AGENT_REGISTRY`（在上述两个文件中）
@@ -32,7 +32,7 @@
 
 ## MCP Agent 全量配置（App 侧基准）
 
-来源：`app/lib/mcp-agents.ts` 的 `MCP_AGENTS`。
+来源：`packages/mindos/src/agent/config/registry.ts` 的 `DEFAULT_MCP_AGENTS`。
 
 | MCP Agent Key | 显示名 | 格式 | MCP 键名 | Global 路径 | Project 路径 | 默认传输 | Skill 模式 |
 |---|---|---|---|---|---|---|---|
@@ -46,7 +46,7 @@
 | `openclaw` | OpenClaw | json | `mcpServers` | `~/.openclaw/mcp.json` | - | `stdio` | additional |
 | `codebuddy` | CodeBuddy | json | `mcpServers` | `~/.codebuddy/mcp.json` | - | `stdio` | additional |
 | `kimi-cli` | Kimi Code | json | `mcpServers` | `~/.kimi/mcp.json` | `.kimi/mcp.json` | `stdio` | universal |
-| `opencode` | OpenCode | json | `mcpServers` | `~/.config/opencode/config.json` | - | `stdio` | universal |
+| `opencode` | OpenCode 1.x | json/jsonc | `mcp` (`local` / `remote`) | `~/.config/opencode/opencode.json`（同名 `.jsonc` 可原地更新） | `opencode.json` / `opencode.jsonc` | `stdio` | universal |
 | `kilo-code` | Kilo Code | json/jsonc | `mcp` (`local` / `remote`) | `~/.config/kilo/kilo.jsonc`（兼容读 `kilo.json` / `opencode.json*` / `config.json`） | `.kilo/kilo.jsonc`（兼容读 `.kilo/kilo.json` / `kilo.json*` / `.kilocode/kilo.json*` / `.opencode/opencode.json*`） | `stdio` | universal |
 | `warp` | Warp | json | `mcpServers` | `~/.warp/.mcp.json` | `.warp/.mcp.json` | `stdio` | universal |
 | `pi` | Pi | json | `mcpServers` | `~/.pi/agent/mcp.json` | `.pi/settings.json` | `stdio` | additional |
@@ -55,7 +55,7 @@
 | `qoder` | Qoder | json | `mcpServers` | `~/.qoder.json` | - | `stdio` | additional |
 | `roo` | Roo Code | json | `mcpServers` | macOS: `~/Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json`; Linux: `~/.config/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json` | `.roo/mcp.json` | `stdio` | additional |
 | `github-copilot` | GitHub Copilot | json | `servers` | macOS: `~/Library/Application Support/Code/User/mcp.json`; Linux: `~/.config/Code/User/mcp.json` | `.vscode/mcp.json` | `stdio` | universal |
-| `codex` | Codex | toml | `mcp_servers` | `~/.codex/config.toml` | - | `stdio` | universal |
+| `codex` | Codex | toml | `mcp_servers` | `~/.codex/config.toml` | `.codex/config.toml` | `stdio` | universal |
 | `antigravity` | Antigravity | json | `mcpServers` | `~/.gemini/antigravity/mcp_config.json` | `.antigravity/mcp_config.json` | `stdio` | additional |
 | `qclaw` | QClaw | json | `mcpServers` | `~/.qclaw/mcp.json` | - | `stdio` | unsupported |
 | `workbuddy` | WorkBuddy | json | `mcpServers` | `~/.workbuddy/mcp.json` | - | `stdio` | unsupported |
@@ -270,3 +270,13 @@ cd app && npx vitest run \
 - Skill 模式（universal/additional）在 `install-skill` 与 `setup` 中实现不一致
 - 文档写了“支持某 agent”，但 `MCP_AGENTS` 或 `SKILL_AGENT_REGISTRY` 未落盘
 - 统计口径误解：把进程级 token 统计误当成 per-agent 统计
+
+## 配置与连接工作台（2026-09-12）
+
+- `installed` 表示配置文件中存在 MindOS 条目。`connection.status` 独立表示尚未验证、服务地址可达、需要认证或暂不可达；HEAD 成功不等于 Agent 已加载。
+- `POST /api/mcp/verify` 只读取已保存配置。HTTP 用 MCP initialize 验证 JSON / SSE 响应；stdio 提示用户在 Agent 内检查，不启动任意配置命令。
+- HTTP 写入使用原生字段：Claude `type: http`、Codex `http_headers`（不写 `type`）、OpenCode 1.x `type: remote`；本地 OpenCode 使用数组 `command` 和 `environment`。
+- 跨客户端复制转换 command/args/env/headers；无法无损迁移的 OAuth、环境变量插值和专属限制明确报错，目标不写入。
+- 优先读取项目配置；安装仅复用与主路径同目录同文件名的 JSON/JSONC 变体，历史发现路径保持只读。
+- 详情页提供范围/连接方式、遮蔽预览、目标路径、保存与只读测试。Skills 的共享目录显示受影响 Agent。保存反馈持续显示，不因后台刷新重置编辑。
+- 预览与落盘共用纯配置生成逻辑；OpenCode 2.x 版本识别与原生配置仍留待后续。

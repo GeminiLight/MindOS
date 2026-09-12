@@ -15,7 +15,7 @@ export type AgentConfigScope = 'global' | 'project';
 
 export type AgentConfigTransport = 'stdio' | 'http';
 
-export type AgentConfigEntryStyle = 'standard' | 'kilo';
+export type AgentConfigEntryStyle = 'standard' | 'kilo' | 'codex';
 
 /** Config-location half of an agent definition (what `mcp-install` needs to write a file). */
 export type AgentConfigLocationDef = {
@@ -24,7 +24,7 @@ export type AgentConfigLocationDef = {
   project: string | null;
   /** Global config path; `~` is expanded against the caller's home directory. */
   global: string;
-  /** Additional config files to inspect for existing installs without writing to them. */
+  /** Additional discovery paths. Same-stem JSON/JSONC alternatives may be edited in place; legacy paths are read-only. */
   projectReadAlso?: string[];
   globalReadAlso?: string[];
   /** Key of the servers map: `mcpServers`, `mcp_servers`, `mcp`, `servers`. */

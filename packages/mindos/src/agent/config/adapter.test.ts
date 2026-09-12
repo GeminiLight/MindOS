@@ -268,3 +268,22 @@ describe('custom agents', () => {
     expect(merged['my-agent']).toMatchObject({ name: 'My Agent', format: 'toml' });
   });
 });
+
+it('updates an existing JSONC alternative instead of creating a competing primary file', () => {
+  const home = mkdtempSync(join(tmpdir(), 'agent-jsonc-'));
+  const def = { ...claude, global: '~/config.json', globalReadAlso: ['~/config.jsonc'] };
+  writeFileSync(join(home, 'config.jsonc'), '{ /* preserved */ "mcpServers": {} }');
+  const agent = createAgentConfigAdapter('example', def, undefined, { homeDir: home });
+  const result = agent.writeServer('mindos', { command: 'mindos' }, 'global');
+  expect(result.configPath).toBe('~/config.jsonc');
+  expect(readFileSync(join(home, 'config.jsonc'), 'utf8')).toContain('/* preserved */');
+});
+
+it('reads project overrides before global configuration and supports explicit global reads', () => {
+  const home = mkdtempSync(join(tmpdir(), 'agent-scope-'));
+  writeFileSync(join(home, '.claude.json'), '{"mcpServers":{"mindos":{"command":"global"}}}');
+  writeFileSync(join(home, '.mcp.json'), '{"mcpServers":{"mindos":{"command":"project"}}}');
+  const agent = createAgentConfigAdapter('claude', claude, undefined, { homeDir: home, projectRoot: home });
+  expect(agent.readServer('mindos')?.entry.command).toBe('project');
+  expect(agent.readServer('mindos', { scope: 'global' })?.entry.command).toBe('global');
+});

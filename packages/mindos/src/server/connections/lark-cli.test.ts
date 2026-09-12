@@ -138,7 +138,8 @@ describe('lark-cli connection discovery', () => {
     });
   });
 
-  it('rejects an executable that another local account can replace', () => {
+  // POSIX mode bits do not represent Windows ACL permissions.
+  it.skipIf(process.platform === 'win32')('rejects an executable that another local account can replace', () => {
     root = mkdtempSync(join(tmpdir(), 'mindos-lark-cli-security-'));
     const executable = join(root, 'lark-cli');
     writeFileSync(executable, '#!/bin/sh\n', { mode: 0o700 });

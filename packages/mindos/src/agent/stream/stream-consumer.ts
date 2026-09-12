@@ -35,7 +35,7 @@ import type {
   TextPart,
   ToolCallPart,
 } from './stream-message-types.js';
-import { parseMindosSseLine } from '../turn/index.js';
+import { parseMindosSseLine } from '../turn/ui-events.js';
 import { redactSensitiveObject, redactSensitiveText } from '../../foundation/security/redaction.js';
 
 /** Tools that modify files — trigger files-changed notification on completion */

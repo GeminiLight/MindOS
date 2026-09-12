@@ -3,12 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const apiFetchMock = vi.fn();
 
+vi.mock('@/lib/mcp-token', () => ({ revealMcpAuthToken: async () => 'fixture-token' }));
+
 vi.mock('@/lib/api', () => ({
   apiFetch: (...args: unknown[]) => apiFetchMock(...args),
 }));
 
 import { resetMcpStoreForTests, useMcpStore } from '@/lib/stores/mcp-store';
-import type { AgentInfo } from '@/components/settings/types';
+import type { AgentInfo, McpStatus } from '@/components/settings/types';
 
 /**
  * `installAgent` scope selection. A project-scoped install writes a config
@@ -70,6 +72,12 @@ describe('mcp-store installAgent scope', () => {
     await useMcpStore.getState().installAgent('claude-code', { scope: 'project', transport: 'http' });
 
     expect(lastInstallBody().agents).toEqual([{ key: 'claude-code', scope: 'project', transport: 'http' }]);
+  });
+
+  it('includes the local endpoint and authentication for an HTTP quick install', async () => {
+    useMcpStore.setState({ agents: [agent({ preferredTransport: 'http' })], status: { endpoint: 'http://127.0.0.1:8567/mcp', authConfigured: true } as McpStatus });
+    await useMcpStore.getState().installAgent('claude-code');
+    expect(lastInstallBody()).toMatchObject({ url: 'http://127.0.0.1:8567/mcp', token: 'fixture-token' });
   });
 
   it('returns false without calling the API for an unknown agent', async () => {

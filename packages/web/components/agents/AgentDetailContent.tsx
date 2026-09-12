@@ -11,8 +11,7 @@ import { toast } from '@/lib/toast';
 import { useMcpData } from '@/lib/stores/mcp-store';
 import { useA2aRegistry } from '@/hooks/useA2aRegistry';
 import { apiFetch } from '@/lib/api';
-import { copyToClipboard } from '@/lib/clipboard';
-import { generateSnippet } from '@/lib/mcp-snippets';
+import AgentConnectionWorkbench from './AgentConnectionWorkbench';
 import type { AgentInfo } from '../settings/types';
 import {
   aggregateCrossAgentMcpServers,
@@ -51,8 +50,6 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
   const [editContent, setEditContent] = useState('');
   const [editError, setEditError] = useState<string | null>(null);
   const [saveBusy, setSaveBusy] = useState(false);
-  const [mcpBusy, setMcpBusy] = useState(false);
-  const [mcpMessage, setMcpMessage] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [deleteMsg, setDeleteMsg, clearDeleteMsgAfter] = useTransientMessage<string | null>(null);
   const [confirmMcpRemove, setConfirmMcpRemove] = useState<string | null>(null);
@@ -122,11 +119,6 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
   const isMindOS = agentKey === 'mindos';
   const status = agent ? resolveAgentStatus(agent) : 'notFound';
   const currentScope = agent?.scope === 'project' ? 'project' : 'global';
-  const currentTransport: 'stdio' | 'http' = agent?.transport === 'http' ? 'http' : 'stdio';
-  const snippet = useMemo(
-    () => agent ? generateSnippet(agent, mcp.status, currentTransport) : { snippet: '', path: '' },
-    [agent, mcp.status, currentTransport],
-  );
   const mindosSkillNames = useMemo(() => new Set(mcp.skills.map((s) => s.name)), [mcp.skills]);
   const nativeInstalledSkills = useMemo(
     () => (agent?.installedSkillNames ?? []).filter((n) => !mindosSkillNames.has(n)),
@@ -311,24 +303,6 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
     });
   }, [agent?.installedSkillSourcePath, a.detail.skillReceiveUnsupported, handleCopySkillToAgent, mindosSkillNames, targetableSkillAgents]);
 
-  const handleCopySnippet = useCallback(async () => {
-    const ok = await copyToClipboard(snippet.snippet);
-    if (ok) toast.copy();
-  }, [snippet.snippet]);
-
-  const handleApplyMcpConfig = useCallback(async (scope: 'project' | 'global', transport: 'stdio' | 'http') => {
-    if (!agent) return;
-    setMcpBusy(true);
-    setMcpMessage(a.detail.mcpApplying);
-    try {
-      const ok = await mcp.installAgent(agent.key, { scope, transport });
-      await mcp.refresh();
-      setMcpMessage(ok ? a.detail.mcpApplySuccess : a.detail.mcpApplyFailed);
-    } finally {
-      setMcpBusy(false);
-    }
-  }, [a.detail.mcpApplying, a.detail.mcpApplySuccess, a.detail.mcpApplyFailed, mcp, agent]);
-
   const handleDeleteSkillFromPopover = useCallback(async (name: string) => {
     await apiFetch('/api/skills', {
       method: 'POST',
@@ -351,7 +325,7 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
       .slice(0, 3);
 
     return (
-      <div className="content-width px-4 md:px-6 py-8 md:py-10">
+      <div className="content-width agents-content-page px-4 md:px-6 py-8 md:py-10">
         <Link href="/agents" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-4">
           <ArrowLeft size={14} />
           {a.backToOverview}
@@ -382,7 +356,7 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
 
 
   return (
-    <div className="content-width px-4 md:px-6 py-8 md:py-10 space-y-4">
+    <div className="content-width agents-content-page px-4 md:px-6 py-8 md:py-10 space-y-4">
       {/* Back link */}
       <Link href="/agents" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
         <ArrowLeft size={14} />
@@ -395,12 +369,12 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
           <AgentAvatar name={agent.name} status={status} size="md" />
           <div className="min-w-0 flex-1">
             <h1 className="text-lg font-semibold tracking-tight text-foreground truncate">{agent.name}</h1>
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-2xs text-muted-foreground/60">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-2xs text-muted-foreground">
               <span className={`font-medium px-1.5 py-px rounded-full ${
                 status === 'connected' ? 'bg-muted text-muted-foreground'
                   : status === 'detected' ? 'bg-[var(--amber-subtle)] text-[var(--amber-text)]'
                     : 'bg-error/10 text-error'
-              }`}>{status}</span>
+              }`}>{status === 'connected' ? a.connection.configured : status === 'detected' ? a.connection.detected : a.connection.notDetected}</span>
               <span className="font-mono">{agent.transport ?? agent.preferredTransport}</span>
               <span className="text-muted-foreground/25" aria-hidden="true">·</span>
               <span>{formatAgentSkillBoundary(agent, a.detail)}</span>
@@ -429,9 +403,9 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
             </div>
           )}
         </div>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-2xs text-muted-foreground/50 px-5 py-2 border-t border-border/40">
-          <span>{agent.format} <span className="text-muted-foreground/30">·</span> {formatRelativeTime(agent.runtimeLastActivityAt)}</span>
-          <span className="tabular-nums">{configuredMcpServers.length} MCP <span className="text-muted-foreground/30">·</span> {nativeInstalledSkills.length} skills</span>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-2xs text-muted-foreground px-5 py-2 border-t border-border/40">
+          <span>{agent.format} <span className="text-muted-foreground">·</span> {formatRelativeTime(agent.runtimeLastActivityAt)}</span>
+          <span className="tabular-nums">{configuredMcpServers.length} MCP <span className="text-muted-foreground">·</span> {nativeInstalledSkills.length} skills</span>
           <span>{agent.skillCapabilities?.workspacePath || a.na}</span>
         </div>
       </section>
@@ -441,61 +415,20 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
 
       {/* ═══════════ MCP MANAGEMENT ═══════════ */}
       <section className="rounded-xl border border-border bg-card p-4 space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-xs font-semibold text-foreground flex items-center gap-2 shrink-0">
-            <div className="w-6 h-6 rounded-md bg-[var(--amber-subtle)] flex items-center justify-center"><Server size={13} className="text-[var(--amber)]" /></div>
-            {a.detail.mcpManagement}
-          </h2>
-          <div className="flex flex-wrap items-center gap-1.5">
-            {!isMindOS && (
-              <ActionButton
-                onClick={() => void handleCopySnippet()}
-                disabled={false}
-                busy={false}
-                label={a.detail.mcpCopySnippet}
-              />
-            )}
-            <ActionButton
-              onClick={() => void mcp.refresh({ force: true })}
-              disabled={false}
-              busy={false}
-              label={a.detail.mcpRefresh}
-            />
-            {!isMindOS && (
-              <ActionButton
-                onClick={() => void handleApplyMcpConfig(currentScope, currentTransport)}
-                disabled={mcpBusy}
-                busy={mcpBusy}
-                label={a.detail.mcpReconnect}
-              />
-            )}
+        {!isMindOS ? (
+          <AgentConnectionWorkbench key={agent.key} agent={agent} status={mcp.status} onRefresh={() => mcp.refresh({ force: true })} />
+        ) : (
+          <div className="flex flex-wrap gap-4">
+            <DetailLine label={a.detail.mcpManagement} value={mcp.status?.running ? a.connection.reachable : a.connection.unreachable} />
+            <DetailLine label="Endpoint" value={mcp.status?.endpoint ?? a.na} />
           </div>
-        </div>
-
-        {mcpMessage && <p className="text-2xs text-muted-foreground animate-in fade-in duration-200">{mcpMessage}</p>}
-
-        {/* MCP status metadata */}
-        <div className="flex flex-wrap gap-x-6 gap-y-1 py-2 border-y border-border/30">
-          {isMindOS ? (
-            <>
-              <DetailLine label="Status" value={mcp.status?.running ? 'Running' : 'Stopped'} />
-              <DetailLine label="Endpoint" value={mcp.status?.endpoint ?? a.na} />
-              <DetailLine label="Tools" value={mcp.status?.toolCount != null ? String(mcp.status.toolCount) : a.na} />
-            </>
-          ) : (
-            <>
-              <DetailLine label={a.detail.mcpInstalled} value={agent.installed ? a.detail.yes : a.detail.no} />
-              <DetailLine label={a.detail.mcpScope} value={agent.scope ?? a.na} />
-              <DetailLine label={a.detail.mcpConfigPath} value={agent.configPath ?? a.na} />
-            </>
-          )}
-        </div>
+        )}
 
         {/* Configured MCP servers */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <p className="text-2xs font-medium text-muted-foreground/60 uppercase tracking-wider">{a.detail.configuredMcpServers}</p>
-            <span className="text-2xs text-muted-foreground/40 tabular-nums">{configuredMcpServers.length}</span>
+            <p className="text-2xs font-medium text-muted-foreground uppercase tracking-wider">{a.detail.configuredMcpServers}</p>
+            <span className="text-2xs text-muted-foreground tabular-nums">{configuredMcpServers.length}</span>
           </div>
 
           {mcpHint && (
@@ -505,27 +438,27 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
           )}
 
           {configuredMcpServers.length === 0 ? (
-            <p className="text-2xs text-muted-foreground/50">{a.detail.configuredMcpServersEmpty}</p>
+            <p className="text-2xs text-muted-foreground">{a.detail.configuredMcpServersEmpty}</p>
           ) : (
             <div className="space-y-1 max-h-[240px] overflow-y-auto">
               {configuredMcpServers.map((name) => {
                 const sharedWith = (crossAgentMcpMap.get(name) ?? []).filter((n) => n !== agent.name);
                 return (
                   <div key={name} className="flex items-center gap-2 rounded-md px-2 py-1.5 group/mcp hover:bg-muted/30 transition-colors duration-100">
-                    <Server size={11} className="text-muted-foreground/40 shrink-0" />
+                    <Server size={11} className="text-muted-foreground shrink-0" />
                     <span className="text-xs text-foreground flex-1 min-w-0 truncate">{name}</span>
                     {sharedWith.length > 0 && (
                       <div className="flex items-center gap-0.5">
                         {sharedWith.slice(0, 3).map((n) => (
                           <AgentAvatar key={n} name={n} size="sm" />
                         ))}
-                        {sharedWith.length > 3 && <span className="text-2xs text-muted-foreground/50">+{sharedWith.length - 3}</span>}
+                        {sharedWith.length > 3 && <span className="text-2xs text-muted-foreground">+{sharedWith.length - 3}</span>}
                       </div>
                     )}
                     <button
                       type="button"
                       onClick={() => setConfirmMcpRemove(name)}
-                      className="text-muted-foreground/40 hover:text-destructive cursor-pointer opacity-0 group-hover/mcp:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded p-0.5 transition-all duration-150"
+                      className="text-muted-foreground hover:text-destructive cursor-pointer opacity-0 group-hover/mcp:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded p-0.5 transition-all duration-150"
                       aria-label={`${a.detail.mcpServerRemove} ${name}`}
                     >
                       <Trash2 size={11} />
@@ -545,7 +478,7 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
             <div className="w-6 h-6 rounded-md bg-[var(--amber-subtle)] flex items-center justify-center"><Zap size={13} className="text-[var(--amber)]" /></div>
             {a.detail.skillAssignments}
           </h2>
-          <div className="flex items-center gap-1.5 text-2xs text-muted-foreground/50 tabular-nums">
+          <div className="flex items-center gap-1.5 text-2xs text-muted-foreground tabular-nums">
             <span>{skillSummary.enabled}/{skillSummary.total} enabled</span>
             <span className="text-muted-foreground/25">·</span>
             <span>{nativeInstalledSkills.length} native</span>
@@ -592,6 +525,15 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
           </div>
         )}
 
+        {!isMindOS && agent.skillMode === 'universal' && (
+          <div className="border-y border-border py-3 text-xs leading-relaxed">
+            <p className="font-medium text-foreground">{a.connection.sharedTitle}</p>
+            <p className="mt-1 text-muted-foreground">{a.connection.sharedHint}</p>
+            <p className="mt-2 text-foreground">{mcp.agents.filter(item => item.present && item.skillWorkspacePath === agent.skillWorkspacePath).map(item => item.name).join(' · ')}</p>
+            <p className="mt-1 break-all font-mono text-muted-foreground">{agent.skillWorkspacePath}</p>
+          </div>
+        )}
+
         {/* MindOS Skills */}
         {filteredSkills.length > 0 && (
           <div>
@@ -610,14 +552,14 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
                     : cellStatus === 'conflict'
                       ? { label: a.skills.sourceAgentOwned, cls: 'bg-[var(--amber-subtle)] text-[var(--amber-text)]' }
                       : cellStatus === 'native-disabled'
-                        ? { label: a.skills.cellParked, cls: 'bg-muted text-muted-foreground/70' }
+                        ? { label: a.skills.cellParked, cls: 'bg-muted text-muted-foreground' }
                         : cellStatus === 'broken'
                           ? { label: a.skills.cellBroken, cls: 'bg-destructive/10 text-destructive' }
                           : { label: a.detail.skillBoundaryGlobal, cls: 'bg-muted text-muted-foreground' };
                 return (
                   <li key={skill.name} className="rounded-md hover:bg-muted/30 transition-colors duration-100">
                     <div className="flex items-center gap-2 py-1.5 px-1.5 group/skill">
-                      <Zap size={13} className={`shrink-0 ${skill.enabled ? 'text-[var(--amber)]' : 'text-muted-foreground/50'}`} aria-hidden="true" />
+                      <Zap size={13} className={`shrink-0 ${skill.enabled ? 'text-[var(--amber)]' : 'text-muted-foreground'}`} aria-hidden="true" />
                       <button
                         type="button"
                         onClick={() => setDetailSkillName(skill.name)}
@@ -703,7 +645,7 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
               <p className="text-2xs font-medium text-muted-foreground uppercase tracking-wider">
                 {a.detail.nativeInstalledSkills} <span className="tabular-nums">({nativeInstalledSkills.length})</span>
               </p>
-              <p className="text-2xs text-muted-foreground/60">{a.detail.skillNativePrivateHint}</p>
+              <p className="text-2xs text-muted-foreground">{a.detail.skillNativePrivateHint}</p>
             </div>
             <div className="space-y-0.5 max-h-[280px] overflow-y-auto">
               {nativeInstalledSkills.map((name) => (
@@ -713,7 +655,7 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
                   onClick={() => setDetailSkillName(name)}
                   className="w-full flex items-center gap-2 py-1.5 px-1.5 rounded-md hover:bg-muted/30 transition-colors duration-100 cursor-pointer text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  <Zap size={13} className="shrink-0 text-muted-foreground/50" aria-hidden="true" />
+                  <Zap size={13} className="shrink-0 text-muted-foreground" aria-hidden="true" />
                   <span className="text-xs text-foreground flex-1 min-w-0 truncate hover:text-[var(--amber)] transition-colors duration-150">{name}</span>
                   <span className="text-2xs px-1.5 py-0.5 rounded shrink-0 bg-muted text-muted-foreground">
                     {a.detail.skillBoundaryNativePrivate}
@@ -735,7 +677,7 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
             {p.a2aCapabilities}
           </h2>
           <span className={`text-2xs px-1.5 py-0.5 rounded font-medium shrink-0 ${
-            status === 'connected' ? 'bg-[var(--success)]/15 text-[var(--success)]' : 'bg-muted text-muted-foreground/60'
+            status === 'connected' ? 'bg-[var(--success)]/15 text-[var(--success)]' : 'bg-muted text-muted-foreground'
           }`}>
             {status === 'connected' ? p.a2aConnected : p.a2aUnavailable}
           </span>
@@ -754,20 +696,20 @@ export default function AgentDetailContent({ agentKey }: { agentKey: string }) {
             {a2a.agents.map((remote) => (
               <div key={remote.id} className="flex items-center gap-2.5 rounded-md px-2 py-1.5 hover:bg-muted/30 transition-colors duration-100">
                 <div className="w-6 h-6 rounded-md bg-muted/40 flex items-center justify-center shrink-0">
-                  <Globe size={11} className="text-muted-foreground/60" />
+                  <Globe size={11} className="text-muted-foreground" />
                 </div>
                 <span className="text-xs text-foreground flex-1 min-w-0 truncate">{remote.card.name}</span>
                 {remote.reachable ? (
                   <Wifi size={11} className="text-[var(--success)] shrink-0" />
                 ) : (
-                  <WifiOff size={11} className="text-muted-foreground/50 shrink-0" />
+                  <WifiOff size={11} className="text-muted-foreground shrink-0" />
                 )}
-                <span className="text-2xs text-muted-foreground/50 tabular-nums shrink-0">{remote.card.skills.length} skills</span>
+                <span className="text-2xs text-muted-foreground tabular-nums shrink-0">{remote.card.skills.length} skills</span>
               </div>
             ))}
           </div>
         ) : (
-          <p className="text-2xs text-muted-foreground/50">{p.a2aNoRemoteHint}</p>
+          <p className="text-2xs text-muted-foreground">{p.a2aNoRemoteHint}</p>
         )}
       </section>
 

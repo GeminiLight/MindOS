@@ -1,3 +1,4 @@
+import { closeAllMindosDatabases } from '../../foundation/storage/sqlite.js';
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -25,6 +26,7 @@ describe('event-driven studio automations', () => {
   });
   afterEach(() => {
     vi.useRealTimers();
+    closeAllMindosDatabases();
     rmSync(mindRoot, { recursive: true, force: true });
   });
 

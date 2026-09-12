@@ -4,7 +4,7 @@ import {
   toMindosAgentMessages,
   type MindosUiAgentMessage,
   type MindosUiMessagePart,
-} from '@geminilight/mindos/agent/turn';
+} from '@geminilight/mindos/agent/turn/ui-messages';
 
 export type { AgentMessage } from '@earendil-works/pi-agent-core';
 

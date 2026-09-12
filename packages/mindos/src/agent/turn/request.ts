@@ -399,13 +399,12 @@ export function normalizeMindosUploadedFiles(files: unknown[]): MindosUploadedFi
 //     total keeps multi-attachment turns under the capsule limit instead of
 //     failing it. This matches the client's 5 MiB per-image cap.
 //   - count: 16 (generous over the client's 4-image cap; bounds tmp fan-out).
-// The text-char cap constant lives in `agent/turn/index.ts`
+// The shared cap constants live in `agent/turn/attachment-limits.ts`
 // (`MINDOS_AGENT_ATTACHMENT_MAX_CHARS`), re-exported by the web
 // `attachment-limits.ts` so there is a single source of truth.
 
-export const MINDOS_AGENT_ATTACHMENT_MAX_FILE_BYTES = 5 * 1024 * 1024;
-export const MINDOS_AGENT_ATTACHMENT_MAX_TOTAL_BYTES = 5 * 1024 * 1024;
-export const MINDOS_AGENT_ATTACHMENT_MAX_FILE_COUNT = 16;
+export { MINDOS_AGENT_ATTACHMENT_MAX_FILE_BYTES, MINDOS_AGENT_ATTACHMENT_MAX_TOTAL_BYTES, MINDOS_AGENT_ATTACHMENT_MAX_FILE_COUNT } from './attachment-limits.js';
+import { MINDOS_AGENT_ATTACHMENT_MAX_FILE_BYTES, MINDOS_AGENT_ATTACHMENT_MAX_TOTAL_BYTES, MINDOS_AGENT_ATTACHMENT_MAX_FILE_COUNT } from './attachment-limits.js';
 
 /** Decoded-byte estimate for a base64 string (data-URL prefix aware), without decoding it. */
 function estimateMindosBase64DecodedBytes(value: string): number {

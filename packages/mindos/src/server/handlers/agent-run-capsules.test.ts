@@ -1,3 +1,4 @@
+import { closeAllMindosDatabases } from '../../foundation/storage/sqlite.js';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -33,7 +34,10 @@ describe('agent run capsule handlers', () => {
     });
   });
 
-  afterEach(() => rmSync(mindRoot, { recursive: true, force: true }));
+  afterEach(() => {
+    closeAllMindosDatabases();
+    rmSync(mindRoot, { recursive: true, force: true });
+  });
 
   it('lists only public redacted projections and supports filtering by run', () => {
     const response = handleAgentRunCapsulesGet(new URLSearchParams('runId=run-1'), { mindRoot });

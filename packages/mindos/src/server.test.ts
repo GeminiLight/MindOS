@@ -1157,7 +1157,7 @@ hidden: true
       transport: 'stdio',
       configPath: '~/.config/kilo/kilo.json',
       configuredMcpServers: ['mindos'],
-      globalPath: '~/.config/kilo/kilo.jsonc',
+      globalPath: '~/.config/kilo/kilo.json',
       skillMode: 'universal',
       skillWorkspacePath: join(home, '.agents', 'skills'),
     });

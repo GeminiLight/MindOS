@@ -86,6 +86,7 @@ describe('MindOS runtime product kernel contract', () => {
       './agent/bridges/*',
       './agent/capsules',
       './agent/capsules/*',
+      './agent/config/preview',
       './agent/global-state',
       './agent/ledger',
       './agent/ledger/*',

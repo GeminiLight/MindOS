@@ -194,7 +194,7 @@ describe('POST /api/mcp/install', () => {
     expect(fs.existsSync(configPath)).toBe(true);
     const content = fs.readFileSync(configPath, 'utf-8');
     expect(content).toContain('[mcp_servers.mindos]');
-    expect(content).toContain('type = "stdio"');
+    expect(content).not.toContain('type = "stdio"');
     expect(content).toContain('command = "mindos"');
     expect(content).toContain('MCP_TRANSPORT = "stdio"');
   });

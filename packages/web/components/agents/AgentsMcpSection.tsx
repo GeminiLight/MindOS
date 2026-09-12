@@ -172,6 +172,7 @@ export default function AgentsMcpSection({
       const first = res.results?.[0];
       const ok = first?.ok === true || first?.status === 'ok';
       if (ok) await mcp.refresh({ force: true });
+      else setBulkMessage(first?.message || first?.error || copy.copyServerFailed(serverName, target?.name ?? targetAgentKey));
       return ok;
     } catch (err) {
       console.error('[mcp] copy server failed', err);
