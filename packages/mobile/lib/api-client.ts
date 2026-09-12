@@ -3,6 +3,7 @@
  * Communicates with the MindOS web server over HTTP.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getWorkspaceIdentity, setWorkspaceIdentity, workspaceKey, migrateLegacyWorkspace, serializeWorkspace } from './workspace-storage';
 import type {
   FileNode,
   SearchResult,
@@ -37,16 +38,17 @@ import {
 
 const STORAGE_KEY = 'mindos_server_url';
 const TREE_CACHE_KEY = 'mindos_file_tree_cache';
+const IDENTITY_KEY = 'mindos_connection_identity';
 const DEFAULT_TIMEOUT = 15_000;
 
 export type ApiAccessProbe =
   | { ok: true }
   | {
-      ok: false;
-      reason: 'auth_required' | 'unreachable';
-      status?: number;
-      message: string;
-    };
+    ok: false;
+    reason: 'auth_required' | 'unreachable';
+    status?: number;
+    message: string;
+  };
 
 export interface FileTreeLoadResult {
   tree: FileNode[];
@@ -57,19 +59,41 @@ export interface FileTreeLoadResult {
 export type ApiConnectionEvent =
   | { type: 'success'; path: string; checkedAt: number }
   | {
-      type: 'failure';
-      path: string;
-      checkedAt: number;
-      reason: ConnectionIssueReason;
-      message: string;
-      status?: number;
-    };
+    type: 'failure';
+    path: string;
+    checkedAt: number;
+    reason: ConnectionIssueReason;
+    message: string;
+    status?: number;
+  };
 
 type ApiConnectionObserver = (event: ApiConnectionEvent) => void;
 
 class MindOSClient {
   private _baseUrl = '';
   private _authToken = '';
+  private _rootId = '';
+  private epoch = 0;
+  private requests = new Set<AbortController>();
+  private connectionListeners = new Set<() => void>();
+
+  get rootId() { return this._rootId; }
+  get workspaceIdentity() { return getWorkspaceIdentity(); }
+  subscribeConnectionChange(listener: () => void): () => void {
+    this.connectionListeners.add(listener);
+    return () => { this.connectionListeners.delete(listener); };
+  }
+  private invalidateConnection(): void {
+    this.epoch += 1;
+    for (const controller of this.requests) controller.abort();
+    this.requests.clear();
+    setWorkspaceIdentity(this._baseUrl, this._rootId);
+    for (const listener of this.connectionListeners) listener();
+  }
+  setRootId(rootId: string): void {
+    if (rootId === this._rootId) return;
+    this._rootId = rootId; this.invalidateConnection();
+  }
   private connectionObserver: ApiConnectionObserver | null = null;
 
   get baseUrl() {
@@ -92,9 +116,14 @@ class MindOSClient {
   async init(): Promise<boolean> {
     const savedUrl = await AsyncStorage.getItem(STORAGE_KEY);
     if (savedUrl) {
+      this.setBaseUrl(savedUrl);
+      const raw = await AsyncStorage.getItem(IDENTITY_KEY);
+      if (raw) {
+        try { const saved = JSON.parse(raw); if (saved.url === savedUrl) this.setRootId(saved.rootId ?? ''); } catch { /* keep URL identity */ }
+      }
+      await migrateLegacyWorkspace(this.workspaceIdentity);
       const savedToken = await readConnectionAuthToken();
-      this._baseUrl = savedUrl;
-      this._authToken = savedToken;
+      this.setAuthToken(savedToken);
       return true;
     }
     this._authToken = '';
@@ -103,31 +132,38 @@ class MindOSClient {
 
   /** Set base URL in memory (does NOT persist). */
   setBaseUrl(url: string): void {
-    this._baseUrl = url.replace(/\/+$/, '');
+    const next = url.replace(/\/+$/, '');
+    if (next === this._baseUrl) return;
+    this._baseUrl = next; this._rootId = ''; this._authToken = ''; this.invalidateConnection();
   }
 
   /** Set API token in memory (does NOT persist). */
   setAuthToken(token?: string): void {
-    this._authToken = token?.trim() ?? '';
+    const next = token?.trim() ?? '';
+    if (next === this._authToken) return;
+    this._authToken = next; this.invalidateConnection();
   }
 
   /** Persist current base URL and optional token to storage. Call only after verifying connection. */
   async persistServer(): Promise<void> {
     try {
-      await AsyncStorage.setItem(STORAGE_KEY, this._baseUrl);
-      await persistConnectionAuthToken(this._authToken);
+      const url = this._baseUrl; const rootId = this._rootId; const token = this._authToken;
+      await migrateLegacyWorkspace(this.workspaceIdentity);
+      await AsyncStorage.setItem(STORAGE_KEY, url);
+      await AsyncStorage.setItem(IDENTITY_KEY, JSON.stringify({ url, rootId }));
+      await persistConnectionAuthToken(token);
     } catch (error) {
-      await AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
-      await clearConnectionAuthToken().catch(() => {});
+      await AsyncStorage.removeItem(STORAGE_KEY).catch(() => { });
+      await clearConnectionAuthToken().catch(() => { });
       throw error;
     }
   }
 
   /** Clear the saved server URL and token. */
   async disconnect(): Promise<void> {
-    this._baseUrl = '';
-    this._authToken = '';
+    this._baseUrl = ''; this._authToken = ''; this._rootId = ''; this.invalidateConnection();
     await AsyncStorage.removeItem(STORAGE_KEY);
+    await AsyncStorage.removeItem(IDENTITY_KEY);
     await clearConnectionAuthToken();
   }
 
@@ -146,7 +182,7 @@ class MindOSClient {
         notifyConnection: false,
       });
       if (!res.ok) return null;
-      return res.json();
+      return await res.json();
     } catch {
       return null;
     }
@@ -158,7 +194,7 @@ class MindOSClient {
         notifyConnection: false,
       });
       if (!res.ok) return null;
-      return res.json();
+      return await res.json();
     } catch {
       return null;
     }
@@ -209,17 +245,21 @@ class MindOSClient {
   }
 
   async getFileTreeWithStatus(): Promise<FileTreeLoadResult> {
+    const scope = this.workspaceIdentity;
+    const cacheKey = workspaceKey(TREE_CACHE_KEY, scope);
     try {
       const res = await this.fetchWithTimeout('/api/files');
       if (!res.ok) throw new ApiError(res.status, 'Failed to load files');
       const data = await res.json();
+      if (scope !== this.workspaceIdentity) throw new Error('Workspace changed');
       const tree = normalizeFilesResponseToTree(data);
       // Cache for offline use
-      AsyncStorage.setItem(TREE_CACHE_KEY, JSON.stringify(tree)).catch(() => {});
+      AsyncStorage.setItem(cacheKey, JSON.stringify(tree)).catch(() => { });
       return { tree, stale: false };
     } catch (e) {
+      if (scope !== this.workspaceIdentity) throw e;
       // Fallback to cached tree when offline
-      const cached = await AsyncStorage.getItem(TREE_CACHE_KEY).catch(() => null);
+      const cached = await AsyncStorage.getItem(cacheKey).catch(() => null);
       if (cached) {
         try {
           const parsed = JSON.parse(cached);
@@ -236,6 +276,27 @@ class MindOSClient {
   }
 
   /** Check if a file exists (returns true/false, never throws). */
+  async getRecentFiles(): Promise<FileNode[]> {
+    const key = workspaceKey('recent-files');
+    const scope = this.workspaceIdentity;
+    try {
+      const response = await this.fetchWithTimeout('/api/recent-files?limit=10');
+      if (!response.ok) throw new ApiError(response.status, 'Could not load recent notes');
+      const data: unknown = await response.json();
+      if (!Array.isArray(data)) throw new Error('Invalid recent notes response');
+      const files: FileNode[] = data.filter(item => item && typeof item.path === 'string' && Number.isFinite(item.mtime))
+        .map(item => ({ name: item.path.split('/').pop() || item.path, path: item.path, type: 'file', mtime: item.mtime }));
+      if (scope !== this.workspaceIdentity) throw new Error('Workspace changed');
+      await AsyncStorage.setItem(key, JSON.stringify(files));
+      return files;
+    } catch (error) {
+      if (scope !== this.workspaceIdentity) throw error;
+      const raw = await AsyncStorage.getItem(key);
+      if (raw) return normalizeFilesResponseToTree(JSON.parse(raw));
+      throw error;
+    }
+  }
+
   async fileExists(filePath: string): Promise<boolean> {
     try {
       const res = await this.fetchWithTimeout(
@@ -251,7 +312,7 @@ class MindOSClient {
   async getFileContent(
     filePath: string,
     signal?: AbortSignal,
-  ): Promise<{ content: string; mtime?: number }> {
+  ): Promise<{ content: string; mtime?: number; revision?: string; vaultId?: string }> {
     const res = await this.fetchWithTimeout(
       `/api/file?path=${enc(filePath)}&op=read_file`,
       { signal },
@@ -261,10 +322,42 @@ class MindOSClient {
     return data;
   }
 
+  /** Reader-only fallback. Mutation preflights always use getFileContent and require a live response. */
+  async getReadableFile(filePath: string, signal?: AbortSignal): Promise<{ content: string; mtime?: number; revision?: string; vaultId?: string; cached?: boolean }> {
+    const scope = this.workspaceIdentity;
+    const key = workspaceKey(`reader:${filePath}`, scope);
+    try {
+      const data = await this.getFileContent(filePath, signal);
+      if (scope !== this.workspaceIdentity || signal?.aborted) throw new Error('Workspace changed');
+      if (typeof data.content !== 'string') throw new Error('Invalid document response');
+      // Keep at most 30 recently read notes, each below 200 KB (UTF-16 upper bound).
+      if (data.content.length <= 100_000) {
+        await serializeWorkspace(workspaceKey('reader-index', scope), async () => {
+          const indexKey = workspaceKey('reader-index', scope);
+          const raw = await AsyncStorage.getItem(indexKey);
+          const old: string[] = raw ? JSON.parse(raw) : [];
+          const next = [key, ...old.filter(k => k !== key)];
+          await AsyncStorage.setItem(key, JSON.stringify(data));
+          await AsyncStorage.setItem(indexKey, JSON.stringify(next.slice(0, 30)));
+          await Promise.all(next.slice(30).map(k => AsyncStorage.removeItem(k)));
+        }).catch(() => { });
+      }
+      return data;
+    } catch (error) {
+      if (scope !== this.workspaceIdentity || signal?.aborted || (error instanceof ApiError && error.status >= 400 && error.status < 500)) throw error;
+      const raw = await AsyncStorage.getItem(key);
+      if (!raw) throw error;
+      const cached = JSON.parse(raw);
+      if (typeof cached.content !== 'string') throw error;
+      return { ...cached, cached: true };
+    }
+  }
+
   async saveFile(
     filePath: string,
     content: string,
     expectedMtime?: number,
+    guard?: { expectedRevision?: string; expectedVaultId?: string },
   ): Promise<FileSaveResponse> {
     const res = await this.fetchWithTimeout('/api/file', {
       method: 'POST',
@@ -273,27 +366,29 @@ class MindOSClient {
         path: filePath,
         content,
         expectedMtime,
+        ...guard,
       }),
     });
     const data = await res.json();
-    if (res.status === 409) return { ok: false, error: 'conflict', serverMtime: data.serverMtime };
+    if (res.status === 409) return { ok: false, error: data.error === 'vault_changed' ? 'vault_changed' : 'conflict', serverMtime: data.serverMtime };
     if (!res.ok) throw new ApiError(res.status, data.error || 'Save failed');
-    return { ok: true, mtime: data.mtime };
+    return { ok: true, mtime: data.mtime, revision: data.revision };
   }
 
-  async createFile(filePath: string, content: string): Promise<FileSaveResponse> {
+  async createFile(filePath: string, content: string, expectedRootId = this._rootId || undefined): Promise<FileSaveResponse> {
     const res = await this.fetchWithTimeout('/api/file', {
       method: 'POST',
       body: JSON.stringify({
         op: 'create_file',
         path: filePath,
         content,
+        expectedRootId,
       }),
     });
     const data = await res.json().catch(() => ({}));
-    if (res.status === 409) return { ok: false, error: 'exists' };
+    if (res.status === 409) return { ok: false, error: data.error === 'root_changed' ? 'root_changed' : 'exists' };
     if (!res.ok) throw new ApiError(res.status, readErrorMessage(data, 'Create failed'));
-    return { ok: true, mtime: data.mtime };
+    return { ok: true, mtime: data.mtime, revision: data.revision };
   }
 
   async deleteFile(filePath: string): Promise<FileDeleteResponse> {
@@ -305,7 +400,7 @@ class MindOSClient {
       const data = await res.json().catch(() => ({ error: 'Delete failed' }));
       throw new ApiError(res.status, data.error || 'Delete failed');
     }
-    return res.json();
+    return await res.json();
   }
 
   async renameFile(filePath: string, newName: string): Promise<FileRenameResponse> {
@@ -317,15 +412,15 @@ class MindOSClient {
       const data = await res.json().catch(() => ({ error: 'Rename failed' }));
       throw new ApiError(res.status, data.error || 'Rename failed');
     }
-    return res.json();
+    return await res.json();
   }
 
   // ---------------------------------------------------------------------------
   // Search
   // ---------------------------------------------------------------------------
 
-  async search(query: string): Promise<SearchResult[]> {
-    const res = await this.fetchWithTimeout(`/api/search?q=${enc(query)}`);
+  async search(query: string, signal?: AbortSignal): Promise<SearchResult[]> {
+    const res = await this.fetchWithTimeout(`/api/search?q=${enc(query)}`, { signal });
     if (!res.ok) throw new ApiError(res.status, 'Search failed');
     const data = await res.json();
     const results = data.results ?? data;
@@ -388,20 +483,20 @@ class MindOSClient {
     const actions = Array.isArray(data.actions)
       ? data.actions
       : [
-          ...permissions.map((action: PendingRuntimePermission) => ({
-            ...action,
-            key: `runtime-permission:${action.runId}:${action.requestId}`,
-          })),
-          ...questions.map((action: PendingAskUserQuestion) => ({
-            ...action,
-            key: `user-question:${action.runId}:${action.toolCallId}`,
-          })),
-          ...automationApprovals.map((action: PendingAutomationApproval) => ({
-            ...action,
-            key: `automation-approval:${action.approvalId}`,
-          })),
-        ].sort((left: { createdAt?: number }, right: { createdAt?: number }) =>
-          (left.createdAt ?? 0) - (right.createdAt ?? 0));
+        ...permissions.map((action: PendingRuntimePermission) => ({
+          ...action,
+          key: `runtime-permission:${action.runId}:${action.requestId}`,
+        })),
+        ...questions.map((action: PendingAskUserQuestion) => ({
+          ...action,
+          key: `user-question:${action.runId}:${action.toolCallId}`,
+        })),
+        ...automationApprovals.map((action: PendingAutomationApproval) => ({
+          ...action,
+          key: `automation-approval:${action.approvalId}`,
+        })),
+      ].sort((left: { createdAt?: number }, right: { createdAt?: number }) =>
+        (left.createdAt ?? 0) - (right.createdAt ?? 0));
     return {
       permissions,
       questions,
@@ -605,7 +700,10 @@ class MindOSClient {
     if (body) headers['Content-Type'] = 'application/json';
     if (this._authToken) headers.Authorization = `Bearer ${this._authToken}`;
 
+    const requestEpoch = this.epoch;
     const controller = new AbortController();
+    this.requests.add(controller);
+    const forwardAbort = () => controller.abort();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
 
     // If an external signal is provided, forward its abort
@@ -613,7 +711,7 @@ class MindOSClient {
       if (signal.aborted) {
         controller.abort();
       } else {
-        signal.addEventListener('abort', () => controller.abort(), { once: true });
+        signal.addEventListener('abort', forwardAbort, { once: true });
       }
     }
 
@@ -624,11 +722,12 @@ class MindOSClient {
       signal: controller.signal,
     })
       .then((res) => {
+        if (requestEpoch !== this.epoch) throw new Error('Workspace changed');
         if (notifyConnection) this.notifyResponse(path, res);
         return res;
       })
       .catch((error) => {
-        if (notifyConnection) {
+        if (notifyConnection && !signal?.aborted && requestEpoch === this.epoch) {
           this.notifyConnectionFailure({
             path,
             reason: 'connection_lost',
@@ -637,7 +736,10 @@ class MindOSClient {
         }
         throw error;
       })
-      .finally(() => clearTimeout(timeoutId));
+      .finally(() => {
+        clearTimeout(timeoutId); this.requests.delete(controller);
+        signal?.removeEventListener('abort', forwardAbort);
+      });
   }
 
   private notifyResponse(path: string, res: Response) {

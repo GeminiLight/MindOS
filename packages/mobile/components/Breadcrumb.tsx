@@ -1,10 +1,11 @@
+import { useThemedStyles, type ThemeColors } from '@/lib/theme';
 /**
  * Breadcrumb — horizontal scrollable path navigation for Files tab.
  */
-import { useRef, useEffect } from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { hairlineWidth, hitSlop, radius, spacing, typography } from '@/lib/theme';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, hairlineWidth, hitSlop, radius, spacing, typography } from '@/lib/theme';
+import { useEffect, useRef } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 interface BreadcrumbProps {
   currentPath: string;
@@ -26,6 +27,7 @@ function buildSegments(currentPath: string): Segment[] {
 }
 
 export default function Breadcrumb({ currentPath, onNavigate }: BreadcrumbProps) {
+  const { colors, styles } = useThemedStyles(createViewTheme);
   const scrollRef = useRef<ScrollView>(null);
   const segments = buildSegments(currentPath);
 
@@ -84,39 +86,42 @@ export default function Breadcrumb({ currentPath, onNavigate }: BreadcrumbProps)
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    borderBottomWidth: hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
-    backgroundColor: colors.background,
-  },
-  scroll: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    gap: spacing.xs,
-  },
-  segmentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  segment: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.xs,
-    borderRadius: radius.sm,
-  },
-  segmentText: {
-    fontSize: typography.caption,
-    color: colors.textMuted,
-    maxWidth: 120,
-  },
-  segmentTextActive: {
-    color: colors.amber,
-    fontWeight: '600',
-  },
-});
+function createViewTheme(colors: ThemeColors) {
+  const styles = StyleSheet.create({
+    container: {
+      borderBottomWidth: hairlineWidth,
+      borderBottomColor: colors.borderSubtle,
+      backgroundColor: colors.background,
+    },
+    scroll: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.sm,
+      gap: spacing.xs,
+    },
+    segmentRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+    },
+    segment: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      paddingVertical: spacing.xs,
+      paddingHorizontal: spacing.xs,
+      borderRadius: radius.sm,
+    },
+    segmentText: {
+      fontSize: typography.caption,
+      color: colors.textMuted,
+      maxWidth: 120,
+    },
+    segmentTextActive: {
+      color: colors.amber,
+      fontWeight: '600',
+    },
+  });
+  return { styles };
+}

@@ -1,22 +1,23 @@
+import { useThemedStyles, type ThemeColors } from '@/lib/theme';
 /**
  * SessionListDrawer — Bottom sheet showing chat session history.
  */
 
-import { useCallback, useState } from 'react';
-import {
-  View,
-  Text,
-  FlatList,
-  Pressable,
-  Modal,
-  StyleSheet,
-  Alert,
-  Platform,
-  ActionSheetIOS,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import TextInputModal from '@/components/TextInputModal';
 import type { ChatSessionMeta } from '@/lib/chat-session-store';
+import { Ionicons } from '@expo/vector-icons';
+import { useCallback, useState } from 'react';
+import {
+  ActionSheetIOS,
+  Alert,
+  FlatList,
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 interface SessionListDrawerProps {
   visible: boolean;
@@ -39,6 +40,7 @@ export default function SessionListDrawer({
   onDelete,
   onClose,
 }: SessionListDrawerProps) {
+  const { colors, styles } = useThemedStyles(createViewTheme);
   const [renameTarget, setRenameTarget] = useState<ChatSessionMeta | null>(null);
 
   const handleLongPress = useCallback((session: ChatSessionMeta) => {
@@ -118,7 +120,7 @@ export default function SessionListDrawer({
           <View style={styles.header}>
             <Text style={styles.headerTitle}>Sessions</Text>
             <Pressable onPress={onClose} hitSlop={8}>
-              <Ionicons name="close" size={22} color="#a8a29e" />
+              <Ionicons name="close" size={22} color={colors.textMuted} />
             </Pressable>
           </View>
 
@@ -138,13 +140,13 @@ export default function SessionListDrawer({
                   </Text>
                 </View>
                 {item.id === activeSessionId && (
-                  <Ionicons name="checkmark" size={18} color="#c8873a" />
+                  <Ionicons name="checkmark" size={18} color={colors.amber} />
                 )}
               </Pressable>
             )}
             ListEmptyComponent={
               <View style={styles.emptyState}>
-                <Ionicons name="chatbubbles-outline" size={32} color="#44403c" />
+                <Ionicons name="chatbubbles-outline" size={32} color={colors.border} />
                 <Text style={styles.emptyText}>No chat sessions yet</Text>
               </View>
             }
@@ -152,7 +154,7 @@ export default function SessionListDrawer({
           />
 
           <Pressable style={styles.newChatBtn} onPress={() => { onNewChat(); onClose(); }}>
-            <Ionicons name="add-circle-outline" size={18} color="#fff" />
+            <Ionicons name="add-circle-outline" size={18} color={colors.white} />
             <Text style={styles.newChatText}>New Chat</Text>
           </Pressable>
 
@@ -176,88 +178,91 @@ export default function SessionListDrawer({
   );
 }
 
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
-  drawer: {
-    backgroundColor: '#1a1917',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    maxHeight: '70%',
-    paddingBottom: 24,
-    borderTopWidth: 1,
-    borderColor: '#292524',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#292524',
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#fafaf9',
-  },
-  listContent: {
-    paddingVertical: 8,
-  },
-  sessionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#292524',
-  },
-  sessionRowActive: {
-    backgroundColor: 'rgba(200, 135, 58, 0.08)',
-  },
-  sessionInfo: {
-    flex: 1,
-  },
-  sessionTitle: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: '#fafaf9',
-  },
-  sessionMeta: {
-    fontSize: 12,
-    color: '#78716c',
-    marginTop: 2,
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 40,
-    gap: 8,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: '#78716c',
-  },
-  newChatBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginHorizontal: 16,
-    marginTop: 12,
-    paddingVertical: 12,
-    backgroundColor: '#c8873a',
-    borderRadius: 10,
-  },
-  newChatText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#fff',
-  },
-});
+function createViewTheme(colors: ThemeColors) {
+  const styles = StyleSheet.create({
+    overlay: {
+      flex: 1,
+      justifyContent: 'flex-end',
+    },
+    backdrop: {
+      ...StyleSheet.absoluteFill,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    },
+    drawer: {
+      backgroundColor: colors.background,
+      borderTopLeftRadius: 16,
+      borderTopRightRadius: 16,
+      maxHeight: '70%',
+      paddingBottom: 24,
+      borderTopWidth: 1,
+      borderColor: colors.surface,
+    },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.surface,
+    },
+    headerTitle: {
+      fontSize: 17,
+      fontWeight: '600',
+      color: colors.text,
+    },
+    listContent: {
+      paddingVertical: 8,
+    },
+    sessionRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.surface,
+    },
+    sessionRowActive: {
+      backgroundColor: 'rgba(200, 135, 58, 0.08)',
+    },
+    sessionInfo: {
+      flex: 1,
+    },
+    sessionTitle: {
+      fontSize: 15,
+      fontWeight: '500',
+      color: colors.text,
+    },
+    sessionMeta: {
+      fontSize: 12,
+      color: colors.textSubtle,
+      marginTop: 2,
+    },
+    emptyState: {
+      alignItems: 'center',
+      paddingVertical: 40,
+      gap: 8,
+    },
+    emptyText: {
+      fontSize: 14,
+      color: colors.textSubtle,
+    },
+    newChatBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      marginHorizontal: 16,
+      marginTop: 12,
+      paddingVertical: 12,
+      backgroundColor: colors.amberAction,
+      borderRadius: 10,
+    },
+    newChatText: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: colors.white,
+    },
+  });
+  return { styles };
+}

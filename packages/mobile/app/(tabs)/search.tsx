@@ -1,89 +1,33 @@
+import { useThemedStyles, type ThemeColors } from '@/lib/theme';
 /**
  * Search tab — full-text search with debounce and keyboard dismiss.
  */
-import { useState, useCallback, useRef, useEffect } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  FlatList,
-  Pressable,
-  StyleSheet,
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import {
   EmptyState,
   MindScreen,
 } from '@/components/ui/MobileScaffold';
-import { mindosClient } from '@/lib/api-client';
+import { useSearch } from '@/hooks/useSearch';
+import { viewFileHref } from '@/lib/mobile-navigation';
 import {
-  canRunSearch,
   getNormalizedSearchQuery,
   getSearchEmptyState,
-  getSearchErrorMessage,
 } from '@/lib/search-state';
-import { viewFileHref } from '@/lib/mobile-navigation';
-import { colors, hairlineWidth, hitSlop, radius, spacing, typography } from '@/lib/theme';
-import type { SearchResult } from '@/lib/types';
-
-const DEBOUNCE_MS = 400;
+import { hairlineWidth, hitSlop, radius, spacing, typography } from '@/lib/theme';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import {
+  FlatList,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 
 export default function SearchScreen() {
+  const { colors, styles } = useThemedStyles(createViewTheme);
   const router = useRouter();
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState<SearchResult[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [searched, setSearched] = useState(false);
-  const [error, setError] = useState('');
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const doSearch = useCallback(async (q: string) => {
-    const normalized = getNormalizedSearchQuery(q);
-    if (!canRunSearch(normalized)) {
-      setResults([]);
-      setError('');
-      setSearched(Boolean(normalized));
-      return;
-    }
-
-    setLoading(true);
-    setSearched(true);
-    setError('');
-    try {
-      const data = await mindosClient.search(normalized);
-      setResults(data);
-    } catch (e) {
-      setResults([]);
-      setError(getSearchErrorMessage(e));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // Debounced search on typing
-  const handleChangeText = useCallback((text: string) => {
-    setQuery(text);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (canRunSearch(text)) {
-      debounceRef.current = setTimeout(() => doSearch(text), DEBOUNCE_MS);
-    } else {
-      setResults([]);
-      setError('');
-      setSearched(false);
-    }
-  }, [doSearch]);
-
-  // Instant search on submit
-  const handleSubmit = useCallback(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    doSearch(query);
-  }, [query, doSearch]);
-
-  // Cleanup
-  useEffect(() => {
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, []);
+  const { query, results, loading, searched, error, changeQuery: handleChangeText, submit: handleSubmit } = useSearch();
 
   /** Highlight query match in snippet */
   function renderSnippet(snippet: string) {
@@ -122,6 +66,7 @@ export default function SearchScreen() {
               <Ionicons name="search" size={18} color={colors.textSubtle} />
               <TextInput
                 style={styles.input}
+                accessibilityLabel="Search your notes"
                 value={query}
                 onChangeText={handleChangeText}
                 placeholder="Search notes, files, or phrases"
@@ -135,12 +80,7 @@ export default function SearchScreen() {
                 <Ionicons name="sync-outline" size={18} color={colors.amber} />
               ) : query.length > 0 ? (
                 <Pressable
-                  onPress={() => {
-                    setQuery('');
-                    setResults([]);
-                    setError('');
-                    setSearched(false);
-                  }}
+                  onPress={() => handleChangeText('')}
                   hitSlop={hitSlop}
                   accessibilityRole="button"
                   accessibilityLabel="Clear search"
@@ -174,7 +114,7 @@ export default function SearchScreen() {
               title={emptyState.title}
               message={emptyState.message}
               actionLabel={emptyState.actionLabel}
-              onAction={emptyState.actionLabel ? () => doSearch(query) : undefined}
+              onAction={emptyState.actionLabel ? handleSubmit : undefined}
               loading={loading}
             />
           ) : null
@@ -184,68 +124,71 @@ export default function SearchScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  header: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    gap: spacing.md,
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: spacing.md,
-    minHeight: 48,
-    gap: spacing.sm,
-  },
-  input: {
-    flex: 1,
-    paddingVertical: spacing.md,
-    fontSize: typography.bodyLarge,
-    color: colors.text,
-  },
-  resultRow: {
-    minHeight: 68,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderBottomWidth: hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
-  },
-  resultRowPressed: {
-    backgroundColor: colors.surfaceMuted,
-  },
-  resultIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.amberSoft,
-    marginTop: 2,
-  },
-  resultCopy: {
-    flex: 1,
-    minWidth: 0,
-  },
-  resultPath: {
-    fontSize: typography.caption,
-    color: colors.amber,
-    marginBottom: spacing.xs,
-    fontWeight: '700',
-  },
-  resultSnippet: {
-    fontSize: typography.body,
-    color: colors.textMuted,
-    lineHeight: 20,
-  },
-  highlight: {
-    color: colors.amber,
-    fontWeight: '700',
-  },
-});
+function createViewTheme(colors: ThemeColors) {
+  const styles = StyleSheet.create({
+    header: {
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.lg,
+      gap: spacing.md,
+    },
+    searchBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.surface,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: spacing.md,
+      minHeight: 48,
+      gap: spacing.sm,
+    },
+    input: {
+      flex: 1,
+      paddingVertical: spacing.md,
+      fontSize: typography.bodyLarge,
+      color: colors.text,
+    },
+    resultRow: {
+      minHeight: 68,
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.md,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+      borderBottomWidth: hairlineWidth,
+      borderBottomColor: colors.borderSubtle,
+    },
+    resultRowPressed: {
+      backgroundColor: colors.surfaceMuted,
+    },
+    resultIcon: {
+      width: 30,
+      height: 30,
+      borderRadius: radius.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.amberSoft,
+      marginTop: 2,
+    },
+    resultCopy: {
+      flex: 1,
+      minWidth: 0,
+    },
+    resultPath: {
+      fontSize: typography.caption,
+      color: colors.amber,
+      marginBottom: spacing.xs,
+      fontWeight: '700',
+    },
+    resultSnippet: {
+      fontSize: typography.body,
+      color: colors.textMuted,
+      lineHeight: 20,
+    },
+    highlight: {
+      color: colors.amber,
+      fontWeight: '700',
+    },
+  });
+  return { styles };
+}

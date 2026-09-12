@@ -1,3 +1,17 @@
+import MindButton from '@/components/ui/MindButton';
+import { usePendingAgentActions } from '@/hooks/usePendingAgentActions';
+import { useConnectionStore } from '@/lib/connection-store';
+import {
+  buildAskUserQuestionAnswers,
+  type AskUserQuestionDraft,
+} from '@/lib/pending-agent-actions';
+import { hairlineWidth, hitSlop, radius, shadows, spacing, typography, useThemedStyles, type ThemeColors } from '@/lib/theme';
+import type {
+  PendingAskUserQuestion,
+  PendingAutomationApproval,
+  PendingRuntimePermission,
+} from '@/lib/types';
+import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -10,23 +24,10 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import MindButton from '@/components/ui/MindButton';
-import { usePendingAgentActions } from '@/hooks/usePendingAgentActions';
-import { useConnectionStore } from '@/lib/connection-store';
-import {
-  buildAskUserQuestionAnswers,
-  type AskUserQuestionDraft,
-} from '@/lib/pending-agent-actions';
-import type {
-  PendingAskUserQuestion,
-  PendingAutomationApproval,
-  PendingRuntimePermission,
-} from '@/lib/types';
-import { colors, hairlineWidth, hitSlop, radius, shadows, spacing, typography } from '@/lib/theme';
 
 export default function PendingAgentActionSheet() {
+  const { colors, styles } = useThemedStyles(createViewTheme);
   const connected = useConnectionStore((state) => state.status === 'connected');
   const pending = usePendingAgentActions({ enabled: connected });
   const action = pending.actions[0];
@@ -164,6 +165,7 @@ function AutomationApprovalAction({
   disabled: boolean;
   onDecision(decision: 'allow' | 'deny'): void;
 }) {
+  const { styles } = useThemedStyles(createViewTheme);
   return (
     <View style={styles.actionBody}>
       <View style={styles.metaRow}>
@@ -210,6 +212,7 @@ function PermissionAction({
   disabled: boolean;
   onDecision(decision: string): void;
 }) {
+  const { styles } = useThemedStyles(createViewTheme);
   const input = useMemo(() => formatInput(action.input), [action.input]);
   return (
     <View style={styles.actionBody}>
@@ -261,6 +264,7 @@ function QuestionAction({
   onSubmit(): void;
   onCancel(): void;
 }) {
+  const { colors, styles } = useThemedStyles(createViewTheme);
   function toggleOption(questionIndex: number, label: string, multiSelect: boolean) {
     const current = drafts[questionIndex]?.selected ?? [];
     const selected = multiSelect
@@ -331,6 +335,7 @@ function QuestionAction({
 }
 
 function Detail({ label, value }: { label: string; value: string }) {
+  const { styles } = useThemedStyles(createViewTheme);
   return (
     <View style={styles.detailRow}>
       <Text style={styles.detailLabel}>{label}</Text>
@@ -349,55 +354,58 @@ function formatInput(input: unknown): string {
   }
 }
 
-const styles = StyleSheet.create({
-  floatingButton: {
-    position: 'absolute', right: spacing.lg, bottom: 92, zIndex: 40,
-    minWidth: 52, height: 52, borderRadius: 26, paddingHorizontal: spacing.md,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs,
-    backgroundColor: colors.amber, ...shadows.floating,
-  },
-  floatingLabel: { color: colors.white, fontSize: typography.body, fontWeight: '800' },
-  modalRoot: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: { ...StyleSheet.absoluteFill, backgroundColor: colors.scrim },
-  sheet: {
-    maxHeight: '88%', backgroundColor: colors.surfaceRaised,
-    borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet,
-    borderWidth: 1, borderBottomWidth: 0, borderColor: colors.border,
-  },
-  handle: { alignSelf: 'center', width: 38, height: 4, borderRadius: 2, backgroundColor: colors.border, marginTop: spacing.sm },
-  header: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.lg, borderBottomWidth: hairlineWidth, borderBottomColor: colors.border },
-  headerIcon: { width: 36, height: 36, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.amberSoft },
-  headerCopy: { flex: 1, gap: 2 },
-  eyebrow: { color: colors.textSubtle, fontSize: typography.caption, fontWeight: '600' },
-  title: { color: colors.text, fontSize: typography.title, fontWeight: '700' },
-  content: { padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xl },
-  actionBody: { gap: spacing.lg },
-  metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  runtimeLabel: { color: colors.amber, fontSize: typography.caption, fontWeight: '800', letterSpacing: 0.8 },
-  riskLabel: { color: colors.warning, fontSize: typography.caption, fontWeight: '700', textTransform: 'uppercase' },
-  riskHigh: { color: colors.errorText },
-  prompt: { color: colors.text, fontSize: typography.bodyLarge, lineHeight: 21, fontWeight: '600' },
-  approvalSummary: { color: colors.textMuted, fontSize: typography.body, lineHeight: 20 },
-  detailBox: { padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.surfaceMuted, borderWidth: 1, borderColor: colors.borderSubtle, gap: spacing.md },
-  detailRow: { gap: spacing.xs },
-  detailLabel: { color: colors.textSubtle, fontSize: typography.caption, fontWeight: '700', textTransform: 'uppercase' },
-  detailValue: { color: colors.textMuted, fontSize: typography.body, lineHeight: 19 },
-  buttonStack: { gap: spacing.sm },
-  emptyOptions: { color: colors.errorText, fontSize: typography.caption, lineHeight: 17 },
-  questionBlock: { gap: spacing.md, paddingBottom: spacing.lg, borderBottomWidth: hairlineWidth, borderBottomColor: colors.border },
-  questionHeader: { color: colors.amber, fontSize: typography.caption, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.6 },
-  optionList: { gap: spacing.sm },
-  option: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md, padding: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceMuted },
-  optionSelected: { borderColor: colors.amberBorder, backgroundColor: colors.amberSoft },
-  optionCopy: { flex: 1, gap: 2 },
-  optionLabel: { color: colors.text, fontSize: typography.body, fontWeight: '600' },
-  optionLabelSelected: { color: colors.amber },
-  optionDescription: { color: colors.textMuted, fontSize: typography.caption, lineHeight: 17 },
-  optionPreview: { color: colors.textSubtle, fontSize: typography.caption, lineHeight: 17 },
-  customInput: { minHeight: 72, color: colors.text, fontSize: typography.body, lineHeight: 20, textAlignVertical: 'top', padding: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceMuted },
-  submitRow: { flexDirection: 'row', gap: spacing.sm },
-  submitButton: { flex: 1 },
-  errorBox: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.errorSoft, borderWidth: 1, borderColor: colors.errorBorder },
-  errorText: { flex: 1, color: colors.errorText, fontSize: typography.caption, lineHeight: 17 },
-  ownershipNote: { color: colors.textSubtle, fontSize: typography.caption, lineHeight: 17, textAlign: 'center' },
-});
+function createViewTheme(colors: ThemeColors) {
+  const styles = StyleSheet.create({
+    floatingButton: {
+      position: 'absolute', right: spacing.lg, bottom: 92, zIndex: 40,
+      minWidth: 52, height: 52, borderRadius: 26, paddingHorizontal: spacing.md,
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs,
+      backgroundColor: colors.amberAction, ...shadows.floating,
+    },
+    floatingLabel: { color: colors.white, fontSize: typography.body, fontWeight: '800' },
+    modalRoot: { flex: 1, justifyContent: 'flex-end' },
+    backdrop: { ...StyleSheet.absoluteFill, backgroundColor: colors.scrim },
+    sheet: {
+      maxHeight: '88%', backgroundColor: colors.surfaceRaised,
+      borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet,
+      borderWidth: 1, borderBottomWidth: 0, borderColor: colors.border,
+    },
+    handle: { alignSelf: 'center', width: 38, height: 4, borderRadius: 2, backgroundColor: colors.border, marginTop: spacing.sm },
+    header: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.lg, borderBottomWidth: hairlineWidth, borderBottomColor: colors.border },
+    headerIcon: { width: 36, height: 36, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.amberSoft },
+    headerCopy: { flex: 1, gap: 2 },
+    eyebrow: { color: colors.textSubtle, fontSize: typography.caption, fontWeight: '600' },
+    title: { color: colors.text, fontSize: typography.title, fontWeight: '700' },
+    content: { padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xl },
+    actionBody: { gap: spacing.lg },
+    metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    runtimeLabel: { color: colors.amber, fontSize: typography.caption, fontWeight: '800', letterSpacing: 0.8 },
+    riskLabel: { color: colors.warning, fontSize: typography.caption, fontWeight: '700', textTransform: 'uppercase' },
+    riskHigh: { color: colors.errorText },
+    prompt: { color: colors.text, fontSize: typography.bodyLarge, lineHeight: 21, fontWeight: '600' },
+    approvalSummary: { color: colors.textMuted, fontSize: typography.body, lineHeight: 20 },
+    detailBox: { padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.surfaceMuted, borderWidth: 1, borderColor: colors.borderSubtle, gap: spacing.md },
+    detailRow: { gap: spacing.xs },
+    detailLabel: { color: colors.textSubtle, fontSize: typography.caption, fontWeight: '700', textTransform: 'uppercase' },
+    detailValue: { color: colors.textMuted, fontSize: typography.body, lineHeight: 19 },
+    buttonStack: { gap: spacing.sm },
+    emptyOptions: { color: colors.errorText, fontSize: typography.caption, lineHeight: 17 },
+    questionBlock: { gap: spacing.md, paddingBottom: spacing.lg, borderBottomWidth: hairlineWidth, borderBottomColor: colors.border },
+    questionHeader: { color: colors.amber, fontSize: typography.caption, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.6 },
+    optionList: { gap: spacing.sm },
+    option: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md, padding: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceMuted },
+    optionSelected: { borderColor: colors.amberBorder, backgroundColor: colors.amberSoft },
+    optionCopy: { flex: 1, gap: 2 },
+    optionLabel: { color: colors.text, fontSize: typography.body, fontWeight: '600' },
+    optionLabelSelected: { color: colors.amber },
+    optionDescription: { color: colors.textMuted, fontSize: typography.caption, lineHeight: 17 },
+    optionPreview: { color: colors.textSubtle, fontSize: typography.caption, lineHeight: 17 },
+    customInput: { minHeight: 72, color: colors.text, fontSize: typography.body, lineHeight: 20, textAlignVertical: 'top', padding: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceMuted },
+    submitRow: { flexDirection: 'row', gap: spacing.sm },
+    submitButton: { flex: 1 },
+    errorBox: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.errorSoft, borderWidth: 1, borderColor: colors.errorBorder },
+    errorText: { flex: 1, color: colors.errorText, fontSize: typography.caption, lineHeight: 17 },
+    ownershipNote: { color: colors.textSubtle, fontSize: typography.caption, lineHeight: 17, textAlign: 'center' },
+  });
+  return { styles };
+}

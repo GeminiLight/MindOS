@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MessageBuilder, streamChat } from '@/lib/sse-client';
 
 class FakeXMLHttpRequest {
@@ -41,9 +41,23 @@ class FakeXMLHttpRequest {
 }
 
 describe('streamChat', () => {
+  afterEach(() => { vi.clearAllTimers(); vi.useRealTimers(); });
   beforeEach(() => {
+    vi.useFakeTimers();
     FakeXMLHttpRequest.instances = [];
     vi.stubGlobal('XMLHttpRequest', FakeXMLHttpRequest);
+  });
+
+  it('allows a live turn to run beyond five minutes but detects a stalled connection', () => {
+    const onError = vi.fn();
+    streamChat('http://fixture', { sessionId: 'long-turn' }, { onEvent: vi.fn(), onComplete: vi.fn(), onError });
+    const xhr = FakeXMLHttpRequest.instances[0];
+    for (let i = 0; i < 6; i++) {
+      vi.advanceTimersByTime(60_000); xhr.responseText += ': heartbeat\n\n'; xhr.onprogress?.();
+    }
+    expect(xhr.timeout).toBe(0); expect(onError).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(300_000);
+    expect(onError).toHaveBeenCalledTimes(1); expect(xhr.aborted).toBe(true);
   });
 
   it('sends JSON body and optional bearer token to the agent turn endpoint', () => {
@@ -130,6 +144,7 @@ function feed(xhr: FakeXMLHttpRequest, chunk: string) {
 
 describe('streamChat frame parsing', () => {
   beforeEach(() => {
+    vi.useFakeTimers();
     FakeXMLHttpRequest.instances = [];
     vi.stubGlobal('XMLHttpRequest', FakeXMLHttpRequest);
   });

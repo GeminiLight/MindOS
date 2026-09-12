@@ -1,14 +1,11 @@
+import { useThemedStyles, type ThemeColors } from '@/lib/theme';
 /**
  * QuickCaptureCard — Home card for quickly appending notes to today's inbox.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import MindButton from '@/components/ui/MindButton';
+import MindCard from '@/components/ui/MindCard';
+import MindTextInput from '@/components/ui/MindTextInput';
 import {
   buildInboxPath,
   clearQuickCaptureDraft,
@@ -17,20 +14,30 @@ import {
   loadQuickCaptureDraft,
   queueQuickCapture,
   retryPendingCaptures,
-  saveQuickCapture,
   saveQuickCaptureDraft,
   type PendingQuickCapture,
 } from '@/lib/quick-capture';
-import MindButton from '@/components/ui/MindButton';
-import MindCard from '@/components/ui/MindCard';
-import MindTextInput from '@/components/ui/MindTextInput';
-import { colors, spacing, typography } from '@/lib/theme';
+import { spacing, typography } from '@/lib/theme';
+import { getWorkspaceIdentity } from '@/lib/workspace-storage';
+import { Ionicons } from '@expo/vector-icons';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  AppState,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 interface QuickCaptureCardProps {
   onSaved: () => Promise<void> | void;
 }
 
 export default function QuickCaptureCard({ onSaved }: QuickCaptureCardProps) {
+  const { colors, styles } = useThemedStyles(createViewTheme);
+  const [workspace] = useState(getWorkspaceIdentity);
+  const draftChangedRef = useRef(false);
+  const busyRef = useRef(false);
+  const draftRef = useRef('');
   const [captureMode, setCaptureMode] = useState(false);
   const [captureText, setCaptureText] = useState('');
   const [captureSaving, setCaptureSaving] = useState(false);
@@ -48,32 +55,33 @@ export default function QuickCaptureCard({ onSaved }: QuickCaptureCardProps) {
   const hasDraft = isValidCapture(captureText);
   const pendingCount = pendingCaptures.length;
 
-  const refreshPendingCaptures = useCallback(async () => {
-    setPendingCaptures(await loadPendingCaptures());
-  }, []);
-
   useEffect(() => {
     let cancelled = false;
-    void Promise.all([loadQuickCaptureDraft(), loadPendingCaptures()]).then(([draft, pending]) => {
+    void Promise.all([loadQuickCaptureDraft(workspace), loadPendingCaptures(workspace)]).then(([draft, pending]) => {
       if (cancelled) return;
-      setCaptureText(draft);
+      draftRef.current = draft; setCaptureText(draft);
       setPendingCaptures(pending);
-    });
+    }).catch(() => { if (!cancelled) setCaptureError('Could not load local notes. Retry before writing.'); });
     return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
     if (!captureMode) return;
     const timer = setTimeout(() => {
-      void saveQuickCaptureDraft(captureText);
+      void saveQuickCaptureDraft(captureText, workspace).catch(() => setCaptureError('Draft could not be saved. Keep this screen open.'));
     }, 250);
     return () => clearTimeout(timer);
   }, [captureMode, captureText]);
 
-  const resetEditor = useCallback(() => {
-    setCaptureMode(false);
-    setCaptureError('');
+  useEffect(() => {
+    const listener = AppState.addEventListener('change', state => { if (state !== 'active' && draftChangedRef.current) void saveQuickCaptureDraft(draftRef.current, workspace).catch(() => { }); });
+    return () => { listener.remove(); if (draftChangedRef.current) void saveQuickCaptureDraft(draftRef.current, workspace).catch(() => { }); };
   }, []);
+
+  const resetEditor = useCallback(() => {
+    void saveQuickCaptureDraft(captureText, workspace).then(() => { setCaptureMode(false); setCaptureError(''); })
+      .catch(() => setCaptureError('Draft could not be saved. Keep this screen open.'));
+  }, [captureText]);
 
   const startEditing = useCallback(() => {
     setCaptureSuccess(false);
@@ -84,7 +92,8 @@ export default function QuickCaptureCard({ onSaved }: QuickCaptureCardProps) {
   }, []);
 
   const handleCaptureSubmit = useCallback(async () => {
-    if (!canSave) return;
+    if (!canSave || busyRef.current) return;
+    busyRef.current = true;
 
     setCaptureError('');
     setSyncMessage('');
@@ -92,26 +101,24 @@ export default function QuickCaptureCard({ onSaved }: QuickCaptureCardProps) {
 
     const contentDate = new Date();
     try {
-      const result = await saveQuickCapture(captureText, { pathDate: activeDate, contentDate });
-      await onSaved();
-      setSavedPath(result.inboxPath);
-      setCaptureText('');
-      await clearQuickCaptureDraft();
-      setCaptureSuccess(true);
-      setCaptureMode(false);
-    } catch {
-      const queued = await queueQuickCapture(captureText, { pathDate: activeDate, contentDate });
-      await clearQuickCaptureDraft();
-      setSavedPath(queued.inboxPath);
-      setCaptureText('');
-      setCaptureMode(false);
-      setCaptureSuccess(false);
-      setSyncMessage(`Saved locally for ${queued.inboxPath}`);
-      await refreshPendingCaptures();
+      // Persist the intent before any network operation, including the initial attempt.
+      const queued = await queueQuickCapture(captureText, { pathDate: activeDate, contentDate, workspace });
+      await clearQuickCaptureDraft(workspace);
+      draftChangedRef.current = false; draftRef.current = '';
+      setSavedPath(queued.inboxPath); setCaptureText(''); setCaptureMode(false);
+      const result = await retryPendingCaptures();
+      setPendingCaptures(result.remaining);
+      const saved = result.saved.some(item => item.id === queued.id);
+      setCaptureSuccess(saved);
+      setSyncMessage(saved ? '' : 'Saved on this device. Sync when connected.');
+      if (result.saved.length) await Promise.resolve(onSaved()).catch(() => { });
+    } catch (error) {
+      setCaptureError(error instanceof Error ? error.message : 'Could not save on this device. Keep your text and retry.');
     } finally {
+      busyRef.current = false;
       setCaptureSaving(false);
     }
-  }, [activeDate, canSave, captureText, onSaved, refreshPendingCaptures]);
+  }, [activeDate, canSave, captureText, onSaved]);
 
   const handleSyncPending = useCallback(async () => {
     if (syncingPending || pendingCount === 0) return;
@@ -128,10 +135,16 @@ export default function QuickCaptureCard({ onSaved }: QuickCaptureCardProps) {
       } else {
         setCaptureError(result.error?.message ?? 'Some captures could not sync yet');
       }
+    } catch (error) {
+      setCaptureError(error instanceof Error ? error.message : 'Could not sync. Your notes remain on this device.');
     } finally {
       setSyncingPending(false);
     }
   }, [onSaved, pendingCount, syncingPending]);
+
+  if (!captureMode && !captureSuccess && !pendingCount && !syncMessage && !captureError) {
+    return <MindButton label={hasDraft ? 'Resume your quick note' : 'Capture a thought…'} icon="pencil-outline" variant="secondary" onPress={startEditing} />;
+  }
 
   if (captureSuccess && pendingCount === 0) {
     return (
@@ -187,14 +200,12 @@ export default function QuickCaptureCard({ onSaved }: QuickCaptureCardProps) {
         </View>
       ) : null}
 
+      {captureError && !captureMode ? <Text accessibilityRole="alert" style={styles.errorText}>{captureError}</Text> : null}
       {!captureMode ? (
         <>
-          <Text style={styles.title}>Quick Capture</Text>
-          <Text style={styles.subtitle}>
-            {hasDraft ? 'Draft saved on this device' : 'Capture a thought before it escapes'}
-          </Text>
           <MindButton
-            label={hasDraft ? 'Resume draft' : 'Start writing'}
+            label={hasDraft ? 'Resume your quick note' : 'Capture a thought…'}
+            variant="secondary"
             icon="pencil-outline"
             onPress={startEditing}
             style={styles.startButton}
@@ -206,7 +217,8 @@ export default function QuickCaptureCard({ onSaved }: QuickCaptureCardProps) {
           <MindTextInput
             style={styles.input}
             value={captureText}
-            onChangeText={setCaptureText}
+            onChangeText={text => { draftChangedRef.current = true; draftRef.current = text; setCaptureText(text); }}
+            accessibilityLabel="Quick note"
             placeholder="I need to remember to..."
             multiline
             maxLength={1000}
@@ -217,7 +229,7 @@ export default function QuickCaptureCard({ onSaved }: QuickCaptureCardProps) {
           {captureError ? <Text style={styles.errorText}>{captureError}</Text> : null}
           <View style={styles.actions}>
             <MindButton
-              label="Cancel"
+              label="Keep draft"
               variant="ghost"
               onPress={resetEditor}
               disabled={captureSaving}
@@ -238,99 +250,102 @@ export default function QuickCaptureCard({ onSaved }: QuickCaptureCardProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.lg,
-    marginBottom: spacing.md,
-  },
-  title: {
-    fontSize: typography.title,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  subtitle: {
-    fontSize: typography.body,
-    color: colors.textMuted,
-  },
-  startButton: {
-    alignSelf: 'flex-start',
-  },
-  label: {
-    fontSize: typography.caption,
-    color: colors.textSubtle,
-    fontWeight: '600',
-  },
-  input: {
-    backgroundColor: colors.background,
-    minHeight: 108,
-    fontSize: typography.body,
-    color: colors.text,
-  },
-  errorText: {
-    fontSize: typography.caption,
-    color: colors.errorText,
-  },
-  actions: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    justifyContent: 'flex-end',
-  },
-  actionButton: {
-    minWidth: 104,
-  },
-  pendingBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: 10,
-    backgroundColor: colors.warningSoft,
-    borderWidth: 1,
-    borderColor: colors.warningBorder,
-  },
-  pendingBarSuccess: {
-    backgroundColor: colors.successSoft,
-    borderColor: colors.successBorder,
-  },
-  pendingCopy: {
-    flex: 1,
-  },
-  pendingTitle: {
-    color: colors.warning,
-    fontSize: typography.caption,
-    fontWeight: '700',
-  },
-  pendingTitleSuccess: {
-    color: colors.success,
-  },
-  pendingText: {
-    color: colors.textMuted,
-    fontSize: typography.caption,
-    marginTop: 2,
-  },
-  syncButton: {
-    minHeight: 34,
-    paddingHorizontal: spacing.md,
-  },
-  successContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  successTextWrap: { flex: 1 },
-  successTitle: {
-    fontSize: typography.body,
-    fontWeight: '700',
-    color: colors.success,
-  },
-  successSubtitle: {
-    fontSize: typography.caption,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
-  writeMoreButton: {
-    alignSelf: 'flex-start',
-  },
-});
+function createViewTheme(colors: ThemeColors) {
+  const styles = StyleSheet.create({
+    card: {
+      marginHorizontal: spacing.lg,
+      marginTop: spacing.lg,
+      marginBottom: spacing.md,
+    },
+    title: {
+      fontSize: typography.title,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    subtitle: {
+      fontSize: typography.body,
+      color: colors.textMuted,
+    },
+    startButton: {
+      alignSelf: 'flex-start',
+    },
+    label: {
+      fontSize: typography.caption,
+      color: colors.textSubtle,
+      fontWeight: '600',
+    },
+    input: {
+      backgroundColor: colors.background,
+      minHeight: 108,
+      fontSize: typography.body,
+      color: colors.text,
+    },
+    errorText: {
+      fontSize: typography.caption,
+      color: colors.errorText,
+    },
+    actions: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+      justifyContent: 'flex-end',
+    },
+    actionButton: {
+      minWidth: 104,
+    },
+    pendingBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderRadius: 10,
+      backgroundColor: colors.warningSoft,
+      borderWidth: 1,
+      borderColor: colors.warningBorder,
+    },
+    pendingBarSuccess: {
+      backgroundColor: colors.successSoft,
+      borderColor: colors.successBorder,
+    },
+    pendingCopy: {
+      flex: 1,
+    },
+    pendingTitle: {
+      color: colors.warning,
+      fontSize: typography.caption,
+      fontWeight: '700',
+    },
+    pendingTitleSuccess: {
+      color: colors.success,
+    },
+    pendingText: {
+      color: colors.textMuted,
+      fontSize: typography.caption,
+      marginTop: 2,
+    },
+    syncButton: {
+      minHeight: 34,
+      paddingHorizontal: spacing.md,
+    },
+    successContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+    },
+    successTextWrap: { flex: 1 },
+    successTitle: {
+      fontSize: typography.body,
+      fontWeight: '700',
+      color: colors.success,
+    },
+    successSubtitle: {
+      fontSize: typography.caption,
+      color: colors.textMuted,
+      marginTop: 2,
+    },
+    writeMoreButton: {
+      alignSelf: 'flex-start',
+    },
+  });
+  return { styles };
+}

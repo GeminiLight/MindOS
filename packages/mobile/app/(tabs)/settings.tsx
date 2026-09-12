@@ -1,24 +1,27 @@
+import { useThemedStyles, type ThemeColors } from '@/lib/theme';
 /**
  * Settings tab — connection management + app info.
  */
-import { View, Text, StyleSheet, Alert, ScrollView } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import Constants from 'expo-constants';
-import { useConnectionStore } from '@/lib/connection-store';
+import AgentRuntimeOverview from '@/components/agent/AgentRuntimeOverview';
+import LegacyNotesRecovery from '@/components/LegacyNotesRecovery';
+import MindButton from '@/components/ui/MindButton';
+import MindCard from '@/components/ui/MindCard';
+import StatusPill from '@/components/ui/StatusPill';
+import { useAgentRuntimes } from '@/hooks/useAgentRuntimes';
 import {
   formatConnectionDiagnostic,
   formatLastCheckedAt,
 } from '@/lib/connection-diagnostics';
-import MindButton from '@/components/ui/MindButton';
-import MindCard from '@/components/ui/MindCard';
-import StatusPill from '@/components/ui/StatusPill';
-import AgentRuntimeOverview from '@/components/agent/AgentRuntimeOverview';
-import { useAgentRuntimes } from '@/hooks/useAgentRuntimes';
-import { colors, spacing, typography } from '@/lib/theme';
+import { useConnectionStore } from '@/lib/connection-store';
+import { spacing, typography } from '@/lib/theme';
+import { Ionicons } from '@expo/vector-icons';
+import Constants from 'expo-constants';
+import { useRouter } from 'expo-router';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function SettingsScreen() {
+  const { colors, styles } = useThemedStyles(createViewTheme);
   const router = useRouter();
   const {
     status,
@@ -65,6 +68,7 @@ export default function SettingsScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right']}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
+        <LegacyNotesRecovery />
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Connection</Text>
@@ -159,6 +163,7 @@ export default function SettingsScreen() {
 }
 
 function InfoRow({ label, value }: { label: string; value: string }) {
+  const { styles } = useThemedStyles(createViewTheme);
   return (
     <View style={styles.infoRow}>
       <Text style={styles.infoLabel}>{label}</Text>
@@ -167,113 +172,116 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  scrollContent: {
-    paddingBottom: spacing.xl,
-  },
-  section: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xl,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-    marginBottom: spacing.md,
-  },
-  sectionTitle: {
-    fontSize: typography.section,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  sectionTitleStandalone: {
-    marginBottom: spacing.md,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.lg,
-  },
-  infoLabel: {
-    fontSize: typography.body,
-    color: colors.textSubtle,
-  },
-  infoValue: {
-    flex: 1,
-    textAlign: 'right',
-    fontSize: typography.body,
-    color: colors.textMuted,
-  },
-  emptyConnection: {
-    minHeight: 56,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  emptyText: {
-    color: colors.textMuted,
-    fontSize: typography.body,
-  },
-  errorRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-    paddingTop: spacing.xs,
-  },
-  errorCopy: {
-    flex: 1,
-    gap: spacing.xs / 2,
-  },
-  errorTitle: {
-    color: colors.errorText,
-    fontSize: typography.body,
-    fontWeight: '700',
-  },
-  errorText: {
-    color: colors.errorText,
-    fontSize: typography.body,
-    lineHeight: 20,
-  },
-  actions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    paddingTop: spacing.xs,
-  },
-  actionButton: {
-    flexGrow: 1,
-  },
-  aboutRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  aboutLogo: {
-    fontSize: 24,
-    color: colors.amber,
-  },
-  aboutCopy: {
-    flex: 1,
-  },
-  aboutName: {
-    fontSize: typography.title,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  aboutVersion: {
-    fontSize: typography.caption,
-    color: colors.textSubtle,
-    marginTop: 2,
-  },
-  aboutText: {
-    fontSize: typography.body,
-    color: colors.textMuted,
-    lineHeight: 21,
-  },
-});
+function createViewTheme(colors: ThemeColors) {
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    scrollContent: {
+      paddingBottom: spacing.xl,
+    },
+    section: {
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.xl,
+    },
+    sectionHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.md,
+      marginBottom: spacing.md,
+    },
+    sectionTitle: {
+      fontSize: typography.section,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    sectionTitleStandalone: {
+      marginBottom: spacing.md,
+    },
+    infoRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.lg,
+    },
+    infoLabel: {
+      fontSize: typography.body,
+      color: colors.textSubtle,
+    },
+    infoValue: {
+      flex: 1,
+      textAlign: 'right',
+      fontSize: typography.body,
+      color: colors.textMuted,
+    },
+    emptyConnection: {
+      minHeight: 56,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.sm,
+    },
+    emptyText: {
+      color: colors.textMuted,
+      fontSize: typography.body,
+    },
+    errorRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.sm,
+      paddingTop: spacing.xs,
+    },
+    errorCopy: {
+      flex: 1,
+      gap: spacing.xs / 2,
+    },
+    errorTitle: {
+      color: colors.errorText,
+      fontSize: typography.body,
+      fontWeight: '700',
+    },
+    errorText: {
+      color: colors.errorText,
+      fontSize: typography.body,
+      lineHeight: 20,
+    },
+    actions: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.sm,
+      paddingTop: spacing.xs,
+    },
+    actionButton: {
+      flexGrow: 1,
+    },
+    aboutRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+    },
+    aboutLogo: {
+      fontSize: 24,
+      color: colors.amber,
+    },
+    aboutCopy: {
+      flex: 1,
+    },
+    aboutName: {
+      fontSize: typography.title,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    aboutVersion: {
+      fontSize: typography.caption,
+      color: colors.textSubtle,
+      marginTop: 2,
+    },
+    aboutText: {
+      fontSize: typography.body,
+      color: colors.textMuted,
+      lineHeight: 21,
+    },
+  });
+  return { styles };
+}

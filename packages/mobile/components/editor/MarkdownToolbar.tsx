@@ -1,10 +1,11 @@
+import { useThemedStyles, type ThemeColors } from '@/lib/theme';
 /**
  * MarkdownToolbar — Keyboard-top toolbar for quick Markdown formatting.
  * Meets Apple HIG 44pt minimum touch targets.
  */
-import { ScrollView, Pressable, Text, StyleSheet } from 'react-native';
-import { TOOLBAR_ACTIONS, TOOLBAR_ORDER } from './markdown-actions';
+import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
 import type { ToolbarAction } from './markdown-actions';
+import { TOOLBAR_ACTIONS, TOOLBAR_ORDER } from './markdown-actions';
 
 const A11Y_LABELS: Record<ToolbarAction, string> = {
   heading: 'Heading',
@@ -26,6 +27,7 @@ interface MarkdownToolbarProps {
 }
 
 export default function MarkdownToolbar({ onAction, disabled }: MarkdownToolbarProps) {
+  const { styles } = useThemedStyles(createViewTheme);
   return (
     <ScrollView
       horizontal
@@ -60,42 +62,47 @@ export default function MarkdownToolbar({ onAction, disabled }: MarkdownToolbarP
   );
 }
 
-const styles = StyleSheet.create({
-  scroll: {
-    backgroundColor: '#292524',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#44403c',
-  },
-  container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-    gap: 4,
-  },
-  button: {
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    borderRadius: 6,
-    backgroundColor: '#1a1917',
-    minWidth: 44,
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  buttonPressed: {
-    backgroundColor: '#44403c',
-  },
-  buttonDisabled: {
-    opacity: 0.4,
-  },
-  buttonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#d6d3d1',
-    fontFamily: 'monospace',
-  },
-  textDisabled: {
-    color: '#78716c',
-  },
-});
+function createViewTheme(colors: ThemeColors) {
+  const styles = StyleSheet.create({
+    scroll: {
+      flexGrow: 0,
+      flexShrink: 0,
+      backgroundColor: colors.surface,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+    },
+    container: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 6,
+      paddingVertical: 4,
+      gap: 4,
+    },
+    button: {
+      paddingHorizontal: 10,
+      paddingVertical: 10,
+      borderRadius: 6,
+      backgroundColor: colors.background,
+      minWidth: 44,
+      minHeight: 44,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    buttonPressed: {
+      backgroundColor: colors.border,
+    },
+    buttonDisabled: {
+      opacity: 0.4,
+    },
+    buttonText: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.text,
+      fontFamily: 'monospace',
+    },
+    textDisabled: {
+      color: colors.textSubtle,
+    },
+  });
+  return { styles };
+}

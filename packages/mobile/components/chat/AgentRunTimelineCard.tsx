@@ -1,17 +1,17 @@
-import { View, Text, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import {
   formatAgentRunRuntimeLabel,
   formatAgentRunStatus,
   isAgentRunActive,
 } from '@/lib/agent-run-timeline';
-import { colors, hairlineWidth, radius, spacing, typography } from '@/lib/theme';
+import { hairlineWidth, radius, spacing, typography, useThemedStyles, type ThemeColors } from '@/lib/theme';
 import type {
   AgentRunStatus,
   AgentRunTimelineEvent,
   AgentRunTimelinePart,
   AgentRunTimelineRecord,
 } from '@/lib/types';
+import { Ionicons } from '@expo/vector-icons';
+import { StyleSheet, Text, View } from 'react-native';
 
 interface AgentRunTimelineCardProps {
   part: AgentRunTimelinePart;
@@ -23,6 +23,7 @@ type RunNode = {
 };
 
 export default function AgentRunTimelineCard({ part }: AgentRunTimelineCardProps) {
+  const { colors, styles } = useThemedStyles(createViewTheme);
   const runs = part.runs
     .filter((run) => run.agentKind !== 'mindos-main')
     .sort(sortRuns);
@@ -74,6 +75,7 @@ function RunRow({
   depth: number;
   eventsByRun: Map<string, AgentRunTimelineEvent[]>;
 }) {
+  const { colors, statusColor, styles } = useThemedStyles(createViewTheme);
   const { run } = node;
   const active = isAgentRunActive(run);
   const statusTone = statusToneForRun(run.status);
@@ -130,6 +132,7 @@ function RunRow({
 }
 
 function EventRow({ event }: { event: AgentRunTimelineEvent }) {
+  const { eventColor, styles } = useThemedStyles(createViewTheme);
   const tone = eventTone(event);
   const title = eventTitle(event);
   const summary = eventSummary(event);
@@ -193,12 +196,7 @@ function statusIcon(status: AgentRunStatus) {
   return 'sync-outline';
 }
 
-function statusColor(tone: 'active' | 'success' | 'error' | 'muted'): string {
-  if (tone === 'success') return colors.success;
-  if (tone === 'error') return colors.errorText;
-  if (tone === 'active') return colors.amber;
-  return colors.textSubtle;
-}
+
 
 function eventTone(event: AgentRunTimelineEvent): 'active' | 'error' | 'muted' {
   if (event.category === 'error' || event.type === 'run_failed' || event.status === 'failed' || event.status === 'timed_out') {
@@ -225,11 +223,7 @@ function eventIcon(event: AgentRunTimelineEvent) {
   return 'ellipse-outline';
 }
 
-function eventColor(tone: 'active' | 'error' | 'muted'): string {
-  if (tone === 'error') return colors.errorText;
-  if (tone === 'active') return colors.amber;
-  return colors.textSubtle;
-}
+
 
 function eventTitle(event: AgentRunTimelineEvent): string {
   if (event.data?.kind === 'tool') return `${event.data.name}${event.data.status ? ` ${event.data.status}` : ''}`;
@@ -264,164 +258,180 @@ function compactText(text: string, max = 150): string {
   return compact.length > max ? `${compact.slice(0, max - 1)}...` : compact;
 }
 
-const styles = StyleSheet.create({
-  card: {
-    gap: spacing.sm,
-    marginTop: spacing.md,
-    padding: spacing.md,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.surfaceMuted,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-  },
-  headerTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  headerTitle: {
-    fontSize: typography.caption,
-    fontWeight: '700',
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-    color: colors.textMuted,
-  },
-  headerPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-  },
-  headerPillActive: {
-    backgroundColor: colors.amberSoft,
-  },
-  headerPillText: {
-    fontSize: 11,
-    color: colors.textSubtle,
-  },
-  headerPillTextActive: {
-    color: colors.amber,
-  },
-  runList: {
-    gap: spacing.sm,
-  },
-  runBlock: {
-    gap: spacing.xs,
-  },
-  childRunBlock: {
-    marginLeft: spacing.md,
-    paddingLeft: spacing.md,
-    borderLeftWidth: hairlineWidth,
-    borderLeftColor: colors.border,
-  },
-  runHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-  },
-  statusIconShell: {
-    width: 22,
-    height: 22,
-    borderRadius: radius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surface,
-  },
-  statusIconShellActive: {
-    backgroundColor: colors.amberSoft,
-  },
-  runCopy: {
-    flex: 1,
-    gap: 2,
-  },
-  runTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  runName: {
-    flex: 1,
-    fontSize: typography.caption,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  runStatus: {
-    fontSize: 11,
-    color: colors.success,
-    fontWeight: '600',
-  },
-  runStatusActive: {
-    color: colors.amber,
-  },
-  runStatusError: {
-    color: colors.errorText,
-  },
-  runDetail: {
-    fontSize: 11,
-    lineHeight: 16,
-    color: colors.textSubtle,
-  },
-  permissionPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: radius.sm,
-    backgroundColor: colors.surface,
-  },
-  permissionText: {
-    fontSize: 10,
-    color: colors.textSubtle,
-  },
-  eventList: {
-    gap: 4,
-    paddingLeft: 30,
-  },
-  eventRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 5,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-  },
-  eventRowActive: {
-    backgroundColor: colors.amberSoft,
-  },
-  eventRowError: {
-    backgroundColor: colors.errorSoft,
-  },
-  eventText: {
-    flex: 1,
-    fontSize: 11,
-    lineHeight: 15,
-    color: colors.textSubtle,
-  },
-  eventTextActive: {
-    color: colors.amber,
-  },
-  eventTextError: {
-    color: colors.errorText,
-  },
-  eventTitle: {
-    fontWeight: '700',
-  },
-  eventSummary: {
-    fontWeight: '400',
-  },
-  children: {
-    gap: spacing.sm,
-    marginTop: spacing.xs,
-  },
-});
+function createViewTheme(colors: ThemeColors) {
+  function statusColor(tone: 'active' | 'success' | 'error' | 'muted'): string {
+    if (tone === 'success') return colors.success;
+    if (tone === 'error') return colors.errorText;
+    if (tone === 'active') return colors.amber;
+    return colors.textSubtle;
+  }
+
+  function eventColor(tone: 'active' | 'error' | 'muted'): string {
+    if (tone === 'error') return colors.errorText;
+    if (tone === 'active') return colors.amber;
+    return colors.textSubtle;
+  }
+
+  const styles = StyleSheet.create({
+    card: {
+      gap: spacing.sm,
+      marginTop: spacing.md,
+      padding: spacing.md,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle,
+      backgroundColor: colors.surfaceMuted,
+    },
+    headerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.md,
+    },
+    headerTitleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+    },
+    headerTitle: {
+      fontSize: typography.caption,
+      fontWeight: '700',
+      letterSpacing: 0.4,
+      textTransform: 'uppercase',
+      color: colors.textMuted,
+    },
+    headerPill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 4,
+      borderRadius: radius.md,
+      backgroundColor: colors.surface,
+    },
+    headerPillActive: {
+      backgroundColor: colors.amberSoft,
+    },
+    headerPillText: {
+      fontSize: 11,
+      color: colors.textSubtle,
+    },
+    headerPillTextActive: {
+      color: colors.amber,
+    },
+    runList: {
+      gap: spacing.sm,
+    },
+    runBlock: {
+      gap: spacing.xs,
+    },
+    childRunBlock: {
+      marginLeft: spacing.md,
+      paddingLeft: spacing.md,
+      borderLeftWidth: hairlineWidth,
+      borderLeftColor: colors.border,
+    },
+    runHeader: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.sm,
+    },
+    statusIconShell: {
+      width: 22,
+      height: 22,
+      borderRadius: radius.sm,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surface,
+    },
+    statusIconShellActive: {
+      backgroundColor: colors.amberSoft,
+    },
+    runCopy: {
+      flex: 1,
+      gap: 2,
+    },
+    runTitleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+    },
+    runName: {
+      flex: 1,
+      fontSize: typography.caption,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    runStatus: {
+      fontSize: 11,
+      color: colors.success,
+      fontWeight: '600',
+    },
+    runStatusActive: {
+      color: colors.amber,
+    },
+    runStatusError: {
+      color: colors.errorText,
+    },
+    runDetail: {
+      fontSize: 11,
+      lineHeight: 16,
+      color: colors.textSubtle,
+    },
+    permissionPill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 3,
+      paddingHorizontal: 6,
+      paddingVertical: 3,
+      borderRadius: radius.sm,
+      backgroundColor: colors.surface,
+    },
+    permissionText: {
+      fontSize: 10,
+      color: colors.textSubtle,
+    },
+    eventList: {
+      gap: 4,
+      paddingLeft: 30,
+    },
+    eventRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.xs,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 5,
+      borderRadius: radius.md,
+      backgroundColor: colors.surface,
+    },
+    eventRowActive: {
+      backgroundColor: colors.amberSoft,
+    },
+    eventRowError: {
+      backgroundColor: colors.errorSoft,
+    },
+    eventText: {
+      flex: 1,
+      fontSize: 11,
+      lineHeight: 15,
+      color: colors.textSubtle,
+    },
+    eventTextActive: {
+      color: colors.amber,
+    },
+    eventTextError: {
+      color: colors.errorText,
+    },
+    eventTitle: {
+      fontWeight: '700',
+    },
+    eventSummary: {
+      fontWeight: '400',
+    },
+    children: {
+      gap: spacing.sm,
+      marginTop: spacing.xs,
+    },
+  });
+  return { statusColor, eventColor, styles };
+}

@@ -1,6 +1,3 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
-import type { ComponentProps } from 'react';
-import { Ionicons } from '@expo/vector-icons';
 import MindCard from '@/components/ui/MindCard';
 import StatusPill from '@/components/ui/StatusPill';
 import { formatRelativeTime } from '@/lib/file-tree';
@@ -9,7 +6,10 @@ import type {
   RecentAgentActivitySummary,
   RecentAgentActivityTone,
 } from '@/lib/recent-agent-activity';
-import { colors, hairlineWidth, hitSlop, radius, spacing, typography } from '@/lib/theme';
+import { hairlineWidth, hitSlop, radius, spacing, typography, useThemedStyles, type ThemeColors } from '@/lib/theme';
+import { Ionicons } from '@expo/vector-icons';
+import type { ComponentProps } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 type IoniconsName = ComponentProps<typeof Ionicons>['name'];
 type PillTone = ComponentProps<typeof StatusPill>['tone'];
@@ -33,6 +33,7 @@ export default function RecentAgentActivityCard({
   onRefresh,
   onOpenAll,
 }: RecentAgentActivityCardProps) {
+  const { colors, styles } = useThemedStyles(createViewTheme);
   const items = summary.items.slice(0, 4);
   const status = statusForSummary(summary, loading);
 
@@ -118,6 +119,7 @@ export default function RecentAgentActivityCard({
 }
 
 export function RecentAgentActivityListRow({ item }: { item: RecentAgentActivityItem }) {
+  const { colorForTone, iconShellStyle, styles } = useThemedStyles(createViewTheme);
   return (
     <View style={styles.itemRow}>
       <View style={[styles.itemIconShell, iconShellStyle(item.tone)]}>
@@ -165,196 +167,199 @@ function iconForItem(item: RecentAgentActivityItem): IoniconsName {
   return 'sync-outline';
 }
 
-function colorForTone(tone: RecentAgentActivityTone): string {
-  if (tone === 'success') return colors.success;
-  if (tone === 'warning' || tone === 'active') return colors.amber;
-  if (tone === 'error') return colors.errorText;
-  return colors.textSubtle;
-}
+function createViewTheme(colors: ThemeColors) {
+  function colorForTone(tone: RecentAgentActivityTone): string {
+    if (tone === 'success') return colors.success;
+    if (tone === 'warning' || tone === 'active') return colors.amber;
+    if (tone === 'error') return colors.errorText;
+    return colors.textSubtle;
+  }
 
-function iconShellStyle(tone: RecentAgentActivityTone) {
-  if (tone === 'success') return styles.itemIconShellSuccess;
-  if (tone === 'warning' || tone === 'active') return styles.itemIconShellWarning;
-  if (tone === 'error') return styles.itemIconShellError;
-  return null;
-}
+  function iconShellStyle(tone: RecentAgentActivityTone) {
+    if (tone === 'success') return styles.itemIconShellSuccess;
+    if (tone === 'warning' || tone === 'active') return styles.itemIconShellWarning;
+    if (tone === 'error') return styles.itemIconShellError;
+    return null;
+  }
 
-const styles = StyleSheet.create({
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-  },
-  headerCopy: {
-    flex: 1,
-    gap: spacing.xs,
-  },
-  headerActions: {
-    alignItems: 'flex-end',
-    gap: spacing.sm,
-  },
-  openAllButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.amberSoft,
-  },
-  title: {
-    fontSize: typography.title,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  subtitle: {
-    fontSize: typography.caption,
-    lineHeight: 17,
-    color: colors.textMuted,
-  },
-  errorBanner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-    padding: spacing.md,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.errorBorder,
-    backgroundColor: colors.errorSoft,
-  },
-  errorText: {
-    flex: 1,
-    fontSize: typography.caption,
-    lineHeight: 17,
-    color: colors.errorText,
-  },
-  list: {
-    borderTopWidth: hairlineWidth,
-    borderTopColor: colors.borderSubtle,
-  },
-  itemRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.md,
-    paddingVertical: spacing.md,
-    borderBottomWidth: hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
-  },
-  itemIconShell: {
-    width: 30,
-    height: 30,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surfaceRaised,
-  },
-  itemIconShellSuccess: {
-    backgroundColor: colors.successSoft,
-  },
-  itemIconShellWarning: {
-    backgroundColor: colors.amberSoft,
-  },
-  itemIconShellError: {
-    backgroundColor: colors.errorSoft,
-  },
-  itemCopy: {
-    flex: 1,
-    gap: spacing.xs,
-  },
-  itemTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  itemTitle: {
-    flex: 1,
-    fontSize: typography.body,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  itemStatus: {
-    fontSize: typography.caption,
-    fontWeight: '600',
-    color: colors.textMuted,
-  },
-  itemStatusWarning: {
-    color: colors.warning,
-  },
-  itemDetail: {
-    fontSize: typography.caption,
-    lineHeight: 17,
-    color: colors.textMuted,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  runtimePill: {
-    maxWidth: 120,
-    overflow: 'hidden',
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    backgroundColor: colors.surfaceRaised,
-    color: colors.textMuted,
-    fontSize: typography.caption,
-    fontWeight: '600',
-  },
-  metaText: {
-    fontSize: typography.caption,
-    color: colors.textSubtle,
-  },
-  emptyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    minHeight: 64,
-  },
-  emptyIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surfaceMuted,
-  },
-  emptyCopy: {
-    flex: 1,
-    gap: spacing.xs / 2,
-  },
-  emptyTitle: {
-    fontSize: typography.body,
-    fontWeight: '700',
-    color: colors.textMuted,
-  },
-  emptyText: {
-    fontSize: typography.caption,
-    lineHeight: 17,
-    color: colors.textSubtle,
-  },
-  footerRow: {
-    minHeight: 28,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-  },
-  footerText: {
-    flex: 1,
-    fontSize: typography.caption,
-    color: colors.textSubtle,
-  },
-  refreshButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.amberSoft,
-  },
-  refreshButtonDisabled: {
-    opacity: 0.5,
-  },
-});
+  const styles = StyleSheet.create({
+    headerRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: spacing.md,
+    },
+    headerCopy: {
+      flex: 1,
+      gap: spacing.xs,
+    },
+    headerActions: {
+      alignItems: 'flex-end',
+      gap: spacing.sm,
+    },
+    openAllButton: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.amberSoft,
+    },
+    title: {
+      fontSize: typography.title,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    subtitle: {
+      fontSize: typography.caption,
+      lineHeight: 17,
+      color: colors.textMuted,
+    },
+    errorBanner: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.sm,
+      padding: spacing.md,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.errorBorder,
+      backgroundColor: colors.errorSoft,
+    },
+    errorText: {
+      flex: 1,
+      fontSize: typography.caption,
+      lineHeight: 17,
+      color: colors.errorText,
+    },
+    list: {
+      borderTopWidth: hairlineWidth,
+      borderTopColor: colors.borderSubtle,
+    },
+    itemRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.md,
+      paddingVertical: spacing.md,
+      borderBottomWidth: hairlineWidth,
+      borderBottomColor: colors.borderSubtle,
+    },
+    itemIconShell: {
+      width: 30,
+      height: 30,
+      borderRadius: radius.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surfaceRaised,
+    },
+    itemIconShellSuccess: {
+      backgroundColor: colors.successSoft,
+    },
+    itemIconShellWarning: {
+      backgroundColor: colors.amberSoft,
+    },
+    itemIconShellError: {
+      backgroundColor: colors.errorSoft,
+    },
+    itemCopy: {
+      flex: 1,
+      gap: spacing.xs,
+    },
+    itemTitleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
+    itemTitle: {
+      flex: 1,
+      fontSize: typography.body,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    itemStatus: {
+      fontSize: typography.caption,
+      fontWeight: '600',
+      color: colors.textMuted,
+    },
+    itemStatusWarning: {
+      color: colors.warning,
+    },
+    itemDetail: {
+      fontSize: typography.caption,
+      lineHeight: 17,
+      color: colors.textMuted,
+    },
+    metaRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flexWrap: 'wrap',
+      gap: spacing.sm,
+    },
+    runtimePill: {
+      maxWidth: 120,
+      overflow: 'hidden',
+      borderRadius: radius.sm,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 2,
+      backgroundColor: colors.surfaceRaised,
+      color: colors.textMuted,
+      fontSize: typography.caption,
+      fontWeight: '600',
+    },
+    metaText: {
+      fontSize: typography.caption,
+      color: colors.textSubtle,
+    },
+    emptyRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      minHeight: 64,
+    },
+    emptyIcon: {
+      width: 32,
+      height: 32,
+      borderRadius: radius.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surfaceMuted,
+    },
+    emptyCopy: {
+      flex: 1,
+      gap: spacing.xs / 2,
+    },
+    emptyTitle: {
+      fontSize: typography.body,
+      fontWeight: '700',
+      color: colors.textMuted,
+    },
+    emptyText: {
+      fontSize: typography.caption,
+      lineHeight: 17,
+      color: colors.textSubtle,
+    },
+    footerRow: {
+      minHeight: 28,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.md,
+    },
+    footerText: {
+      flex: 1,
+      fontSize: typography.caption,
+      color: colors.textSubtle,
+    },
+    refreshButton: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.amberSoft,
+    },
+    refreshButtonDisabled: {
+      opacity: 0.5,
+    },
+  });
+  return { colorForTone, iconShellStyle, styles };
+}

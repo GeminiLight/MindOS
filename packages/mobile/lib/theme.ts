@@ -1,31 +1,19 @@
 import { StyleSheet } from 'react-native';
 
-export const colors = {
-  background: '#1a1917',
-  surface: '#292524',
-  surfaceMuted: '#211d1b',
-  surfaceRaised: '#332d2a',
-  border: '#44403c',
-  borderSubtle: '#292524',
-  text: '#fafaf9',
-  textMuted: '#a8a29e',
-  textSubtle: '#78716c',
-  amber: '#c8873a',
-  amberSoft: 'rgba(200, 135, 58, 0.14)',
-  amberBorder: 'rgba(200, 135, 58, 0.28)',
-  success: '#22c55e',
-  successSoft: 'rgba(34, 197, 94, 0.12)',
-  successBorder: 'rgba(34, 197, 94, 0.28)',
-  warning: '#eab308',
-  warningSoft: 'rgba(234, 179, 8, 0.12)',
-  warningBorder: 'rgba(234, 179, 8, 0.3)',
-  error: '#ef4444',
-  errorText: '#fca5a5',
-  errorSoft: 'rgba(239, 68, 68, 0.1)',
-  errorBorder: 'rgba(239, 68, 68, 0.25)',
-  white: '#ffffff',
-  scrim: 'rgba(0, 0, 0, 0.55)',
-};
+import { useColorScheme } from 'react-native';
+import { darkColors, palettes, type ThemeColors } from './palette';
+export type { ThemeColors } from './palette';
+export const colors = darkColors;
+export function useThemeColors() { return palettes[useColorScheme() === 'dark' ? 'dark' : 'light']; }
+// Every row shares one stylesheet per palette instead of rebuilding a sheet per list item.
+const themedCache = new WeakMap<Function, Map<ThemeColors, unknown>>();
+export function useThemedStyles<T>(create: (colors: ThemeColors) => T): T & { colors: ThemeColors } {
+  const colors = useThemeColors();
+  let cache = themedCache.get(create);
+  if (!cache) { cache = new Map(); themedCache.set(create, cache); }
+  if (!cache.has(colors)) cache.set(colors, { ...create(colors), colors });
+  return cache.get(colors) as T & { colors: ThemeColors };
+}
 
 export const spacing = {
   xs: 4,
@@ -54,7 +42,7 @@ export const typography = {
 };
 
 export const hitSlop = { top: 8, bottom: 8, left: 8, right: 8 };
-export const minTouchTarget = 40;
+export const minTouchTarget = 48;
 export const hairlineWidth = StyleSheet.hairlineWidth;
 
 export const shadows = {

@@ -1,17 +1,17 @@
+import { mindosClient } from '@/lib/api-client';
+import { minTouchTarget, radius, spacing, typography, useThemedStyles, type ThemeColors } from '@/lib/theme';
+import type { AgentRunCapsuleProjection, AgentRunCapsuleRecoveryAction } from '@/lib/types';
 import { useState } from 'react';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
-import { mindosClient } from '@/lib/api-client';
-import type { AgentRunCapsuleProjection, AgentRunCapsuleRecoveryAction } from '@/lib/types';
-import { colors, minTouchTarget, radius, spacing, typography } from '@/lib/theme';
 
 const ACTIONS: Array<{
   action: Exclude<AgentRunCapsuleRecoveryAction, 'rollback'>;
   label: string;
 }> = [
-  { action: 'retry', label: 'Retry' },
-  { action: 'fork', label: 'Fork' },
-  { action: 'resume', label: 'Resume' },
-];
+    { action: 'retry', label: 'Retry' },
+    { action: 'fork', label: 'Fork' },
+    { action: 'resume', label: 'Resume' },
+  ];
 
 export default function RunRecoveryControls({
   capsule,
@@ -20,6 +20,7 @@ export default function RunRecoveryControls({
   capsule: AgentRunCapsuleProjection;
   onStarted(): void;
 }) {
+  const { styles } = useThemedStyles(createViewTheme);
   const [working, setWorking] = useState<AgentRunCapsuleRecoveryAction | null>(null);
   const [message, setMessage] = useState('');
   const [hostPath, setHostPath] = useState('');
@@ -80,22 +81,25 @@ export default function RunRecoveryControls({
   );
 }
 
-const styles = StyleSheet.create({
-  container: { gap: spacing.xs, paddingBottom: spacing.md, paddingLeft: 42 },
-  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
-  button: {
-    minHeight: minTouchTarget,
-    justifyContent: 'center',
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.amberBorder,
-    backgroundColor: colors.amberSoft,
-    paddingHorizontal: spacing.sm,
-  },
-  buttonText: { color: colors.amber, fontSize: typography.caption, fontWeight: '700' },
-  pressed: { opacity: 0.72 },
-  disabled: { opacity: 0.4 },
-  reason: { color: colors.textSubtle, fontSize: 11, lineHeight: 15 },
-  message: { color: colors.textMuted, fontSize: typography.caption },
-  hostLink: { color: colors.amber, fontSize: typography.caption, fontWeight: '700' },
-});
+function createViewTheme(colors: ThemeColors) {
+  const styles = StyleSheet.create({
+    container: { gap: spacing.xs, paddingBottom: spacing.md, paddingLeft: 42 },
+    actions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
+    button: {
+      minHeight: minTouchTarget,
+      justifyContent: 'center',
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: colors.amberBorder,
+      backgroundColor: colors.amberSoft,
+      paddingHorizontal: spacing.sm,
+    },
+    buttonText: { color: colors.amber, fontSize: typography.caption, fontWeight: '700' },
+    pressed: { opacity: 0.72 },
+    disabled: { opacity: 0.4 },
+    reason: { color: colors.textSubtle, fontSize: 11, lineHeight: 15 },
+    message: { color: colors.textMuted, fontSize: typography.caption },
+    hostLink: { color: colors.amber, fontSize: typography.caption, fontWeight: '700' },
+  });
+  return { styles };
+}

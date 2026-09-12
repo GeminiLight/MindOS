@@ -107,6 +107,7 @@ let attempts = 0;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let stallTimer: ReturnType<typeof setTimeout> | null = null;
 let lastEventId: number | null = null;
+let unsubscribeConnection: (() => void) | null = null;
 let appStateSubscription: { remove(): void } | null = null;
 
 function isServerEvent(value: unknown): value is ServerEvent {
@@ -217,7 +218,7 @@ function closeCurrentConnection(): void {
   const cancel = connection.reader?.cancel;
   if (typeof cancel === 'function') {
     try {
-      void Promise.resolve(cancel.call(connection.reader)).catch(() => {});
+      void Promise.resolve(cancel.call(connection.reader)).catch(() => { });
     } catch {
       // Releasing the reader is best effort.
     }
@@ -261,7 +262,7 @@ async function runConnection(connection: Connection, fetchImpl: typeof expoFetch
     armStallTimer(connection);
     const parser = createSseParser(onFrame);
 
-    for (;;) {
+    for (; ;) {
       const { value, done } = await reader.read();
       if (current !== connection) return;
       if (done) break;
@@ -343,11 +344,16 @@ function unbindAppState(): void {
 }
 
 function start(): void {
+  unsubscribeConnection = mindosClient.subscribeConnectionChange?.(() => {
+    lastEventId = null; attempts = 0; clearReconnectTimer(); closeCurrentConnection();
+    setState('idle'); connect();
+  }) ?? null;
   bindAppState();
   connect();
 }
 
 function teardown(): void {
+  unsubscribeConnection?.(); unsubscribeConnection = null;
   clearReconnectTimer();
   closeCurrentConnection();
   attempts = 0;

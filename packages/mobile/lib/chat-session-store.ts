@@ -3,6 +3,7 @@ import type { Message } from '@/lib/types';
 export interface ChatSessionMeta {
   id: string;
   title: string;
+  customTitle?: boolean;
   messageCount: number;
   createdAt: number;
   updatedAt: number;

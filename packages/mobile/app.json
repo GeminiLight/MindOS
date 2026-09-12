@@ -5,7 +5,7 @@
     "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
@@ -19,7 +19,8 @@
       "bundleIdentifier": "com.geminilight.mindos",
       "infoPlist": {
         "NSCameraUsageDescription": "MindOS needs camera access to scan QR codes for connecting to your MindOS server.",
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocalNetworkUsageDescription": "MindOS connects to the MindOS workspace running on your computer over your local network."
       }
     },
     "android": {
@@ -29,8 +30,9 @@
       },
       "package": "com.geminilight.mindos",
       "permissions": [
-        "CAMERA",
-        "android.permission.CAMERA",
+        "android.permission.CAMERA"
+      ],
+      "blockedPermissions": [
         "android.permission.RECORD_AUDIO"
       ]
     },
@@ -43,9 +45,12 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "MindOS needs camera access to scan QR codes for connecting to your MindOS server."
+          "cameraPermission": "MindOS needs camera access to scan QR codes for connecting to your MindOS server.",
+          "recordAudioAndroid": false,
+          "microphonePermission": false
         }
-      ]
+      ],
+      "./plugins/with-local-network.cjs"
     ],
     "experiments": {
       "typedRoutes": true

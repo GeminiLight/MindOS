@@ -17,6 +17,7 @@ type ConnectionOperation = 'init' | 'connect' | 'retry' | 'heartbeat' | null;
 const HEARTBEAT_INTERVAL = 30_000; // 30 seconds
 
 interface ConnectionState {
+  initialized: boolean;
   status: ConnectionStatus;
   activeOperation: ConnectionOperation;
   serverUrl: string;
@@ -41,6 +42,7 @@ let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 let connectionEpoch = 0;
 
 export const useConnectionStore = create<ConnectionState>((set, get) => ({
+  initialized: false,
   status: 'disconnected',
   activeOperation: null,
   serverUrl: '',
@@ -61,21 +63,25 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
       setConnectionError(set, {
         reason: 'secure_storage_unavailable',
         message: errorMessage(error, 'Could not load the saved access token securely.'),
-        serverUrl: '',
+        serverUrl: mindosClient.baseUrl,
       });
+      set({ initialized: true });
       return;
     }
-    if (!hasSaved) return;
+    if (!isCurrentConnection(epoch)) return;
+    if (!hasSaved) { set({ initialized: true }); return; }
 
     const savedUrl = mindosClient.baseUrl;
     set({
       status: 'connecting',
+      initialized: true,
       activeOperation: 'init',
       serverUrl: savedUrl,
       hasAuthToken: mindosClient.hasAuthToken,
       error: '',
       diagnostic: undefined,
     });
+    get().startHeartbeat();
     const health = await mindosClient.health();
     if (!isCurrentConnection(epoch, savedUrl)) return;
     if (!health?.ok) {
@@ -103,6 +109,9 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
     }
 
     const connectInfo = await mindosClient.getConnectInfo();
+    if (!isCurrentConnection(epoch, savedUrl)) return;
+    mindosClient.setRootId(connectInfo?.rootId ?? mindosClient.rootId);
+    await mindosClient.persistServer().catch(() => { });
     if (!isCurrentConnection(epoch, savedUrl)) return;
     set({
       status: 'connected',
@@ -169,6 +178,9 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
       return false;
     }
 
+    const connectInfo = await mindosClient.getConnectInfo();
+    if (!isCurrentConnection(epoch, normalized)) return false;
+    mindosClient.setRootId(connectInfo?.rootId ?? '');
     try {
       await mindosClient.persistServer();
     } catch (error) {
@@ -183,7 +195,6 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
       });
       return false;
     }
-    const connectInfo = await mindosClient.getConnectInfo();
     if (!isCurrentConnection(epoch, normalized)) return false;
     set({
       status: 'connected',
@@ -203,7 +214,7 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
   disconnect: async () => {
     nextConnectionEpoch();
     get().stopHeartbeat();
-    await mindosClient.disconnect().catch(() => {});
+    await mindosClient.disconnect().catch(() => { });
     set({
       status: 'disconnected',
       activeOperation: null,
@@ -218,6 +229,7 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
   },
 
   checkHealth: async () => {
+    if (get().activeOperation === 'connect' || get().activeOperation === 'init') return false;
     const prevStatus = get().status;
     const currentUrl = mindosClient.baseUrl || get().serverUrl;
     if (!currentUrl) {
@@ -254,6 +266,14 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
         }),
       });
       return false;
+    }
+
+    const info = await mindosClient.getConnectInfo();
+    if (!isCurrentConnection(epoch, currentUrl)) return false;
+    if (info?.rootId && info.rootId !== mindosClient.rootId) {
+      mindosClient.setRootId(info.rootId);
+      await mindosClient.persistServer().catch(() => { });
+      if (!isCurrentConnection(epoch, currentUrl)) return false;
     }
 
     set({

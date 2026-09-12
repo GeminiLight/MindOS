@@ -9,7 +9,8 @@ describe('pending agent action sheet contract', () => {
   it('mounts one global authorization surface from the root layout', () => {
     const layout = read('app/_layout.tsx');
     expect(layout).toContain("import PendingAgentActionSheet from '@/components/agent/PendingAgentActionSheet'");
-    expect(layout).toContain('<PendingAgentActionSheet />');
+    expect(layout.match(/<PendingAgentActionSheet\b/g)).toHaveLength(1);
+    expect(layout).toContain('key={workspace}');
   });
 
   it('refreshes on pending-action and agent-run events, keeps the 2.5s poll only as a fallback, and refreshes after decisions', () => {

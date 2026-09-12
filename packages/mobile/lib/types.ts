@@ -12,14 +12,11 @@ import type {
   AgentRuntimeAdapter,
   AgentRuntimeDescriptor as CoreAgentRuntimeDescriptor,
   AgentRuntimeKind,
-  AgentRuntimeStatus,
   AgentRunTimelineEvent,
   AgentRunTimelinePart,
   AgentRunTimelineRecord,
   DetectedRuntimeAgent,
   MissingRuntimeAgent,
-  PendingAgentAction,
-  PendingAgentActionEntry,
   PendingAgentActionsPayload,
   PendingAskUserQuestionAction,
   PendingAutomationApprovalAction,
@@ -285,6 +282,7 @@ export interface ConnectResponse {
 }
 
 export interface FileSaveResponse {
+  revision?: string;
   ok: boolean;
   mtime?: number;
   error?: string;

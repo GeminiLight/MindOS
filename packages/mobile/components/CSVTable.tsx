@@ -1,8 +1,9 @@
+import { useThemedStyles, type ThemeColors } from '@/lib/theme';
 /**
  * CSVTable — Renders CSV/TSV content as a horizontally scrollable table.
  * Handles: quoted fields, CRLF, empty rows, tab-delimited files.
  */
-import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 interface CSVTableProps {
   content: string;
@@ -11,6 +12,7 @@ interface CSVTableProps {
 }
 
 export default function CSVTable({ content, delimiter = ',' }: CSVTableProps) {
+  const { styles } = useThemedStyles(createViewTheme);
   const rows = parseDelimited(content, delimiter);
   if (rows.length === 0) return <Text style={styles.empty}>Empty file</Text>;
 
@@ -90,30 +92,33 @@ function parseDelimited(text: string, delimiter: string): string[][] {
   });
 }
 
-const styles = StyleSheet.create({
-  scrollH: { flex: 1 },
-  scrollV: { flex: 1, maxHeight: 500 },
-  row: {
-    flexDirection: 'row',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#44403c',
-  },
-  rowAlt: { backgroundColor: 'rgba(255, 255, 255, 0.02)' },
-  headerRow: {
-    backgroundColor: '#292524',
-    borderBottomWidth: 1,
-    borderBottomColor: '#44403c',
-  },
-  cell: {
-    minWidth: 100,
-    maxWidth: 200,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRightWidth: StyleSheet.hairlineWidth,
-    borderRightColor: '#44403c',
-  },
-  headerCell: {},
-  headerText: { fontSize: 12, fontWeight: '700', color: '#fafaf9' },
-  cellText: { fontSize: 12, color: '#d6d3d1' },
-  empty: { padding: 32, textAlign: 'center', color: '#78716c', fontSize: 14 },
-});
+function createViewTheme(colors: ThemeColors) {
+  const styles = StyleSheet.create({
+    scrollH: { flex: 1 },
+    scrollV: { flex: 1, maxHeight: 500 },
+    row: {
+      flexDirection: 'row',
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    rowAlt: { backgroundColor: 'rgba(255, 255, 255, 0.02)' },
+    headerRow: {
+      backgroundColor: colors.surface,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    cell: {
+      minWidth: 100,
+      maxWidth: 200,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      borderRightWidth: StyleSheet.hairlineWidth,
+      borderRightColor: colors.border,
+    },
+    headerCell: {},
+    headerText: { fontSize: 12, fontWeight: '700', color: colors.text },
+    cellText: { fontSize: 12, color: colors.text },
+    empty: { padding: 32, textAlign: 'center', color: colors.textSubtle, fontSize: 14 },
+  });
+  return { styles };
+}

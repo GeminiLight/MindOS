@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import MindCard from '@/components/ui/MindCard';
 import { mindosClient } from '@/lib/api-client';
 import type { MobileContextFeedbackSignal, MobileRetrievalReceipt } from '@/lib/context-feedback';
-import { colors, hairlineWidth, minTouchTarget, radius, spacing, typography } from '@/lib/theme';
+import { hairlineWidth, minTouchTarget, radius, spacing, typography, useThemedStyles, type ThemeColors } from '@/lib/theme';
+import { Ionicons } from '@expo/vector-icons';
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 const ASSET_DECISIONS: Array<{ signal: Exclude<MobileContextFeedbackSignal, 'missing'>; label: string }> = [
   { signal: 'helpful', label: 'Helpful' },
@@ -15,6 +15,7 @@ const ASSET_DECISIONS: Array<{ signal: Exclude<MobileContextFeedbackSignal, 'mis
 type FeedbackSnapshot = { id: string; signal: MobileContextFeedbackSignal; status: 'active' | 'retracted' };
 
 export default function ContextLearningCard({ enabled }: { enabled: boolean }) {
+  const { colors, styles } = useThemedStyles(createViewTheme);
   const [receipts, setReceipts] = useState<MobileRetrievalReceipt[]>([]);
   const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState('');
@@ -144,6 +145,7 @@ export default function ContextLearningCard({ enabled }: { enabled: boolean }) {
 function DecisionButton({ label, selected, disabled, onPress }: {
   label: string; selected: boolean; disabled: boolean; onPress(): void;
 }) {
+  const { styles } = useThemedStyles(createViewTheme);
   return (
     <Pressable
       accessibilityRole="button"
@@ -171,25 +173,28 @@ function normalizeFeedback(value: unknown, fallbackSignal: MobileContextFeedback
   return { id: record.id, signal, status: record.status === 'retracted' ? 'retracted' : 'active' };
 }
 
-const styles = StyleSheet.create({
-  header: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
-  headerCopy: { flex: 1, gap: spacing.xs },
-  title: { color: colors.text, fontSize: typography.title, fontWeight: '700' },
-  subtitle: { color: colors.textMuted, fontSize: typography.caption, lineHeight: 17 },
-  refresh: { width: minTouchTarget, height: minTouchTarget, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, backgroundColor: colors.amberSoft },
-  error: { color: colors.errorText, fontSize: typography.caption },
-  empty: { color: colors.textSubtle, fontSize: typography.caption },
-  receipt: { gap: spacing.sm, paddingTop: spacing.md, borderTopWidth: hairlineWidth, borderTopColor: colors.borderSubtle },
-  query: { color: colors.text, fontSize: typography.body, fontWeight: '600' },
-  selection: { gap: spacing.xs, padding: spacing.sm, borderRadius: radius.md, backgroundColor: colors.surfaceMuted },
-  path: { color: colors.textMuted, fontSize: typography.caption },
-  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
-  decision: { minHeight: minTouchTarget, justifyContent: 'center', paddingHorizontal: spacing.sm, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
-  decisionSelected: { borderColor: colors.amberBorder, backgroundColor: colors.amberSoft },
-  decisionText: { color: colors.textMuted, fontSize: typography.caption, fontWeight: '600' },
-  decisionTextSelected: { color: colors.amber },
-  disabled: { opacity: 0.5 },
-  reviewNote: { color: colors.textSubtle, fontSize: 11, lineHeight: 15 },
-  missingRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.xs },
-  missingCopy: { flex: 1, minWidth: 150, color: colors.textSubtle, fontSize: typography.caption },
-});
+function createViewTheme(colors: ThemeColors) {
+  const styles = StyleSheet.create({
+    header: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
+    headerCopy: { flex: 1, gap: spacing.xs },
+    title: { color: colors.text, fontSize: typography.title, fontWeight: '700' },
+    subtitle: { color: colors.textMuted, fontSize: typography.caption, lineHeight: 17 },
+    refresh: { width: minTouchTarget, height: minTouchTarget, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, backgroundColor: colors.amberSoft },
+    error: { color: colors.errorText, fontSize: typography.caption },
+    empty: { color: colors.textSubtle, fontSize: typography.caption },
+    receipt: { gap: spacing.sm, paddingTop: spacing.md, borderTopWidth: hairlineWidth, borderTopColor: colors.borderSubtle },
+    query: { color: colors.text, fontSize: typography.body, fontWeight: '600' },
+    selection: { gap: spacing.xs, padding: spacing.sm, borderRadius: radius.md, backgroundColor: colors.surfaceMuted },
+    path: { color: colors.textMuted, fontSize: typography.caption },
+    actions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
+    decision: { minHeight: minTouchTarget, justifyContent: 'center', paddingHorizontal: spacing.sm, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+    decisionSelected: { borderColor: colors.amberBorder, backgroundColor: colors.amberSoft },
+    decisionText: { color: colors.textMuted, fontSize: typography.caption, fontWeight: '600' },
+    decisionTextSelected: { color: colors.amber },
+    disabled: { opacity: 0.5 },
+    reviewNote: { color: colors.textSubtle, fontSize: 11, lineHeight: 15 },
+    missingRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.xs },
+    missingCopy: { flex: 1, minWidth: 150, color: colors.textSubtle, fontSize: typography.caption },
+  });
+  return { styles };
+}

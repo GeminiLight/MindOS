@@ -1,15 +1,18 @@
+import { useThemedStyles, type ThemeColors } from '@/lib/theme';
 /**
  * Root index — redirects to tabs or connect screen based on connection state.
  */
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
-import { Redirect } from 'expo-router';
 import { useConnectionStore } from '@/lib/connection-store';
-import { colors } from '@/lib/theme';
+import { Redirect } from 'expo-router';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 export default function Index() {
+  const { colors, styles } = useThemedStyles(createViewTheme);
   const status = useConnectionStore((s) => s.status);
 
-  if (status === 'connected') {
+  const serverUrl = useConnectionStore(s => s.serverUrl);
+
+  if (serverUrl) {
     return <Redirect href="/(tabs)" />;
   }
 
@@ -25,11 +28,14 @@ export default function Index() {
   return <Redirect href="/connect" />;
 }
 
-const styles = StyleSheet.create({
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.background,
-  },
-});
+function createViewTheme(colors: ThemeColors) {
+  const styles = StyleSheet.create({
+    center: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: colors.background,
+    },
+  });
+  return { styles };
+}

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { getWorkspaceIdentity } from '@/lib/workspace-storage';
 import { normalizeAgentTaskDraft, type AgentTaskDraftInput } from '@/lib/agent-task-draft';
 import {
   clearAgentTaskDraft,
@@ -25,6 +26,7 @@ export interface UseAgentTaskDraftResult {
 export function useAgentTaskDraft(
   options: UseAgentTaskDraftOptions = {},
 ): UseAgentTaskDraftResult {
+  const [workspace] = useState(getWorkspaceIdentity);
   const saveDelayMs = options.saveDelayMs ?? 350;
   const [draft, setDraft] = useState<AgentTaskDraftInput>(() => createEmptyAgentTaskDraft());
   const [loaded, setLoaded] = useState(false);
@@ -38,7 +40,7 @@ export function useAgentTaskDraft(
   useEffect(() => {
     let active = true;
 
-    loadAgentTaskDraft()
+    loadAgentTaskDraft(workspace)
       .then((storedDraft) => {
         if (!active) return;
         setDraft(storedDraft);
@@ -74,8 +76,8 @@ export function useAgentTaskDraft(
     const saveSeq = ++saveSeqRef.current;
     const timer = setTimeout(() => {
       saveQueueRef.current = saveQueueRef.current
-        .catch(() => {})
-        .then(() => saveAgentTaskDraft(draft));
+        .catch(() => { })
+        .then(() => saveAgentTaskDraft(draft, workspace));
 
       saveQueueRef.current
         .then(() => {
@@ -108,8 +110,8 @@ export function useAgentTaskDraft(
     setSaveError(null);
 
     saveQueueRef.current = saveQueueRef.current
-      .catch(() => {})
-      .then(() => clearAgentTaskDraft());
+      .catch(() => { })
+      .then(() => clearAgentTaskDraft(workspace));
 
     saveQueueRef.current
       .then(() => {

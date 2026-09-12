@@ -411,3 +411,14 @@ rg 'rounded-2xl|shadow-2xl' packages/web/app packages/web/components --glob '*.{
 | 动效 | 已支持 `prefers-reduced-motion: reduce` 关闭动画 |
 | 色彩对比 | 正文/背景对比度 ≥ 4.5:1（WCAG AA） |
 | Skip link | 未来应增加 "Skip to content" 跳转链接 |
+
+### 移动端原生主题补充（2026-09-12）
+
+Android/iOS 原生组件通过 `packages/mobile/lib/palette.ts` 定义语义色，
+`useThemedStyles` 按系统明暗模式选择并复用同一份样式。原生样式不支持 CSS 变量，
+因此色值只允许集中出现在 palette；组件、Markdown、导航不得各自写色值。
+`amber` 用于文字/图标，`amberAction` 用于填充按钮并配白字；两者分开保证主要正文、
+辅助文字及按钮达到 4.5:1 对比度。Web 的现有 `--amber` 定义不随此原生 token 调整。
+通用按钮触区为 48，编辑器按钮至少 44；尺寸用最小高度，允许系统字号放大。
+系统主题切换不重建页面状态，导航与正文使用同一主题。主页优先快速记录、目录和真实
+最近修改记录，空的 Agent 状态卡不占首屏。编辑时只显示编辑器相关操作。

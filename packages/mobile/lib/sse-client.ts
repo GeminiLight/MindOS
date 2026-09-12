@@ -95,7 +95,7 @@ export function streamChat(
   if (!sessionId) {
     callbacks.onError(new Error('sessionId is required for agent turns'));
     callbacks.onComplete();
-    return () => {};
+    return () => { };
   }
   const { sessionId: _sessionId, ...turnBody } = body;
   let isClosed = false;
@@ -110,9 +110,22 @@ export function streamChat(
     xhr.setRequestHeader('Authorization', `Bearer ${options.authToken}`);
   }
 
+  let idleTimer: ReturnType<typeof setTimeout> | undefined;
+  const clearIdleTimer = () => { if (idleTimer) clearTimeout(idleTimer); idleTimer = undefined; };
+  const resetIdleTimer = () => {
+    clearIdleTimer();
+    idleTimer = setTimeout(() => {
+      if (isClosed) return;
+      isClosed = true;
+      xhr.abort();
+      callbacks.onError(new Error('No response for five minutes. Check Agent Runs before retrying a task.'));
+    }, 300_000);
+  };
+
   const completeOnce = () => {
     if (completed) return;
     completed = true;
+    clearIdleTimer();
     callbacks.onComplete();
   };
 
@@ -161,10 +174,12 @@ export function streamChat(
     // parser keeps partial lines / blocks across calls.
     const newData = xhr.responseText.slice(processedLength);
     processedLength = xhr.responseText.length;
+    if (newData) resetIdleTimer();
     parser.push(newData);
   };
 
   xhr.onload = () => {
+    clearIdleTimer();
     if (!completed && xhr.status !== 0 && (xhr.status < 200 || xhr.status >= 300)) {
       isClosed = true;
       callbacks.onError(new Error(responseErrorMessage()));
@@ -185,6 +200,7 @@ export function streamChat(
   };
 
   xhr.onerror = () => {
+    clearIdleTimer();
     if (!isClosed) {
       callbacks.onError(new Error('Network error — check your connection'));
     }
@@ -192,23 +208,27 @@ export function streamChat(
   };
 
   xhr.ontimeout = () => {
+    clearIdleTimer();
     if (!isClosed) {
       callbacks.onError(new Error('Request timed out'));
     }
     isClosed = true;
   };
 
-  // 5 minute timeout for long-running agent tasks
-  xhr.timeout = 300_000;
+  // Limit silence, not the total duration of an active agent task.
+  xhr.timeout = 0;
+  resetIdleTimer();
 
   try {
     xhr.send(JSON.stringify(turnBody));
   } catch (e) {
+    clearIdleTimer();
     callbacks.onError(e instanceof Error ? e : new Error(String(e)));
     isClosed = true;
   }
 
   return () => {
+    clearIdleTimer();
     if (!isClosed) {
       isClosed = true;
       xhr.abort();

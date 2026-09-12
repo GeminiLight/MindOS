@@ -22,6 +22,7 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
   },
 }));
 
+import { workspaceKey } from '@/lib/workspace-storage';
 import { mindosClient } from '@/lib/api-client';
 import {
   LEGACY_AUTH_TOKEN_STORAGE_KEY,
@@ -97,7 +98,7 @@ describe('mindosClient auth', () => {
 
   it('returns stale cached file tree data when refresh fails', async () => {
     mindosClient.setBaseUrl('http://127.0.0.1:4567');
-    storage.set('mindos_file_tree_cache', JSON.stringify([
+    storage.set(workspaceKey('mindos_file_tree_cache'), JSON.stringify([
       { type: 'file', name: 'cached.md', path: 'cached.md', extension: '.md' },
     ]));
 
@@ -110,6 +111,23 @@ describe('mindosClient auth', () => {
         { type: 'file', name: 'cached.md', path: 'cached.md', extension: '.md' },
       ],
     });
+  });
+
+  it('does not mark a deliberately cancelled request as connection loss', async () => {
+    const observer = vi.fn(); mindosClient.setConnectionObserver(observer);
+    const controller = new AbortController(); controller.abort();
+    vi.mocked(fetch).mockRejectedValueOnce(new DOMException('Aborted', 'AbortError'));
+    await expect(mindosClient.getFileContent('a.md', controller.signal)).rejects.toThrow();
+    expect(observer).not.toHaveBeenCalled();
+  });
+
+  it('does not expose another server file cache after a switch', async () => {
+    mindosClient.setBaseUrl('http://a.test');
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify(['private.md'])));
+    await mindosClient.getFileTree();
+    mindosClient.setBaseUrl('http://b.test');
+    vi.mocked(fetch).mockRejectedValueOnce(new Error('offline'));
+    await expect(mindosClient.getFileTree()).rejects.toThrow('offline');
   });
 
   it('creates files through the no-overwrite create_file operation', async () => {
@@ -340,9 +358,11 @@ describe('mindosClient auth', () => {
     );
     expect(fetch).toHaveBeenNthCalledWith(2,
       'http://127.0.0.1:4567/api/agent/user-question',
-      expect.objectContaining({ method: 'POST', body: JSON.stringify({
-        runId: 'run-2', toolCallId: 'tool-2', action: 'cancel', reason: 'user_cancelled',
-      }) }),
+      expect.objectContaining({
+        method: 'POST', body: JSON.stringify({
+          runId: 'run-2', toolCallId: 'tool-2', action: 'cancel', reason: 'user_cancelled',
+        })
+      }),
     );
   });
 
@@ -473,13 +493,17 @@ describe('mindosClient auth', () => {
     mindosClient.setBaseUrl('http://127.0.0.1:4567');
     mindosClient.setAuthToken('secret-token');
     vi.mocked(fetch)
-      .mockResolvedValueOnce(new Response(JSON.stringify({ receipts: [{
-        id: 'receipt-1', queryPreview: 'launch', outcome: 'selected', startedAt: '2026-09-03T03:00:00.000Z',
-        selections: [{ assetId: 'asset-1', path: 'launch.md', score: 1, reason: 'selected' }],
-      }] }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ feedback: [{
-        id: 'feedback-existing', receiptId: 'receipt-1', assetId: 'asset-1', signal: 'helpful', status: 'active',
-      }] }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        receipts: [{
+          id: 'receipt-1', queryPreview: 'launch', outcome: 'selected', startedAt: '2026-09-03T03:00:00.000Z',
+          selections: [{ assetId: 'asset-1', path: 'launch.md', score: 1, reason: 'selected' }],
+        }]
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        feedback: [{
+          id: 'feedback-existing', receiptId: 'receipt-1', assetId: 'asset-1', signal: 'helpful', status: 'active',
+        }]
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
       .mockResolvedValue(new Response(JSON.stringify({ ok: true, feedback: { id: 'feedback-1' } }), { status: 201 }));
 
     await expect(mindosClient.getRetrievalReceipts({ limit: 4 })).resolves.toEqual([
@@ -533,4 +557,23 @@ describe('mindosClient auth', () => {
       { type: 'failure', path: '/api/search?q=hello', reason: 'api_unavailable', status: 500 },
     ]);
   });
+});
+
+it('does not send credentials from one host to another after changing the URL', async () => {
+  mindosClient.setBaseUrl('https://old.example'); mindosClient.setAuthToken('private');
+  mindosClient.setBaseUrl('https://new.example');
+  expect(mindosClient.authToken).toBe('');
+});
+it('lets a reader reopen a cached note offline but never use it for a write preflight', async () => {
+  mindosClient.setBaseUrl('http://reader.test');
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ content: 'offline note', mtime: 1 }))).mockRejectedValue(new Error('offline')));
+  expect((await mindosClient.getReadableFile('note.md')).content).toBe('offline note');
+  expect(await mindosClient.getReadableFile('note.md')).toMatchObject({ content: 'offline note', cached: true });
+  await expect(mindosClient.getFileContent('note.md')).rejects.toThrow();
+});
+it('binds creation to the verified root and preserves root-change errors', async () => {
+  mindosClient.setBaseUrl('http://conditional-create.test'); mindosClient.setRootId('a'.repeat(24));
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ error: 'root_changed' }), { status: 409 })));
+  expect(await mindosClient.createFile('inbox/note.md', 'private')).toEqual({ ok: false, error: 'root_changed' });
+  expect(JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string).expectedRootId).toBe('a'.repeat(24));
 });

@@ -1,24 +1,25 @@
+import { useThemedStyles, type ThemeColors } from '@/lib/theme';
 /**
  * ChatInput — Message input field with send button, intent selector, and file attachments.
  */
 
+import { hairlineWidth, radius, spacing, typography } from '@/lib/theme';
+import type { ComposerIntent } from '@/lib/types';
+import { Ionicons } from '@expo/vector-icons';
 import { useRef, useState } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
+  Platform,
   Pressable,
   StyleSheet,
-  Platform,
+  Text,
+  TextInput,
+  View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { colors, hairlineWidth, radius, spacing, typography } from '@/lib/theme';
-import type { ComposerIntent } from '@/lib/types';
 
 interface ChatInputProps {
   value: string;
   onChangeText: (text: string) => void;
-  onSend: (message: string) => void;
+  onSend: (message: string) => boolean | void;
   onCancel?: () => void;
   isLoading?: boolean;
   canSend?: boolean;
@@ -48,6 +49,7 @@ export default function ChatInput({
   onOpenAttachmentPicker,
   onRemoveAttachment,
 }: ChatInputProps) {
+  const { colors, styles } = useThemedStyles(createViewTheme);
   const inputRef = useRef<TextInput>(null);
   const [isFocused, setIsFocused] = useState(false);
 
@@ -56,8 +58,7 @@ export default function ChatInput({
 
   const handleSend = () => {
     if (canSubmit) {
-      onSend(value.trim());
-      onChangeText('');
+      if (onSend(value.trim()) !== false) onChangeText('');
     }
   };
 
@@ -102,12 +103,12 @@ export default function ChatInput({
         <View style={styles.attachmentRow}>
           {attachedPaths.map((path) => (
             <View key={path} style={styles.attachmentChip}>
-              <Ionicons name="document-outline" size={12} color="#c8873a" />
+              <Ionicons name="document-outline" size={12} color={colors.amber} />
               <Text style={styles.attachmentText} numberOfLines={1}>
                 {path.split('/').pop() || path}
               </Text>
               <Pressable onPress={() => onRemoveAttachment?.(path)} hitSlop={6}>
-                <Ionicons name="close" size={12} color="#78716c" />
+                <Ionicons name="close" size={12} color={colors.textSubtle} />
               </Pressable>
             </View>
           ))}
@@ -158,126 +159,129 @@ export default function ChatInput({
   );
 }
 
-const styles = StyleSheet.create({
-  modePanel: {
-    gap: spacing.xs,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
-    borderTopWidth: hairlineWidth,
-    borderTopColor: colors.borderSubtle,
-    backgroundColor: colors.background,
-  },
-  modeRow: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-    alignSelf: 'flex-start',
-    padding: 3,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.surfaceMuted,
-  },
-  modeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    minHeight: 30,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 5,
-    borderRadius: radius.md,
-  },
-  modeButtonActive: {
-    backgroundColor: colors.amberSoft,
-  },
-  modeText: {
-    fontSize: typography.caption,
-    color: colors.textSubtle,
-    fontWeight: '500',
-  },
-  modeTextActive: {
-    color: colors.amber,
-  },
-  modeHint: {
-    fontSize: typography.caption,
-    lineHeight: 17,
-    color: colors.textSubtle,
-  },
-  attachmentRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm,
-  },
-  attachmentChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    maxWidth: '100%',
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  attachmentText: {
-    maxWidth: 160,
-    fontSize: typography.caption,
-    color: colors.textMuted,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderTopWidth: hairlineWidth,
-    borderTopColor: colors.borderSubtle,
-    backgroundColor: colors.background,
-  },
-  inputContainerFocused: {
-    borderTopColor: colors.border,
-  },
-  attachButton: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  attachButtonDisabled: {
-    opacity: 0.5,
-  },
-  input: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 10,
-    color: colors.text,
-    fontSize: typography.body,
-    maxHeight: 100,
-  },
-  sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.md,
-    backgroundColor: colors.amber,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  sendButtonDisabled: {
-    opacity: 0.4,
-  },
-  cancelButton: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.md,
-    backgroundColor: colors.errorSoft,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-});
+function createViewTheme(colors: ThemeColors) {
+  const styles = StyleSheet.create({
+    modePanel: {
+      gap: spacing.xs,
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.sm,
+      paddingBottom: spacing.sm,
+      borderTopWidth: hairlineWidth,
+      borderTopColor: colors.borderSubtle,
+      backgroundColor: colors.background,
+    },
+    modeRow: {
+      flexDirection: 'row',
+      gap: spacing.xs,
+      alignSelf: 'flex-start',
+      padding: 3,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle,
+      backgroundColor: colors.surfaceMuted,
+    },
+    modeButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      minHeight: 30,
+      paddingHorizontal: spacing.md,
+      paddingVertical: 5,
+      borderRadius: radius.md,
+    },
+    modeButtonActive: {
+      backgroundColor: colors.amberSoft,
+    },
+    modeText: {
+      fontSize: typography.caption,
+      color: colors.textSubtle,
+      fontWeight: '500',
+    },
+    modeTextActive: {
+      color: colors.amber,
+    },
+    modeHint: {
+      fontSize: typography.caption,
+      lineHeight: 17,
+      color: colors.textSubtle,
+    },
+    attachmentRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.sm,
+      paddingHorizontal: spacing.lg,
+      paddingBottom: spacing.sm,
+    },
+    attachmentChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      maxWidth: '100%',
+      backgroundColor: colors.surface,
+      borderRadius: 16,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    attachmentText: {
+      maxWidth: 160,
+      fontSize: typography.caption,
+      color: colors.textMuted,
+    },
+    inputContainer: {
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+      gap: spacing.sm,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+      borderTopWidth: hairlineWidth,
+      borderTopColor: colors.borderSubtle,
+      backgroundColor: colors.background,
+    },
+    inputContainerFocused: {
+      borderTopColor: colors.border,
+    },
+    attachButton: {
+      width: 40,
+      height: 40,
+      borderRadius: radius.md,
+      backgroundColor: colors.surface,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    attachButtonDisabled: {
+      opacity: 0.5,
+    },
+    input: {
+      flex: 1,
+      backgroundColor: colors.surface,
+      borderRadius: radius.lg,
+      paddingHorizontal: spacing.md,
+      paddingVertical: 10,
+      color: colors.text,
+      fontSize: typography.body,
+      maxHeight: 100,
+    },
+    sendButton: {
+      width: 40,
+      height: 40,
+      borderRadius: radius.md,
+      backgroundColor: colors.amberAction,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    sendButtonDisabled: {
+      opacity: 0.4,
+    },
+    cancelButton: {
+      width: 40,
+      height: 40,
+      borderRadius: radius.md,
+      backgroundColor: colors.errorSoft,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+  });
+  return { styles };
+}

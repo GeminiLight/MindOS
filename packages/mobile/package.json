@@ -36,6 +36,7 @@
     "expo-secure-store": "~57.0.3",
     "expo-splash-screen": "~57.0.8",
     "expo-status-bar": "~57.0.1",
+    "expo-system-ui": "~57.0.4",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
@@ -50,7 +51,9 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.0",
+    "@types/react-dom": "^19.2.3",
     "eas-cli": "^18.8.1",
+    "jsdom": "^29.0.2",
     "typescript": "^5.3.0",
     "vitest": "^5.0.0"
   }

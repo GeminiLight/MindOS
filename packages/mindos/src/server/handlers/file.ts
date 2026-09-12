@@ -35,6 +35,7 @@ import { MINDOS_IGNORED_DIRS } from '../runtime.js';
 import { json, type MindosServerResponse } from '../response.js';
 import { isMindosBuiltinAssistantId } from './assistants.js';
 import { knowledgeRootIdentity } from '../knowledge-root-identity.js';
+import { mindRootIdentity } from '../root-identity.js';
 
 export type FileGetHandlerServices = {
   mindRoot?: string;
@@ -196,6 +197,11 @@ export async function handleFilePost(
   if (!body || typeof body !== 'object') return json({ error: 'Invalid JSON body' }, { status: 400 });
 
   const payload = body as Record<string, unknown>;
+  // Discovery and the write may straddle a host-side workspace switch.
+  // Check before dispatch so rejected creates cannot even make a directory.
+  if ('expectedRootId' in payload && payload.expectedRootId !== mindRootIdentity(services.mindRoot)) {
+    return json({ error: 'root_changed' }, { status: 409 });
+  }
   const source = deriveKnowledgeOperationSource({
     hasAgentHeader: Boolean(options.agentHeader),
     bodySource: payload.source,

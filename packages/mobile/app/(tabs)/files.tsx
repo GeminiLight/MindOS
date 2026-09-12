@@ -1,25 +1,9 @@
+import { useThemedStyles, type ThemeColors } from '@/lib/theme';
 /**
  * Files tab — file tree browser with folder drill-down navigation.
  */
-import { useEffect, useState, useCallback, useMemo } from 'react';
-import {
-  View,
-  FlatList,
-  Pressable,
-  RefreshControl,
-  ActivityIndicator,
-  Alert,
-  BackHandler,
-  StyleSheet,
-} from 'react-native';
-import { ActionSheetIOS, Platform } from 'react-native';
-import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { useEventDrivenRefresh } from '@/hooks/useEventDrivenRefresh';
-import { mindosClient } from '@/lib/api-client';
-import { useConnectionStore } from '@/lib/connection-store';
-import TextInputModal from '@/components/TextInputModal';
 import Breadcrumb from '@/components/Breadcrumb';
+import TextInputModal from '@/components/TextInputModal';
 import MindTextInput from '@/components/ui/MindTextInput';
 import {
   EmptyState,
@@ -27,6 +11,10 @@ import {
   ListRow,
   MindScreen,
 } from '@/components/ui/MobileScaffold';
+import { useEventDrivenRefresh } from '@/hooks/useEventDrivenRefresh';
+import { mindosClient } from '@/lib/api-client';
+import { useConnectionStore } from '@/lib/connection-store';
+import { getChildrenAtPath, getParentPath, sortFileNodes } from '@/lib/file-tree';
 import {
   getFilesErrorMessage,
   getFilesTabViewState,
@@ -34,17 +22,32 @@ import {
   normalizeNewMarkdownFileName,
   normalizeRenameTarget,
 } from '@/lib/files-tab-state';
-import { getChildrenAtPath, getParentPath, sortFileNodes } from '@/lib/file-tree';
 import { getFileNodeIcon } from '@/lib/mobile-icons';
 import { viewFileHref } from '@/lib/mobile-navigation';
-import { colors, hairlineWidth, hitSlop, minTouchTarget, radius, shadows, spacing, typography } from '@/lib/theme';
+import { hairlineWidth, hitSlop, minTouchTarget, radius, shadows, spacing, typography } from '@/lib/theme';
 import type { FileNode } from '@/lib/types';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  ActionSheetIOS,
+  ActivityIndicator,
+  Alert,
+  BackHandler,
+  FlatList,
+  Platform,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  View,
+} from 'react-native';
 
 /** Agent or CLI writes bump the tree version; the Files list re-reads the tree in place. */
 const FILES_TREE_EVENT_TYPES = ['tree.changed'] as const;
 const FILES_TREE_EVENT_DEBOUNCE_MS = 750;
 
 export default function FilesScreen() {
+  const { colors, styles } = useThemedStyles(createViewTheme);
   const router = useRouter();
   const status = useConnectionStore((state) => state.status);
   const [tree, setTree] = useState<FileNode[]>([]);
@@ -415,63 +418,66 @@ export default function FilesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  newFileBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderBottomWidth: hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
-    backgroundColor: colors.surface,
-  },
-  newFileInput: {
-    flex: 1,
-    minHeight: minTouchTarget,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    fontSize: typography.body,
-  },
-  newFileBtn: {
-    width: minTouchTarget,
-    height: minTouchTarget,
-    borderRadius: radius.md,
-    backgroundColor: colors.amber,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  newFileBtnDisabled: { opacity: 0.4 },
-  newFileCancelBtn: {
-    width: minTouchTarget,
-    height: minTouchTarget,
-    borderRadius: radius.md,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  bannerPad: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xs,
-  },
-  emptyList: {
-    flexGrow: 1,
-  },
-  fab: {
-    position: 'absolute',
-    bottom: spacing.xl,
-    right: spacing.xl,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: colors.amber,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...shadows.floating,
-  },
-  fabPressed: {
-    transform: [{ scale: 0.96 }],
-    opacity: 0.86,
-  },
-});
+function createViewTheme(colors: ThemeColors) {
+  const styles = StyleSheet.create({
+    newFileBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+      borderBottomWidth: hairlineWidth,
+      borderBottomColor: colors.borderSubtle,
+      backgroundColor: colors.surface,
+    },
+    newFileInput: {
+      flex: 1,
+      minHeight: minTouchTarget,
+      borderRadius: radius.md,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      fontSize: typography.body,
+    },
+    newFileBtn: {
+      width: minTouchTarget,
+      height: minTouchTarget,
+      borderRadius: radius.md,
+      backgroundColor: colors.amberAction,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    newFileBtnDisabled: { opacity: 0.4 },
+    newFileCancelBtn: {
+      width: minTouchTarget,
+      height: minTouchTarget,
+      borderRadius: radius.md,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    bannerPad: {
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.md,
+      paddingBottom: spacing.xs,
+    },
+    emptyList: {
+      flexGrow: 1,
+    },
+    fab: {
+      position: 'absolute',
+      bottom: spacing.xl,
+      right: spacing.xl,
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      backgroundColor: colors.amberAction,
+      justifyContent: 'center',
+      alignItems: 'center',
+      ...shadows.floating,
+    },
+    fabPressed: {
+      transform: [{ scale: 0.96 }],
+      opacity: 0.86,
+    },
+  });
+  return { styles };
+}

@@ -1,29 +1,31 @@
+import { useThemedStyles, type ThemeColors } from '@/lib/theme';
 /**
  * MessageBubble — Chat message with Markdown, tool calls, reasoning, images, timestamps.
  */
 
+import AgentRunTimelineCard from '@/components/chat/AgentRunTimelineCard';
+import { getMarkdownStyles } from '@/lib/markdown-styles';
+import type { AgentRunTimelinePart, Message, ReasoningPart, ToolCallPart } from '@/lib/types';
+import { Ionicons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
 import { useState } from 'react';
 import {
-  View,
-  Text as RNText,
-  Image,
-  StyleSheet,
   ActivityIndicator,
-  Pressable,
   Alert,
+  Image,
+  Pressable,
+  Text as RNText,
+  StyleSheet,
+  View,
 } from 'react-native';
-import * as Clipboard from 'expo-clipboard';
 import Markdown from 'react-native-markdown-display';
-import { Ionicons } from '@expo/vector-icons';
-import { getMarkdownStyles } from '@/lib/markdown-styles';
-import AgentRunTimelineCard from '@/components/chat/AgentRunTimelineCard';
-import type { AgentRunTimelinePart, Message, ToolCallPart, ReasoningPart } from '@/lib/types';
 
 interface MessageBubbleProps {
   message: Message;
 }
 
 export default function MessageBubble({ message }: MessageBubbleProps) {
+  const { colors, styles } = useThemedStyles(createViewTheme);
   const isUser = message.role === 'user';
   const toolCalls = message.parts?.filter((p) => p.type === 'tool-call') as ToolCallPart[] | undefined;
   const reasoning = message.parts?.filter((p) => p.type === 'reasoning') as ReasoningPart[] | undefined;
@@ -56,7 +58,7 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
           <View style={styles.attachedSection}>
             {message.attachedFiles.map((path) => (
               <View key={path} style={styles.attachedChip}>
-                <Ionicons name="document-outline" size={12} color={isUser ? '#fff' : '#c8873a'} />
+                <Ionicons name="document-outline" size={12} color={isUser ? colors.white : colors.amber} />
                 <RNText style={[styles.attachedText, isUser && styles.attachedTextUser]} numberOfLines={1}>
                   {path.split('/').pop() || path}
                 </RNText>
@@ -70,7 +72,7 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
           isUser ? (
             <RNText style={styles.userText}>{message.content}</RNText>
           ) : (
-            <Markdown style={getMarkdownStyles('bubble')}>{message.content}</Markdown>
+            <Markdown style={getMarkdownStyles('bubble', colors)}>{message.content}</Markdown>
           )
         ) : null}
 
@@ -125,6 +127,7 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
 // --- Reasoning Block (collapsible) ---
 
 function ReasoningBlock({ parts }: { parts: ReasoningPart[] }) {
+  const { colors, styles } = useThemedStyles(createViewTheme);
   const [expanded, setExpanded] = useState(false);
   const text = parts.map((p) => p.text).join('');
   if (!text) return null;
@@ -135,7 +138,7 @@ function ReasoningBlock({ parts }: { parts: ReasoningPart[] }) {
         <Ionicons
           name={expanded ? 'chevron-down' : 'chevron-forward'}
           size={12}
-          color="#78716c"
+          color={colors.textSubtle}
         />
         <RNText style={styles.reasoningLabel}>Thinking</RNText>
       </View>
@@ -151,6 +154,7 @@ function ReasoningBlock({ parts }: { parts: ReasoningPart[] }) {
 // --- Tool Call Card (expandable output) ---
 
 function ToolCallCard({ tc }: { tc: ToolCallPart }) {
+  const { colors, styles } = useThemedStyles(createViewTheme);
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -160,12 +164,12 @@ function ToolCallCard({ tc }: { tc: ToolCallPart }) {
     >
       <View style={styles.toolHeader}>
         {tc.state === 'running' ? (
-          <ActivityIndicator size={12} color="#c8873a" />
+          <ActivityIndicator size={12} color={colors.amber} />
         ) : (
           <Ionicons
             name={tc.state === 'error' ? 'close-circle-outline' : 'checkmark-circle-outline'}
             size={14}
-            color={tc.state === 'error' ? '#ef4444' : '#22c55e'}
+            color={tc.state === 'error' ? colors.error : colors.success}
           />
         )}
         <RNText style={styles.toolName} numberOfLines={1}>{tc.toolName}</RNText>
@@ -173,7 +177,7 @@ function ToolCallCard({ tc }: { tc: ToolCallPart }) {
           <Ionicons
             name={expanded ? 'chevron-up' : 'chevron-down'}
             size={12}
-            color="#78716c"
+            color={colors.textSubtle}
           />
         ) : null}
       </View>
@@ -213,150 +217,153 @@ function formatTime(ts: number): string {
 
 // --- Styles ---
 
-const styles = StyleSheet.create({
-  bubbleContainer: {
-    flexDirection: 'row',
-    marginVertical: 6,
-    paddingHorizontal: 16,
-    justifyContent: 'flex-start',
-  },
-  bubbleContainerUser: {
-    justifyContent: 'flex-end',
-  },
-  bubble: {
-    maxWidth: '85%',
-    backgroundColor: '#292524',
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#44403c',
-  },
-  bubbleUser: {
-    backgroundColor: '#c8873a',
-    borderColor: '#c8873a',
-  },
-  userText: {
-    color: '#fff',
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  timestamp: {
-    fontSize: 10,
-    color: '#78716c',
-    marginTop: 6,
-  },
-  attachedSection: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 8,
-  },
-  attachedChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    maxWidth: '100%',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    backgroundColor: 'rgba(0,0,0,0.15)',
-  },
-  attachedText: {
-    maxWidth: 160,
-    fontSize: 11,
-    color: '#d6d3d1',
-  },
-  attachedTextUser: {
-    color: '#fff',
-  },
-  timestampUser: {
-    color: 'rgba(255,255,255,0.6)',
-  },
+function createViewTheme(colors: ThemeColors) {
+  const styles = StyleSheet.create({
+    bubbleContainer: {
+      flexDirection: 'row',
+      marginVertical: 6,
+      paddingHorizontal: 16,
+      justifyContent: 'flex-start',
+    },
+    bubbleContainerUser: {
+      justifyContent: 'flex-end',
+    },
+    bubble: {
+      maxWidth: '85%',
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+      padding: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    bubbleUser: {
+      backgroundColor: colors.amberAction,
+      borderColor: colors.amber,
+    },
+    userText: {
+      color: colors.white,
+      fontSize: 14,
+      lineHeight: 20,
+    },
+    timestamp: {
+      fontSize: 10,
+      color: colors.textSubtle,
+      marginTop: 6,
+    },
+    attachedSection: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 6,
+      marginBottom: 8,
+    },
+    attachedChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      maxWidth: '100%',
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 12,
+      backgroundColor: 'rgba(0,0,0,0.15)',
+    },
+    attachedText: {
+      maxWidth: 160,
+      fontSize: 11,
+      color: colors.text,
+    },
+    attachedTextUser: {
+      color: colors.white,
+    },
+    timestampUser: {
+      color: 'rgba(255,255,255,0.6)',
+    },
 
-  // Reasoning
-  reasoningBlock: {
-    marginBottom: 8,
-    paddingBottom: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#44403c',
-  },
-  reasoningHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  reasoningLabel: {
-    fontSize: 11,
-    color: '#78716c',
-    fontWeight: '600',
-    fontStyle: 'italic',
-  },
-  reasoningText: {
-    fontSize: 12,
-    color: '#78716c',
-    fontStyle: 'italic',
-    lineHeight: 18,
-    marginTop: 6,
-  },
+    // Reasoning
+    reasoningBlock: {
+      marginBottom: 8,
+      paddingBottom: 8,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    reasoningHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    reasoningLabel: {
+      fontSize: 11,
+      color: colors.textSubtle,
+      fontWeight: '600',
+      fontStyle: 'italic',
+    },
+    reasoningText: {
+      fontSize: 12,
+      color: colors.textSubtle,
+      fontStyle: 'italic',
+      lineHeight: 18,
+      marginTop: 6,
+    },
 
-  // Images
-  imagesRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 8,
-  },
-  image: {
-    width: 200,
-    height: 150,
-    borderRadius: 8,
-    backgroundColor: '#1a1917',
-  },
+    // Images
+    imagesRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+      marginTop: 8,
+    },
+    image: {
+      width: 200,
+      height: 150,
+      borderRadius: 8,
+      backgroundColor: colors.background,
+    },
 
-  // Tool calls
-  toolsSection: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#44403c',
-    gap: 6,
-  },
-  agentRunSection: {
-    marginTop: 10,
-  },
-  toolsLabel: {
-    fontSize: 11,
-    color: '#78716c',
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  toolCard: {
-    backgroundColor: 'rgba(200, 135, 58, 0.08)',
-    borderRadius: 8,
-    padding: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(200, 135, 58, 0.2)',
-  },
-  toolCardError: {
-    backgroundColor: 'rgba(239, 68, 68, 0.08)',
-    borderColor: 'rgba(239, 68, 68, 0.2)',
-  },
-  toolHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  toolName: {
-    flex: 1,
-    fontSize: 12,
-    color: '#d6d3d1',
-    fontWeight: '500',
-  },
-  toolOutput: {
-    fontSize: 11,
-    color: '#a8a29e',
-    marginTop: 4,
-    fontFamily: 'monospace',
-  },
-});
+    // Tool calls
+    toolsSection: {
+      marginTop: 12,
+      paddingTop: 12,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+      gap: 6,
+    },
+    agentRunSection: {
+      marginTop: 10,
+    },
+    toolsLabel: {
+      fontSize: 11,
+      color: colors.textSubtle,
+      fontWeight: '600',
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    toolCard: {
+      backgroundColor: 'rgba(200, 135, 58, 0.08)',
+      borderRadius: 8,
+      padding: 8,
+      borderWidth: 1,
+      borderColor: 'rgba(200, 135, 58, 0.2)',
+    },
+    toolCardError: {
+      backgroundColor: 'rgba(239, 68, 68, 0.08)',
+      borderColor: 'rgba(239, 68, 68, 0.2)',
+    },
+    toolHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    toolName: {
+      flex: 1,
+      fontSize: 12,
+      color: colors.text,
+      fontWeight: '500',
+    },
+    toolOutput: {
+      fontSize: 11,
+      color: colors.textMuted,
+      marginTop: 4,
+      fontFamily: 'monospace',
+    },
+  });
+  return { styles };
+}

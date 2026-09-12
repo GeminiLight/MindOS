@@ -1,8 +1,8 @@
-import { Text, StyleSheet, ActivityIndicator } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import MindButton from '@/components/ui/MindButton';
 import MindCard from '@/components/ui/MindCard';
-import { colors, spacing, typography } from '@/lib/theme';
+import { spacing, typography, useThemedStyles, type ThemeColors } from '@/lib/theme';
+import { Ionicons } from '@expo/vector-icons';
+import { ActivityIndicator, StyleSheet, Text } from 'react-native';
 
 interface ChatStatusFooterProps {
   isStreaming: boolean;
@@ -19,6 +19,7 @@ export default function ChatStatusFooter({
   canRetry,
   onRetry,
 }: ChatStatusFooterProps) {
+  const { colors, styles } = useThemedStyles(createViewTheme);
   return (
     <>
       {isStreaming && !hasAssistantContent ? (
@@ -46,37 +47,40 @@ export default function ChatStatusFooter({
   );
 }
 
-const styles = StyleSheet.create({
-  thinkingBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginHorizontal: spacing.lg,
-    marginVertical: spacing.sm,
-    paddingVertical: spacing.md,
-    backgroundColor: colors.amberSoft,
-    borderColor: colors.amberBorder,
-  },
-  thinkingText: {
-    fontSize: typography.caption,
-    color: colors.amber,
-  },
-  errorBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginHorizontal: spacing.lg,
-    marginVertical: spacing.sm,
-    paddingVertical: spacing.md,
-  },
-  errorText: {
-    fontSize: typography.caption,
-    color: colors.errorText,
-    flex: 1,
-    lineHeight: 18,
-  },
-  retryBtn: {
-    minHeight: 34,
-    paddingHorizontal: spacing.md,
-  },
-});
+function createViewTheme(colors: ThemeColors) {
+  const styles = StyleSheet.create({
+    thinkingBox: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      marginHorizontal: spacing.lg,
+      marginVertical: spacing.sm,
+      paddingVertical: spacing.md,
+      backgroundColor: colors.amberSoft,
+      borderColor: colors.amberBorder,
+    },
+    thinkingText: {
+      fontSize: typography.caption,
+      color: colors.amber,
+    },
+    errorBox: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      marginHorizontal: spacing.lg,
+      marginVertical: spacing.sm,
+      paddingVertical: spacing.md,
+    },
+    errorText: {
+      fontSize: typography.caption,
+      color: colors.errorText,
+      flex: 1,
+      lineHeight: 18,
+    },
+    retryBtn: {
+      minHeight: 34,
+      paddingHorizontal: spacing.md,
+    },
+  });
+  return { styles };
+}

@@ -1,13 +1,13 @@
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import type { ComponentProps } from 'react';
-import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   runtimeKey,
   type RuntimeCompanionOption,
 } from '@/lib/agent-runtime-companion';
+import { hairlineWidth, hitSlop, radius, spacing, typography, useThemedStyles, type ThemeColors } from '@/lib/theme';
 import type { AgentRuntimeIdentity, AgentRuntimeKind } from '@/lib/types';
-import { colors, hairlineWidth, hitSlop, radius, spacing, typography } from '@/lib/theme';
+import { Ionicons } from '@expo/vector-icons';
+import type { ComponentProps } from 'react';
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 type IoniconsName = ComponentProps<typeof Ionicons>['name'];
 
@@ -38,6 +38,7 @@ export default function RuntimePickerSheet({
   onSelect,
   onClose,
 }: RuntimePickerSheetProps) {
+  const { colors, iconColorForTone, statusDotStyle, styles } = useThemedStyles(createViewTheme);
   const selectedKey = runtimeKey(selectedRuntime);
 
   return (
@@ -163,19 +164,9 @@ function iconForRuntimeKind(kind: AgentRuntimeKind): IoniconsName {
   return 'sparkles-outline';
 }
 
-function iconColorForTone(tone: RuntimeCompanionOption['tone']): string {
-  if (tone === 'success') return colors.success;
-  if (tone === 'warning') return colors.warning;
-  if (tone === 'error') return colors.errorText;
-  return colors.textSubtle;
-}
 
-function statusDotStyle(tone: RuntimeCompanionOption['tone']) {
-  if (tone === 'success') return styles.statusDotSuccess;
-  if (tone === 'warning') return styles.statusDotWarning;
-  if (tone === 'error') return styles.statusDotError;
-  return styles.statusDotMuted;
-}
+
+
 
 function formatCheckedAt(timestamp: number): string {
   const seconds = Math.max(0, Math.round((Date.now() - timestamp) / 1000));
@@ -186,173 +177,190 @@ function formatCheckedAt(timestamp: number): string {
   return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-const styles = StyleSheet.create({
-  scrim: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: colors.scrim,
-  },
-  sheet: {
-    maxHeight: '88%',
-    padding: spacing.lg,
-    gap: spacing.md,
-    borderTopLeftRadius: radius.sheet,
-    borderTopRightRadius: radius.sheet,
-    backgroundColor: colors.background,
-  },
-  sheetHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  headerIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.amberSoft,
-  },
-  headerCopy: {
-    flex: 1,
-    gap: 2,
-  },
-  sheetTitle: {
-    color: colors.text,
-    fontSize: typography.title,
-    fontWeight: '700',
-  },
-  sheetSubtitle: {
-    color: colors.textMuted,
-    fontSize: typography.caption,
-    lineHeight: 17,
-  },
-  closeButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surface,
-  },
-  errorBanner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-    padding: spacing.md,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.errorBorder,
-    backgroundColor: colors.errorSoft,
-  },
-  errorText: {
-    flex: 1,
-    fontSize: typography.caption,
-    lineHeight: 17,
-    color: colors.errorText,
-  },
-  optionList: {
-    gap: spacing.sm,
-  },
-  optionRow: {
-    minHeight: 92,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    padding: spacing.md,
-    borderRadius: radius.xl,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.surfaceMuted,
-  },
-  optionRowSelected: {
-    borderColor: colors.amberBorder,
-    backgroundColor: colors.amberSoft,
-  },
-  optionRowDisabled: {
-    opacity: 0.62,
-  },
-  optionIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surfaceRaised,
-  },
-  optionIconReady: {
-    backgroundColor: colors.successSoft,
-  },
-  optionCopy: {
-    flex: 1,
-    gap: 3,
-  },
-  optionTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  optionName: {
-    flexShrink: 1,
-    color: colors.text,
-    fontSize: typography.bodyLarge,
-    fontWeight: '700',
-  },
-  statusDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-  },
-  statusDotSuccess: { backgroundColor: colors.success },
-  statusDotWarning: { backgroundColor: colors.warning },
-  statusDotError: { backgroundColor: colors.error },
-  statusDotMuted: { backgroundColor: colors.textSubtle },
-  optionSubtitle: {
-    color: colors.textMuted,
-    fontSize: typography.caption,
-    fontWeight: '600',
-  },
-  optionDetail: {
-    color: colors.textSubtle,
-    fontSize: typography.caption,
-    lineHeight: 17,
-  },
-  optionTrailing: {
-    minWidth: 58,
-    alignItems: 'flex-end',
-    gap: spacing.sm,
-  },
-  optionStatus: {
-    color: colors.textMuted,
-    fontSize: 11,
-    fontWeight: '600',
-    textAlign: 'right',
-  },
-  footerRow: {
-    minHeight: 36,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-    paddingTop: spacing.xs,
-    borderTopWidth: hairlineWidth,
-    borderTopColor: colors.borderSubtle,
-  },
-  footerText: {
-    flex: 1,
-    color: colors.textSubtle,
-    fontSize: typography.caption,
-    lineHeight: 17,
-  },
-  refreshButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.amberSoft,
-  },
-  refreshButtonDisabled: {
-    opacity: 0.5,
-  },
-});
+function createViewTheme(colors: ThemeColors) {
+  function iconColorForTone(tone: RuntimeCompanionOption['tone']): string {
+    if (tone === 'success') return colors.success;
+    if (tone === 'warning') return colors.warning;
+    if (tone === 'error') return colors.errorText;
+    return colors.textSubtle;
+  }
+
+  function statusDotStyle(tone: RuntimeCompanionOption['tone']) {
+    if (tone === 'success') return styles.statusDotSuccess;
+    if (tone === 'warning') return styles.statusDotWarning;
+    if (tone === 'error') return styles.statusDotError;
+    return styles.statusDotMuted;
+  }
+
+  const styles = StyleSheet.create({
+    scrim: {
+      flex: 1,
+      justifyContent: 'flex-end',
+      backgroundColor: colors.scrim,
+    },
+    sheet: {
+      maxHeight: '88%',
+      padding: spacing.lg,
+      gap: spacing.md,
+      borderTopLeftRadius: radius.sheet,
+      borderTopRightRadius: radius.sheet,
+      backgroundColor: colors.background,
+    },
+    sheetHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+    },
+    headerIcon: {
+      width: 36,
+      height: 36,
+      borderRadius: radius.lg,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.amberSoft,
+    },
+    headerCopy: {
+      flex: 1,
+      gap: 2,
+    },
+    sheetTitle: {
+      color: colors.text,
+      fontSize: typography.title,
+      fontWeight: '700',
+    },
+    sheetSubtitle: {
+      color: colors.textMuted,
+      fontSize: typography.caption,
+      lineHeight: 17,
+    },
+    closeButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surface,
+    },
+    errorBanner: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.sm,
+      padding: spacing.md,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.errorBorder,
+      backgroundColor: colors.errorSoft,
+    },
+    errorText: {
+      flex: 1,
+      fontSize: typography.caption,
+      lineHeight: 17,
+      color: colors.errorText,
+    },
+    optionList: {
+      gap: spacing.sm,
+    },
+    optionRow: {
+      minHeight: 92,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      padding: spacing.md,
+      borderRadius: radius.xl,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle,
+      backgroundColor: colors.surfaceMuted,
+    },
+    optionRowSelected: {
+      borderColor: colors.amberBorder,
+      backgroundColor: colors.amberSoft,
+    },
+    optionRowDisabled: {
+      opacity: 0.62,
+    },
+    optionIcon: {
+      width: 38,
+      height: 38,
+      borderRadius: radius.lg,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surfaceRaised,
+    },
+    optionIconReady: {
+      backgroundColor: colors.successSoft,
+    },
+    optionCopy: {
+      flex: 1,
+      gap: 3,
+    },
+    optionTitleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
+    optionName: {
+      flexShrink: 1,
+      color: colors.text,
+      fontSize: typography.bodyLarge,
+      fontWeight: '700',
+    },
+    statusDot: {
+      width: 7,
+      height: 7,
+      borderRadius: 4,
+    },
+    statusDotSuccess: { backgroundColor: colors.success },
+    statusDotWarning: { backgroundColor: colors.warning },
+    statusDotError: { backgroundColor: colors.error },
+    statusDotMuted: { backgroundColor: colors.textSubtle },
+    optionSubtitle: {
+      color: colors.textMuted,
+      fontSize: typography.caption,
+      fontWeight: '600',
+    },
+    optionDetail: {
+      color: colors.textSubtle,
+      fontSize: typography.caption,
+      lineHeight: 17,
+    },
+    optionTrailing: {
+      minWidth: 58,
+      alignItems: 'flex-end',
+      gap: spacing.sm,
+    },
+    optionStatus: {
+      color: colors.textMuted,
+      fontSize: 11,
+      fontWeight: '600',
+      textAlign: 'right',
+    },
+    footerRow: {
+      minHeight: 36,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.md,
+      paddingTop: spacing.xs,
+      borderTopWidth: hairlineWidth,
+      borderTopColor: colors.borderSubtle,
+    },
+    footerText: {
+      flex: 1,
+      color: colors.textSubtle,
+      fontSize: typography.caption,
+      lineHeight: 17,
+    },
+    refreshButton: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.amberSoft,
+    },
+    refreshButtonDisabled: {
+      opacity: 0.5,
+    },
+  });
+  return { iconColorForTone, statusDotStyle, styles };
+}

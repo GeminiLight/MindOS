@@ -26,6 +26,7 @@ import {
   parseStoredAgentTaskDraft,
   validateAgentTaskDraft,
 } from '@/lib/agent-task-draft';
+import { workspaceKey } from '@/lib/workspace-storage';
 import {
   AGENT_TASK_DRAFT_STORAGE_KEY,
   loadAgentTaskDraft,
@@ -158,7 +159,7 @@ describe('agent task draft contract', () => {
       projectPath: '',
     });
 
-    expect(storage.has(AGENT_TASK_DRAFT_STORAGE_KEY)).toBe(true);
+    expect(storage.has(workspaceKey(AGENT_TASK_DRAFT_STORAGE_KEY))).toBe(true);
     await expect(loadAgentTaskDraft()).resolves.toMatchObject({
       provider: 'github-copilot',
       prompt: 'Open a PR',
@@ -167,7 +168,7 @@ describe('agent task draft contract', () => {
 
     await saveAgentTaskDraft(DEFAULT_AGENT_TASK_DRAFT);
 
-    expect(storage.has(AGENT_TASK_DRAFT_STORAGE_KEY)).toBe(false);
+    expect(storage.has(workspaceKey(AGENT_TASK_DRAFT_STORAGE_KEY))).toBe(false);
     await expect(loadAgentTaskDraft()).resolves.toEqual(DEFAULT_AGENT_TASK_DRAFT);
   });
 

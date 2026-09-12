@@ -1,21 +1,22 @@
+import { useThemedStyles, type ThemeColors } from '@/lib/theme';
 /**
  * FileAttachmentPicker — Modal picker for attaching MindOS knowledge-base files to chat.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  Modal,
-  View,
-  Text,
-  Pressable,
-  FlatList,
-  ActivityIndicator,
-  StyleSheet,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import { mindosClient } from '@/lib/api-client';
 import { flattenFiles } from '@/lib/file-tree';
 import type { FileNode } from '@/lib/types';
+import { Ionicons } from '@expo/vector-icons';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  FlatList,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface FileAttachmentPickerProps {
   visible: boolean;
@@ -30,6 +31,7 @@ export default function FileAttachmentPicker({
   onChangeSelectedPaths,
   onClose,
 }: FileAttachmentPickerProps) {
+  const { colors, styles } = useThemedStyles(createViewTheme);
   const [files, setFiles] = useState<FileNode[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -75,12 +77,12 @@ export default function FileAttachmentPicker({
 
         {loading ? (
           <View style={styles.centerState}>
-            <ActivityIndicator color="#c8873a" />
+            <ActivityIndicator color={colors.amber} />
             <Text style={styles.stateText}>Loading files...</Text>
           </View>
         ) : error ? (
           <View style={styles.centerState}>
-            <Ionicons name="warning-outline" size={28} color="#fca5a5" />
+            <Ionicons name="warning-outline" size={28} color={colors.errorText} />
             <Text style={styles.errorText}>{error}</Text>
             <Pressable style={styles.retryBtn} onPress={load}>
               <Text style={styles.retryText}>Retry</Text>
@@ -88,7 +90,7 @@ export default function FileAttachmentPicker({
           </View>
         ) : files.length === 0 ? (
           <View style={styles.centerState}>
-            <Ionicons name="document-outline" size={28} color="#78716c" />
+            <Ionicons name="document-outline" size={28} color={colors.textSubtle} />
             <Text style={styles.stateText}>No files available to attach</Text>
           </View>
         ) : (
@@ -105,7 +107,7 @@ export default function FileAttachmentPicker({
                   <Ionicons
                     name={selected ? 'checkbox' : 'square-outline'}
                     size={20}
-                    color={selected ? '#c8873a' : '#78716c'}
+                    color={selected ? colors.amber : colors.textSubtle}
                   />
                   <View style={styles.rowTextWrap}>
                     <Text style={styles.fileName} numberOfLines={1}>{item.name}</Text>
@@ -122,84 +124,87 @@ export default function FileAttachmentPicker({
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#1a1917',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#292524',
-  },
-  title: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fafaf9',
-  },
-  cancelText: {
-    fontSize: 14,
-    color: '#a8a29e',
-  },
-  doneText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#c8873a',
-  },
-  centerState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 32,
-  },
-  stateText: {
-    fontSize: 14,
-    color: '#a8a29e',
-    textAlign: 'center',
-  },
-  errorText: {
-    fontSize: 14,
-    color: '#fca5a5',
-    textAlign: 'center',
-  },
-  retryBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    backgroundColor: 'rgba(200, 135, 58, 0.15)',
-  },
-  retryText: {
-    color: '#c8873a',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  listContent: {
-    paddingVertical: 8,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#292524',
-  },
-  rowTextWrap: {
-    flex: 1,
-  },
-  fileName: {
-    fontSize: 14,
-    color: '#fafaf9',
-    marginBottom: 2,
-  },
-  filePath: {
-    fontSize: 12,
-    color: '#78716c',
-  },
-});
+function createViewTheme(colors: ThemeColors) {
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.surface,
+    },
+    title: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.text,
+    },
+    cancelText: {
+      fontSize: 14,
+      color: colors.textMuted,
+    },
+    doneText: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.amber,
+    },
+    centerState: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      gap: 12,
+      paddingHorizontal: 32,
+    },
+    stateText: {
+      fontSize: 14,
+      color: colors.textMuted,
+      textAlign: 'center',
+    },
+    errorText: {
+      fontSize: 14,
+      color: colors.errorText,
+      textAlign: 'center',
+    },
+    retryBtn: {
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderRadius: 8,
+      backgroundColor: 'rgba(200, 135, 58, 0.15)',
+    },
+    retryText: {
+      color: colors.amber,
+      fontWeight: '600',
+      fontSize: 14,
+    },
+    listContent: {
+      paddingVertical: 8,
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.surface,
+    },
+    rowTextWrap: {
+      flex: 1,
+    },
+    fileName: {
+      fontSize: 14,
+      color: colors.text,
+      marginBottom: 2,
+    },
+    filePath: {
+      fontSize: 12,
+      color: colors.textSubtle,
+    },
+  });
+  return { styles };
+}

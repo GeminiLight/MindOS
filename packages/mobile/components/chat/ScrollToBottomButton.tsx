@@ -1,5 +1,6 @@
-import { Pressable, StyleSheet } from 'react-native';
+import { useThemedStyles, type ThemeColors } from '@/lib/theme';
 import { Ionicons } from '@expo/vector-icons';
+import { Pressable, StyleSheet } from 'react-native';
 
 interface ScrollToBottomButtonProps {
   visible: boolean;
@@ -7,6 +8,7 @@ interface ScrollToBottomButtonProps {
 }
 
 export default function ScrollToBottomButton({ visible, onPress }: ScrollToBottomButtonProps) {
+  const { colors, styles } = useThemedStyles(createViewTheme);
   if (!visible) return null;
 
   return (
@@ -14,27 +16,30 @@ export default function ScrollToBottomButton({ visible, onPress }: ScrollToBotto
       style={({ pressed }) => [styles.scrollBtn, pressed && styles.scrollBtnPressed]}
       onPress={onPress}
     >
-      <Ionicons name="chevron-down" size={18} color="#fafaf9" />
+      <Ionicons name="chevron-down" size={18} color={colors.text} />
     </Pressable>
   );
 }
 
-const styles = StyleSheet.create({
-  scrollBtn: {
-    position: 'absolute',
-    right: 16,
-    bottom: 80,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#44403c',
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.3,
-    shadowRadius: 2,
-  },
-  scrollBtnPressed: { opacity: 0.7 },
-});
+function createViewTheme(colors: ThemeColors) {
+  const styles = StyleSheet.create({
+    scrollBtn: {
+      position: 'absolute',
+      right: 16,
+      bottom: 80,
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: colors.border,
+      justifyContent: 'center',
+      alignItems: 'center',
+      elevation: 3,
+      shadowColor: colors.black,
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.3,
+      shadowRadius: 2,
+    },
+    scrollBtnPressed: { opacity: 0.7 },
+  });
+  return { styles };
+}

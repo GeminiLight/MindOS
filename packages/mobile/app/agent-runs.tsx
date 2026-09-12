@@ -1,3 +1,22 @@
+import CloudTaskDraftCard from '@/components/agent/CloudTaskDraftCard';
+import ContextLearningCard from '@/components/agent/ContextLearningCard';
+import { RecentAgentActivityListRow } from '@/components/agent/RecentAgentActivityCard';
+import RunRecoveryControls from '@/components/agent/RunRecoveryControls';
+import ServerRequirementsCard from '@/components/agent/ServerRequirementsCard';
+import MindButton from '@/components/ui/MindButton';
+import MindCard from '@/components/ui/MindCard';
+import StatusPill from '@/components/ui/StatusPill';
+import { useRecentAgentActivity } from '@/hooks/useRecentAgentActivity';
+import { useConnectionStore } from '@/lib/connection-store';
+import {
+  buildRecentAgentActivityFilterOptions,
+  filterRecentAgentActivityItems,
+  type RecentAgentActivityFilter,
+} from '@/lib/recent-agent-activity';
+import { hairlineWidth, hitSlop, radius, spacing, typography, useThemedStyles, type ThemeColors } from '@/lib/theme';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import type { ComponentProps } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -8,26 +27,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import type { ComponentProps } from 'react';
-import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import MindButton from '@/components/ui/MindButton';
-import MindCard from '@/components/ui/MindCard';
-import StatusPill from '@/components/ui/StatusPill';
-import { RecentAgentActivityListRow } from '@/components/agent/RecentAgentActivityCard';
-import CloudTaskDraftCard from '@/components/agent/CloudTaskDraftCard';
-import ServerRequirementsCard from '@/components/agent/ServerRequirementsCard';
-import ContextLearningCard from '@/components/agent/ContextLearningCard';
-import RunRecoveryControls from '@/components/agent/RunRecoveryControls';
-import { useConnectionStore } from '@/lib/connection-store';
-import { useRecentAgentActivity } from '@/hooks/useRecentAgentActivity';
-import {
-  buildRecentAgentActivityFilterOptions,
-  filterRecentAgentActivityItems,
-  type RecentAgentActivityFilter,
-} from '@/lib/recent-agent-activity';
-import { colors, hairlineWidth, hitSlop, radius, spacing, typography } from '@/lib/theme';
 
 type IoniconsName = ComponentProps<typeof Ionicons>['name'];
 
@@ -37,27 +37,28 @@ const CLOUD_BRIDGES: Array<{
   detail: string;
   icon: IoniconsName;
 }> = [
-  {
-    id: 'codex-cloud',
-    name: 'Codex Cloud',
-    detail: 'Needs a Product Server task adapter for repo, branch, diff, and review state.',
-    icon: 'terminal-outline',
-  },
-  {
-    id: 'claude-code-web',
-    name: 'Claude Code Web',
-    detail: 'Needs remote session/task sync before mobile can resume or approve work.',
-    icon: 'code-slash-outline',
-  },
-  {
-    id: 'github-copilot',
-    name: 'GitHub Copilot agent',
-    detail: 'Needs issue, branch, PR, and checkpoint events from the server side.',
-    icon: 'git-pull-request-outline',
-  },
-];
+    {
+      id: 'codex-cloud',
+      name: 'Codex Cloud',
+      detail: 'Needs a Product Server task adapter for repo, branch, diff, and review state.',
+      icon: 'terminal-outline',
+    },
+    {
+      id: 'claude-code-web',
+      name: 'Claude Code Web',
+      detail: 'Needs remote session/task sync before mobile can resume or approve work.',
+      icon: 'code-slash-outline',
+    },
+    {
+      id: 'github-copilot',
+      name: 'GitHub Copilot agent',
+      detail: 'Needs issue, branch, PR, and checkpoint events from the server side.',
+      icon: 'git-pull-request-outline',
+    },
+  ];
 
 export default function AgentRunsScreen() {
+  const { colors, styles } = useThemedStyles(createViewTheme);
   const router = useRouter();
   const { status } = useConnectionStore();
   const connected = status === 'connected';
@@ -260,196 +261,199 @@ export default function AgentRunsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  content: {
-    gap: spacing.lg,
-    padding: spacing.lg,
-    paddingBottom: spacing.xxl,
-  },
-  heroRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.md,
-  },
-  heroIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.amberSoft,
-  },
-  heroCopy: {
-    flex: 1,
-    gap: spacing.xs,
-  },
-  heroTitle: {
-    fontSize: typography.section,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  heroText: {
-    fontSize: typography.caption,
-    lineHeight: 17,
-    color: colors.textMuted,
-  },
-  noticeRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.md,
-  },
-  noticeCopy: {
-    flex: 1,
-    gap: spacing.xs,
-  },
-  noticeTitle: {
-    fontSize: typography.body,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  noticeText: {
-    fontSize: typography.caption,
-    lineHeight: 17,
-    color: colors.textMuted,
-  },
-  errorTitle: {
-    fontSize: typography.body,
-    fontWeight: '700',
-    color: colors.errorText,
-  },
-  errorText: {
-    fontSize: typography.caption,
-    lineHeight: 17,
-    color: colors.errorText,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.xs,
-  },
-  sectionTitle: {
-    fontSize: typography.title,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  refreshButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.amberSoft,
-  },
-  refreshButtonDisabled: {
-    opacity: 0.5,
-  },
-  filterRow: {
-    gap: spacing.sm,
-    paddingRight: spacing.lg,
-  },
-  filterChip: {
-    minHeight: 34,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: 17,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  filterChipSelected: {
-    borderColor: colors.amberBorder,
-    backgroundColor: colors.amberSoft,
-  },
-  filterChipDisabled: {
-    opacity: 0.45,
-  },
-  filterText: {
-    fontSize: typography.caption,
-    fontWeight: '700',
-    color: colors.textMuted,
-  },
-  filterTextSelected: {
-    color: colors.amber,
-  },
-  filterCount: {
-    minWidth: 18,
-    overflow: 'hidden',
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.xs,
-    textAlign: 'center',
-    fontSize: typography.caption,
-    fontWeight: '700',
-    color: colors.textSubtle,
-    backgroundColor: colors.surfaceRaised,
-  },
-  runsCard: {
-    paddingTop: spacing.sm,
-  },
-  runList: {
-    borderTopWidth: hairlineWidth,
-    borderTopColor: colors.borderSubtle,
-  },
-  loadingState: {
-    minHeight: 96,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  emptyState: {
-    minHeight: 128,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-  },
-  emptyTitle: {
-    fontSize: typography.body,
-    fontWeight: '700',
-    color: colors.textMuted,
-  },
-  emptyText: {
-    fontSize: typography.caption,
-    lineHeight: 17,
-    color: colors.textSubtle,
-    textAlign: 'center',
-  },
-  bridgeRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.md,
-    paddingVertical: spacing.md,
-  },
-  bridgeRowBorder: {
-    borderBottomWidth: hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
-  },
-  bridgeIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surfaceMuted,
-  },
-  bridgeCopy: {
-    flex: 1,
-    gap: spacing.xs / 2,
-  },
-  bridgeName: {
-    fontSize: typography.body,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  bridgeDetail: {
-    fontSize: typography.caption,
-    lineHeight: 17,
-    color: colors.textSubtle,
-  },
-});
+function createViewTheme(colors: ThemeColors) {
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    content: {
+      gap: spacing.lg,
+      padding: spacing.lg,
+      paddingBottom: spacing.xxl,
+    },
+    heroRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.md,
+    },
+    heroIcon: {
+      width: 38,
+      height: 38,
+      borderRadius: radius.lg,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.amberSoft,
+    },
+    heroCopy: {
+      flex: 1,
+      gap: spacing.xs,
+    },
+    heroTitle: {
+      fontSize: typography.section,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    heroText: {
+      fontSize: typography.caption,
+      lineHeight: 17,
+      color: colors.textMuted,
+    },
+    noticeRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.md,
+    },
+    noticeCopy: {
+      flex: 1,
+      gap: spacing.xs,
+    },
+    noticeTitle: {
+      fontSize: typography.body,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    noticeText: {
+      fontSize: typography.caption,
+      lineHeight: 17,
+      color: colors.textMuted,
+    },
+    errorTitle: {
+      fontSize: typography.body,
+      fontWeight: '700',
+      color: colors.errorText,
+    },
+    errorText: {
+      fontSize: typography.caption,
+      lineHeight: 17,
+      color: colors.errorText,
+    },
+    sectionHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: spacing.xs,
+    },
+    sectionTitle: {
+      fontSize: typography.title,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    refreshButton: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.amberSoft,
+    },
+    refreshButtonDisabled: {
+      opacity: 0.5,
+    },
+    filterRow: {
+      gap: spacing.sm,
+      paddingRight: spacing.lg,
+    },
+    filterChip: {
+      minHeight: 34,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      paddingHorizontal: spacing.md,
+      borderRadius: 17,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+    },
+    filterChipSelected: {
+      borderColor: colors.amberBorder,
+      backgroundColor: colors.amberSoft,
+    },
+    filterChipDisabled: {
+      opacity: 0.45,
+    },
+    filterText: {
+      fontSize: typography.caption,
+      fontWeight: '700',
+      color: colors.textMuted,
+    },
+    filterTextSelected: {
+      color: colors.amber,
+    },
+    filterCount: {
+      minWidth: 18,
+      overflow: 'hidden',
+      borderRadius: radius.sm,
+      paddingHorizontal: spacing.xs,
+      textAlign: 'center',
+      fontSize: typography.caption,
+      fontWeight: '700',
+      color: colors.textSubtle,
+      backgroundColor: colors.surfaceRaised,
+    },
+    runsCard: {
+      paddingTop: spacing.sm,
+    },
+    runList: {
+      borderTopWidth: hairlineWidth,
+      borderTopColor: colors.borderSubtle,
+    },
+    loadingState: {
+      minHeight: 96,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.sm,
+    },
+    emptyState: {
+      minHeight: 128,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.sm,
+      paddingHorizontal: spacing.lg,
+    },
+    emptyTitle: {
+      fontSize: typography.body,
+      fontWeight: '700',
+      color: colors.textMuted,
+    },
+    emptyText: {
+      fontSize: typography.caption,
+      lineHeight: 17,
+      color: colors.textSubtle,
+      textAlign: 'center',
+    },
+    bridgeRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.md,
+      paddingVertical: spacing.md,
+    },
+    bridgeRowBorder: {
+      borderBottomWidth: hairlineWidth,
+      borderBottomColor: colors.borderSubtle,
+    },
+    bridgeIcon: {
+      width: 30,
+      height: 30,
+      borderRadius: radius.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surfaceMuted,
+    },
+    bridgeCopy: {
+      flex: 1,
+      gap: spacing.xs / 2,
+    },
+    bridgeName: {
+      fontSize: typography.body,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    bridgeDetail: {
+      fontSize: typography.caption,
+      lineHeight: 17,
+      color: colors.textSubtle,
+    },
+  });
+  return { styles };
+}

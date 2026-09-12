@@ -21,6 +21,7 @@ export function useAgentRunTimeline(input: {
   messages: Message[];
   setMessages: Dispatch<SetStateAction<Message[]>>;
   pollMs?: number;
+  rootRunId?: string;
 }): void {
   const pollMs = input.pollMs ?? DEFAULT_POLL_MS;
   const turnStartedAfterRef = useRef<number | null>(null);
@@ -51,7 +52,7 @@ export function useAgentRunTimeline(input: {
     // (spec-cross-process-run-events E/F).
     const payload = await mindosClient.getAgentRuns({
       chatSessionId,
-      startedAfter,
+      ...(input.rootRunId ? { rootRunId: input.rootRunId } : { startedAfter }),
       includeEvents: true,
       limit: 50,
       view: 'timeline',
@@ -62,7 +63,7 @@ export function useAgentRunTimeline(input: {
     const timeline = payload.timeline ?? null;
     if (!timeline) return;
     setMessagesRef.current((prev) => mergeAgentRunTimelineIntoMessages(prev, timeline));
-  }, [ensureTurnStartedAfter]);
+  }, [ensureTurnStartedAfter, input.rootRunId]);
 
   useEffect(() => {
     if (!input.enabled || !input.chatSessionId || !input.isStreaming) return;

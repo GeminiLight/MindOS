@@ -1,11 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import type { ComponentProps } from 'react';
-import { Ionicons } from '@expo/vector-icons';
-import * as Clipboard from 'expo-clipboard';
-import MindCard from '@/components/ui/MindCard';
 import MindButton from '@/components/ui/MindButton';
+import MindCard from '@/components/ui/MindCard';
 import StatusPill from '@/components/ui/StatusPill';
+import { useAgentTaskDraft } from '@/hooks/useAgentTaskDraft';
 import {
   AGENT_TASK_PROVIDER_OPTIONS,
   formatAgentTaskDraftContract,
@@ -13,8 +9,12 @@ import {
   validateAgentTaskDraft,
   type AgentTaskProviderId,
 } from '@/lib/agent-task-draft';
-import { useAgentTaskDraft } from '@/hooks/useAgentTaskDraft';
-import { colors, hairlineWidth, radius, spacing, typography } from '@/lib/theme';
+import { hairlineWidth, radius, spacing, typography, useThemedStyles, type ThemeColors } from '@/lib/theme';
+import { Ionicons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
+import type { ComponentProps } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 type IoniconsName = ComponentProps<typeof Ionicons>['name'];
 
@@ -25,6 +25,7 @@ const PROVIDER_ICONS: Record<AgentTaskProviderId, IoniconsName> = {
 };
 
 export default function CloudTaskDraftCard() {
+  const { colors, styles } = useThemedStyles(createViewTheme);
   const { draft, loaded, saveStatus, saveError, updateDraft, resetDraft } = useAgentTaskDraft();
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
   const provider = getAgentTaskProvider(draft.provider);
@@ -203,6 +204,7 @@ function Field({
   placeholder: string;
   onChangeText: (value: string) => void;
 }) {
+  const { colors, styles } = useThemedStyles(createViewTheme);
   return (
     <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>
@@ -219,177 +221,180 @@ function Field({
   );
 }
 
-const styles = StyleSheet.create({
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.md,
-  },
-  headerIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.amberSoft,
-  },
-  headerCopy: {
-    flex: 1,
-    gap: spacing.xs,
-  },
-  title: {
-    fontSize: typography.title,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  subtitle: {
-    fontSize: typography.caption,
-    lineHeight: 17,
-    color: colors.textMuted,
-  },
-  providerRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  providerChip: {
-    minHeight: 34,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: 17,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceMuted,
-  },
-  providerChipSelected: {
-    borderColor: colors.amberBorder,
-    backgroundColor: colors.amberSoft,
-  },
-  providerText: {
-    fontSize: typography.caption,
-    fontWeight: '700',
-    color: colors.textMuted,
-  },
-  providerTextSelected: {
-    color: colors.amber,
-  },
-  form: {
-    gap: spacing.md,
-  },
-  field: {
-    gap: spacing.xs,
-  },
-  label: {
-    fontSize: typography.caption,
-    fontWeight: '700',
-    color: colors.textMuted,
-  },
-  promptLabelRow: {
-    minHeight: 22,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-  },
-  resetButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.xs,
-    paddingVertical: spacing.xs / 2,
-  },
-  resetText: {
-    fontSize: typography.caption,
-    fontWeight: '700',
-    color: colors.textSubtle,
-  },
-  input: {
-    minHeight: 42,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    color: colors.text,
-    backgroundColor: colors.surfaceMuted,
-    fontSize: typography.body,
-  },
-  promptInput: {
-    minHeight: 92,
-    lineHeight: 20,
-  },
-  contractBox: {
-    gap: spacing.sm,
-    padding: spacing.md,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.surfaceMuted,
-  },
-  contractHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-  },
-  contractTitle: {
-    flex: 1,
-    fontSize: typography.body,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  contractStatus: {
-    fontSize: typography.caption,
-    fontWeight: '700',
-    color: colors.textSubtle,
-  },
-  contractHint: {
-    fontSize: typography.caption,
-    lineHeight: 17,
-    color: colors.textMuted,
-  },
-  contractPreview: {
-    paddingTop: spacing.sm,
-    borderTopWidth: hairlineWidth,
-    borderTopColor: colors.border,
-    fontSize: typography.caption,
-    lineHeight: 17,
-    color: colors.textSubtle,
-  },
-  footerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  footerCopy: {
-    flex: 1,
-    gap: spacing.xs / 2,
-  },
-  footerTitle: {
-    fontSize: typography.body,
-    fontWeight: '700',
-    color: colors.textMuted,
-  },
-  footerTitleReady: {
-    color: colors.success,
-  },
-  footerText: {
-    fontSize: typography.caption,
-    lineHeight: 17,
-    color: colors.textSubtle,
-  },
-  footerTextError: {
-    color: colors.warning,
-  },
-  footerActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'flex-end',
-    gap: spacing.sm,
-  },
-  actionButton: {
-    minWidth: 108,
-  },
-});
+function createViewTheme(colors: ThemeColors) {
+  const styles = StyleSheet.create({
+    headerRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.md,
+    },
+    headerIcon: {
+      width: 36,
+      height: 36,
+      borderRadius: radius.lg,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.amberSoft,
+    },
+    headerCopy: {
+      flex: 1,
+      gap: spacing.xs,
+    },
+    title: {
+      fontSize: typography.title,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    subtitle: {
+      fontSize: typography.caption,
+      lineHeight: 17,
+      color: colors.textMuted,
+    },
+    providerRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.sm,
+    },
+    providerChip: {
+      minHeight: 34,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      paddingHorizontal: spacing.md,
+      borderRadius: 17,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surfaceMuted,
+    },
+    providerChipSelected: {
+      borderColor: colors.amberBorder,
+      backgroundColor: colors.amberSoft,
+    },
+    providerText: {
+      fontSize: typography.caption,
+      fontWeight: '700',
+      color: colors.textMuted,
+    },
+    providerTextSelected: {
+      color: colors.amber,
+    },
+    form: {
+      gap: spacing.md,
+    },
+    field: {
+      gap: spacing.xs,
+    },
+    label: {
+      fontSize: typography.caption,
+      fontWeight: '700',
+      color: colors.textMuted,
+    },
+    promptLabelRow: {
+      minHeight: 22,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.md,
+    },
+    resetButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      paddingHorizontal: spacing.xs,
+      paddingVertical: spacing.xs / 2,
+    },
+    resetText: {
+      fontSize: typography.caption,
+      fontWeight: '700',
+      color: colors.textSubtle,
+    },
+    input: {
+      minHeight: 42,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      color: colors.text,
+      backgroundColor: colors.surfaceMuted,
+      fontSize: typography.body,
+    },
+    promptInput: {
+      minHeight: 92,
+      lineHeight: 20,
+    },
+    contractBox: {
+      gap: spacing.sm,
+      padding: spacing.md,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle,
+      backgroundColor: colors.surfaceMuted,
+    },
+    contractHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.md,
+    },
+    contractTitle: {
+      flex: 1,
+      fontSize: typography.body,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    contractStatus: {
+      fontSize: typography.caption,
+      fontWeight: '700',
+      color: colors.textSubtle,
+    },
+    contractHint: {
+      fontSize: typography.caption,
+      lineHeight: 17,
+      color: colors.textMuted,
+    },
+    contractPreview: {
+      paddingTop: spacing.sm,
+      borderTopWidth: hairlineWidth,
+      borderTopColor: colors.border,
+      fontSize: typography.caption,
+      lineHeight: 17,
+      color: colors.textSubtle,
+    },
+    footerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+    },
+    footerCopy: {
+      flex: 1,
+      gap: spacing.xs / 2,
+    },
+    footerTitle: {
+      fontSize: typography.body,
+      fontWeight: '700',
+      color: colors.textMuted,
+    },
+    footerTitleReady: {
+      color: colors.success,
+    },
+    footerText: {
+      fontSize: typography.caption,
+      lineHeight: 17,
+      color: colors.textSubtle,
+    },
+    footerTextError: {
+      color: colors.warning,
+    },
+    footerActions: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'flex-end',
+      gap: spacing.sm,
+    },
+    actionButton: {
+      minWidth: 108,
+    },
+  });
+  return { styles };
+}

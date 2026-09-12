@@ -1,15 +1,14 @@
+import { useThemedStyles, type ThemeColors } from '@/lib/theme';
 /**
  * QRScanner — Camera-based QR code scanner for connecting to MindOS server.
  */
-import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Pressable, Alert, Dimensions } from 'react-native';
-import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
-import { Ionicons } from '@expo/vector-icons';
 import { parseMobilePairingPayload, type MobilePairingPayload } from '@/lib/pairing-payload';
-import { colors, radius, spacing, typography } from '@/lib/theme';
+import { radius, spacing, typography } from '@/lib/theme';
+import { Ionicons } from '@expo/vector-icons';
+import { BarcodeScanningResult, CameraView, useCameraPermissions } from 'expo-camera';
+import { useEffect, useRef, useState } from 'react';
+import { Alert, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const SCAN_AREA_SIZE = SCREEN_WIDTH * 0.7;
 
 interface QRScannerProps {
   onScan: (payload: MobilePairingPayload) => void;
@@ -17,18 +16,24 @@ interface QRScannerProps {
 }
 
 export default function QRScanner({ onScan, onClose }: QRScannerProps) {
+  const { colors, styles } = useThemedStyles(createViewTheme);
+  const { width } = useWindowDimensions();
+  const scanSize = Math.min(width * 0.7, 360);
+  const scannedRef = useRef(false);
+  const askedRef = useRef(false);
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
 
   useEffect(() => {
-    if (permission && !permission.granted && permission.canAskAgain) {
-      requestPermission();
+    if (permission && !permission.granted && permission.canAskAgain && !askedRef.current) {
+      askedRef.current = true;
+      void requestPermission().catch(() => { });
     }
   }, [permission, requestPermission]);
 
   const handleBarCodeScanned = (result: BarcodeScanningResult) => {
-    if (scanned) return;
-    setScanned(true);
+    if (scannedRef.current) return;
+    scannedRef.current = true; setScanned(true);
 
     const parsed = parseMobilePairingPayload(result.data);
     if (parsed.ok) {
@@ -37,7 +42,7 @@ export default function QRScanner({ onScan, onClose }: QRScannerProps) {
       Alert.alert(
         'Invalid connection code',
         parsed.message,
-        [{ text: 'Try Again', onPress: () => setScanned(false) }],
+        [{ text: 'Try Again', onPress: () => { scannedRef.current = false; setScanned(false); } }],
       );
     }
   };
@@ -83,9 +88,9 @@ export default function QRScanner({ onScan, onClose }: QRScannerProps) {
       {/* Overlay with cutout */}
       <View style={styles.overlay}>
         <View style={styles.overlayTop} />
-        <View style={styles.overlayMiddle}>
+        <View style={[styles.overlayMiddle, { height: scanSize }]}>
           <View style={styles.overlaySide} />
-          <View style={styles.scanArea}>
+          <View style={[styles.scanArea, { width: scanSize, height: scanSize }]}>
             {/* Corner markers */}
             <View style={[styles.corner, styles.cornerTopLeft]} />
             <View style={[styles.corner, styles.cornerTopRight]} />
@@ -102,129 +107,129 @@ export default function QRScanner({ onScan, onClose }: QRScannerProps) {
       </View>
 
       {/* Close button */}
-      <Pressable style={styles.closeButton} onPress={onClose} hitSlop={16}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Close camera" style={styles.closeButton} onPress={onClose} hitSlop={16}>
         <Ionicons name="close" size={28} color={colors.white} />
       </Pressable>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: spacing.lg,
-  },
-  message: {
-    fontSize: typography.title,
-    color: colors.text,
-    textAlign: 'center',
-    paddingHorizontal: spacing.xxl,
-    marginTop: spacing.lg,
-  },
-  hint: {
-    fontSize: typography.body,
-    color: colors.textSubtle,
-    textAlign: 'center',
-    paddingHorizontal: spacing.xxl,
-  },
-  button: {
-    backgroundColor: colors.amber,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-    borderRadius: radius.md,
-    marginTop: spacing.sm,
-  },
-  buttonText: {
-    color: colors.white,
-    fontWeight: '600',
-    fontSize: typography.bodyLarge,
-  },
-  cancelButton: {
-    paddingVertical: spacing.md,
-  },
-  cancelText: {
-    color: colors.textSubtle,
-    fontSize: typography.body,
-  },
-  overlay: {
-    ...StyleSheet.absoluteFill,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  overlayTop: {
-    flex: 1,
-    width: '100%',
-    backgroundColor: colors.scrim,
-  },
-  overlayMiddle: {
-    flexDirection: 'row',
-    height: SCAN_AREA_SIZE,
-  },
-  overlaySide: {
-    flex: 1,
-    backgroundColor: colors.scrim,
-  },
-  scanArea: {
-    width: SCAN_AREA_SIZE,
-    height: SCAN_AREA_SIZE,
-    position: 'relative',
-  },
-  overlayBottom: {
-    flex: 1,
-    width: '100%',
-    backgroundColor: colors.scrim,
-    justifyContent: 'flex-start',
-    alignItems: 'center',
-    paddingTop: spacing.xl,
-  },
-  instruction: {
-    fontSize: typography.body,
-    color: colors.text,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  corner: {
-    position: 'absolute',
-    width: 24,
-    height: 24,
-    borderColor: colors.amber,
-  },
-  cornerTopLeft: {
-    top: 0,
-    left: 0,
-    borderTopWidth: 3,
-    borderLeftWidth: 3,
-  },
-  cornerTopRight: {
-    top: 0,
-    right: 0,
-    borderTopWidth: 3,
-    borderRightWidth: 3,
-  },
-  cornerBottomLeft: {
-    bottom: 0,
-    left: 0,
-    borderBottomWidth: 3,
-    borderLeftWidth: 3,
-  },
-  cornerBottomRight: {
-    bottom: 0,
-    right: 0,
-    borderBottomWidth: 3,
-    borderRightWidth: 3,
-  },
-  closeButton: {
-    position: 'absolute',
-    top: 60,
-    left: 20,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.scrim,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-});
+function createViewTheme(colors: ThemeColors) {
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+      justifyContent: 'center',
+      alignItems: 'center',
+      gap: spacing.lg,
+    },
+    message: {
+      fontSize: typography.title,
+      color: colors.text,
+      textAlign: 'center',
+      paddingHorizontal: spacing.xxl,
+      marginTop: spacing.lg,
+    },
+    hint: {
+      fontSize: typography.body,
+      color: colors.textSubtle,
+      textAlign: 'center',
+      paddingHorizontal: spacing.xxl,
+    },
+    button: {
+      backgroundColor: colors.amberAction,
+      paddingHorizontal: spacing.xl,
+      paddingVertical: spacing.md,
+      borderRadius: radius.md,
+      marginTop: spacing.sm,
+    },
+    buttonText: {
+      color: colors.white,
+      fontWeight: '600',
+      fontSize: typography.bodyLarge,
+    },
+    cancelButton: {
+      paddingVertical: spacing.md,
+    },
+    cancelText: {
+      color: colors.textSubtle,
+      fontSize: typography.body,
+    },
+    overlay: {
+      ...StyleSheet.absoluteFill,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    overlayTop: {
+      flex: 1,
+      width: '100%',
+      backgroundColor: colors.scrim,
+    },
+    overlayMiddle: {
+      flexDirection: 'row',
+    },
+    overlaySide: {
+      flex: 1,
+      backgroundColor: colors.scrim,
+    },
+    scanArea: {
+      position: 'relative',
+    },
+    overlayBottom: {
+      flex: 1,
+      width: '100%',
+      backgroundColor: colors.scrim,
+      justifyContent: 'flex-start',
+      alignItems: 'center',
+      paddingTop: spacing.xl,
+    },
+    instruction: {
+      fontSize: typography.body,
+      color: colors.text,
+      textAlign: 'center',
+      lineHeight: 20,
+    },
+    corner: {
+      position: 'absolute',
+      width: 24,
+      height: 24,
+      borderColor: colors.amber,
+    },
+    cornerTopLeft: {
+      top: 0,
+      left: 0,
+      borderTopWidth: 3,
+      borderLeftWidth: 3,
+    },
+    cornerTopRight: {
+      top: 0,
+      right: 0,
+      borderTopWidth: 3,
+      borderRightWidth: 3,
+    },
+    cornerBottomLeft: {
+      bottom: 0,
+      left: 0,
+      borderBottomWidth: 3,
+      borderLeftWidth: 3,
+    },
+    cornerBottomRight: {
+      bottom: 0,
+      right: 0,
+      borderBottomWidth: 3,
+      borderRightWidth: 3,
+    },
+    closeButton: {
+      position: 'absolute',
+      top: 60,
+      left: 20,
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: colors.scrim,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+  });
+  return { styles };
+}

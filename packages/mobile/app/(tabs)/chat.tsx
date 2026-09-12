@@ -1,39 +1,48 @@
+import { useThemedStyles, type ThemeColors } from '@/lib/theme';
 /**
  * Chat tab — AI conversation with multi-session management.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  FlatList,
-  ActivityIndicator,
-  StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  Alert,
-  NativeSyntheticEvent,
-  NativeScrollEvent,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import ChatInput from '@/components/ChatInput';
+import FileAttachmentPicker from '@/components/FileAttachmentPicker';
+import MessageBubble from '@/components/MessageBubble';
+import OfflineBanner from '@/components/OfflineBanner';
+import ChatEmptyState from '@/components/chat/ChatEmptyState';
+import ChatHeader from '@/components/chat/ChatHeader';
+import ChatStatusFooter from '@/components/chat/ChatStatusFooter';
+import RuntimePickerSheet from '@/components/chat/RuntimePickerSheet';
+import ScrollToBottomButton from '@/components/chat/ScrollToBottomButton';
+import SessionListDrawer from '@/components/chat/SessionListDrawer';
+import { InlineBanner } from '@/components/ui/MobileScaffold';
+import { useAgentRuntimes } from '@/hooks/useAgentRuntimes';
 import { useChatSessions } from '@/hooks/useChatSessions';
 import { useChatWithSession } from '@/hooks/useChatWithSession';
-import ChatInput from '@/components/ChatInput';
-import MessageBubble from '@/components/MessageBubble';
-import FileAttachmentPicker from '@/components/FileAttachmentPicker';
-import SessionListDrawer from '@/components/chat/SessionListDrawer';
-import ChatHeader from '@/components/chat/ChatHeader';
-import ChatEmptyState from '@/components/chat/ChatEmptyState';
-import ChatStatusFooter from '@/components/chat/ChatStatusFooter';
-import ScrollToBottomButton from '@/components/chat/ScrollToBottomButton';
-import RuntimePickerSheet from '@/components/chat/RuntimePickerSheet';
-import { useAgentRuntimes } from '@/hooks/useAgentRuntimes';
 import {
   buildRuntimeComposerPresentation,
   coerceSelectedRuntime,
   runtimeKey,
 } from '@/lib/agent-runtime-companion';
-import { colors } from '@/lib/theme';
+import { useConnectionStore } from '@/lib/connection-store';
 import type { AgentRuntimeIdentity, ComposerIntent, Message } from '@/lib/types';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  KeyboardAvoidingView,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  Platform,
+  StyleSheet,
+} from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function ChatScreen() {
+  const { colors, styles } = useThemedStyles(createViewTheme);
+  const connected = useConnectionStore(s => s.status === 'connected');
+  const insets = useSafeAreaInsets();
+  const [loadedSessionId, setLoadedSessionId] = useState<string | null>(null);
+  const [storageError, setStorageError] = useState('');
+  const [loadRetry, setLoadRetry] = useState(0);
   const [composerIntent, setComposerIntent] = useState<ComposerIntent>('chat');
   const [inputText, setInputText] = useState('');
   const [selectedAttachments, setSelectedAttachments] = useState<string[]>([]);
@@ -72,33 +81,32 @@ export default function ChatScreen() {
     }
 
     setCurrentMessagesLoaded(false);
+    setStorageError('');
     getSessionMessages(activeSessionId)
       .then((loadedMessages) => {
         if (cancelled) return;
+        setLoadedSessionId(activeSessionId);
         setCurrentMessages(loadedMessages);
         setCurrentMessagesLoaded(true);
       })
-      .catch(() => {
-        if (cancelled) return;
-        setCurrentMessages([]);
-        setCurrentMessagesLoaded(true);
-      });
+      .catch(() => { if (!cancelled) setStorageError('Could not read this conversation. Retry to protect your saved messages.'); });
     return () => { cancelled = true; };
-  }, [activeSessionId, getSessionMessages, sessionsLoaded]);
+  }, [activeSessionId, getSessionMessages, sessionsLoaded, loadRetry]);
 
-  const handleMessagesChange = useCallback((messages: Message[]) => {
-    if (!activeSessionId || !currentMessagesLoaded) return;
-    void saveSessionMessages(activeSessionId, messages);
-  }, [activeSessionId, currentMessagesLoaded, saveSessionMessages]);
+  const handleMessagesChange = useCallback((messages: Message[], sessionId?: string) => {
+    if (!sessionId) return;
+    return saveSessionMessages(sessionId, messages);
+  }, [saveSessionMessages]);
 
   const chatState = useChatWithSession({
     sessionId: activeSessionId ?? '',
     initialMessages: currentMessages,
-    initialMessagesLoaded: currentMessagesLoaded,
+    initialMessagesLoaded: currentMessagesLoaded && loadedSessionId === activeSessionId,
     selectedRuntime,
+    composerIntent,
     onMessagesChange: handleMessagesChange,
   });
-  const { messages, isStreaming, error, lastFailedMessage, send, retry, cancel } = chatState;
+  const { messages, isStreaming, error, lastFailedMessage, send, retry, cancel, flush, saveError } = chatState;
 
   useEffect(() => {
     setSelectedRuntime((current) => {
@@ -114,10 +122,8 @@ export default function ChatScreen() {
 
   const handleNewChat = useCallback(async () => {
     const createFreshChat = async () => {
-      setCurrentMessagesLoaded(false);
-      await createSession();
-      setCurrentMessages([]);
-      resetComposer();
+      try { await flush(); cancel(); await createSession(); setCurrentMessages([]); resetComposer(); }
+      catch { setStorageError('Could not save the conversation. Please retry before switching.'); }
     };
 
     if (!messages.length) {
@@ -133,18 +139,19 @@ export default function ChatScreen() {
         { text: 'New Chat', onPress: () => { void createFreshChat(); } },
       ],
     );
-  }, [createSession, messages.length, resetComposer]);
+  }, [createSession, messages.length, resetComposer, flush, cancel]);
 
   const handleSelectSession = useCallback(async (sessionId: string) => {
-    await setActiveSession(sessionId);
-    resetComposer();
-  }, [resetComposer, setActiveSession]);
+    try { await flush(); cancel(); await setActiveSession(sessionId); resetComposer(); }
+    catch { setStorageError('Could not save the conversation. Please retry before switching.'); }
+  }, [resetComposer, setActiveSession, flush, cancel]);
 
   const handleSend = useCallback((message: string) => {
     const started = send(message, selectedAttachments);
-    if (!started) return;
+    if (!started) return false;
     setSelectedAttachments([]);
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
+    return true;
   }, [selectedAttachments, send]);
 
   const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -165,18 +172,20 @@ export default function ChatScreen() {
 
   if (!sessionsLoaded || !currentMessagesLoaded) {
     return (
-      <SafeAreaView style={styles.container} edges={['left', 'right']}>
-        <ActivityIndicator color={colors.amber} style={styles.loader} />
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+        <OfflineBanner />
+        {storageError || sessionsState.error ? <InlineBanner tone="error" title="Conversation unavailable" message={storageError || sessionsState.error || ''} actionLabel="Retry" onAction={() => { sessionsState.reload(); setLoadRetry(n => n + 1); }} /> : <ActivityIndicator color={colors.amber} style={styles.loader} />}
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['left', 'right']}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <OfflineBanner />
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={insets.top}
       >
         <ChatHeader
           title={headerTitle}
@@ -190,6 +199,7 @@ export default function ChatScreen() {
           onNewChat={() => { void handleNewChat(); }}
         />
 
+        {storageError || saveError ? <InlineBanner tone="error" title="Messages need saving" message={storageError || saveError || ''} actionLabel="Retry save" onAction={() => { void flush().then(() => setStorageError('')).catch(() => { }); }} /> : null}
         {isEmptyState ? (
           <ChatEmptyState
             title={composerPresentation.emptyTitle}
@@ -210,7 +220,7 @@ export default function ChatScreen() {
               scrollEventThrottle={100}
               onContentSizeChange={() => {
                 const distanceFromBottom = contentHeightRef.current - scrollOffsetRef.current - layoutHeightRef.current;
-                if (distanceFromBottom < 150 || isStreaming) {
+                if (distanceFromBottom < 150) {
                   listRef.current?.scrollToEnd({ animated: false });
                 }
               }}
@@ -242,7 +252,7 @@ export default function ChatScreen() {
           hostActionsEnabled={composerPresentation.hostActionsEnabled}
           placeholder={composerPresentation.placeholder}
           modeHint={composerPresentation.modeHint}
-          canSend={!isStreaming}
+          canSend={!isStreaming && connected && Boolean(selectedRuntimeOption?.selectable)}
           attachedPaths={selectedAttachments}
           onOpenAttachmentPicker={() => setShowAttachmentPicker(true)}
           onRemoveAttachment={(path) => setSelectedAttachments((prev) => prev.filter((item) => item !== path))}
@@ -262,8 +272,8 @@ export default function ChatScreen() {
         activeSessionId={activeSessionId}
         onSelect={handleSelectSession}
         onNewChat={() => { void handleNewChat(); }}
-        onRename={renameSession}
-        onDelete={deleteSession}
+        onRename={(id, title) => { void renameSession(id, title).catch(() => setStorageError('Could not rename the conversation. Retry.')); }}
+        onDelete={id => { void (async () => { if (id === activeSessionId) { await flush(); cancel(); } await deleteSession(id); })().catch(() => setStorageError('Could not delete the conversation. Retry.')); }}
         onClose={() => setShowSessionList(false)}
       />
 
@@ -288,9 +298,12 @@ export default function ChatScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  flex: { flex: 1 },
-  loader: { marginTop: 40 },
-  messageList: { paddingVertical: 8 },
-});
+function createViewTheme(colors: ThemeColors) {
+  const styles = StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.background },
+    flex: { flex: 1 },
+    loader: { marginTop: 40 },
+    messageList: { paddingVertical: 8 },
+  });
+  return { styles };
+}

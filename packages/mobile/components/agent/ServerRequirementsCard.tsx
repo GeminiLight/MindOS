@@ -1,8 +1,3 @@
-import { useEffect, useMemo, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import type { ComponentProps } from 'react';
-import { Ionicons } from '@expo/vector-icons';
-import * as Clipboard from 'expo-clipboard';
 import MindButton from '@/components/ui/MindButton';
 import MindCard from '@/components/ui/MindCard';
 import StatusPill from '@/components/ui/StatusPill';
@@ -12,7 +7,12 @@ import {
   summarizeAgentServerRequirements,
   type AgentServerRequirementId,
 } from '@/lib/agent-server-requirements';
-import { colors, hairlineWidth, radius, spacing, typography } from '@/lib/theme';
+import { hairlineWidth, radius, spacing, typography, useThemedStyles, type ThemeColors } from '@/lib/theme';
+import { Ionicons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
+import type { ComponentProps } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 
 type IoniconsName = ComponentProps<typeof Ionicons>['name'];
 
@@ -26,6 +26,7 @@ const REQUIREMENT_ICONS: Record<AgentServerRequirementId, IoniconsName> = {
 };
 
 export default function ServerRequirementsCard() {
+  const { colors, styles } = useThemedStyles(createViewTheme);
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
   const contract = useMemo(() => formatAgentServerRequirementsContract(), []);
   const summary = useMemo(() => summarizeAgentServerRequirements(), []);
@@ -93,7 +94,7 @@ export default function ServerRequirementsCard() {
             ? 'Requirements copied'
             : copyState === 'error'
               ? 'Clipboard unavailable. Try again from a supported device.'
-            : `${summary.availableCount} control contracts are ready; ${summary.gapCount} remain.`}
+              : `${summary.availableCount} control contracts are ready; ${summary.gapCount} remain.`}
         </Text>
         <MindButton
           label={copyState === 'copied' ? 'Copied' : 'Copy contract'}
@@ -108,6 +109,7 @@ export default function ServerRequirementsCard() {
 }
 
 function Metric({ label, value }: { label: string; value: number }) {
+  const { styles } = useThemedStyles(createViewTheme);
   return (
     <View style={styles.metric}>
       <Text style={styles.metricValue}>{value}</Text>
@@ -116,115 +118,118 @@ function Metric({ label, value }: { label: string; value: number }) {
   );
 }
 
-const styles = StyleSheet.create({
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.md,
-  },
-  headerIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.amberSoft,
-  },
-  headerCopy: {
-    flex: 1,
-    gap: spacing.xs,
-  },
-  title: {
-    fontSize: typography.title,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  subtitle: {
-    fontSize: typography.caption,
-    lineHeight: 17,
-    color: colors.textMuted,
-  },
-  metricRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  metric: {
-    flex: 1,
-    minHeight: 58,
-    justifyContent: 'center',
-    gap: spacing.xs / 2,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    paddingHorizontal: spacing.md,
-    backgroundColor: colors.surfaceMuted,
-  },
-  metricValue: {
-    fontSize: typography.title,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  metricLabel: {
-    fontSize: typography.caption,
-    fontWeight: '700',
-    color: colors.textSubtle,
-  },
-  list: {
-    borderTopWidth: hairlineWidth,
-    borderTopColor: colors.borderSubtle,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.md,
-    paddingVertical: spacing.md,
-  },
-  rowBorder: {
-    borderBottomWidth: hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
-  },
-  rowIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surfaceMuted,
-  },
-  rowCopy: {
-    flex: 1,
-    gap: spacing.xs / 2,
-  },
-  rowTitle: {
-    fontSize: typography.body,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  rowSummary: {
-    fontSize: typography.caption,
-    lineHeight: 17,
-    color: colors.textMuted,
-  },
-  rowUnlocks: {
-    fontSize: typography.caption,
-    lineHeight: 17,
-    color: colors.textSubtle,
-  },
-  footerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  footerText: {
-    flex: 1,
-    fontSize: typography.caption,
-    lineHeight: 17,
-    color: colors.textSubtle,
-  },
-  footerError: {
-    color: colors.warning,
-  },
-  copyButton: {
-    minWidth: 126,
-  },
-});
+function createViewTheme(colors: ThemeColors) {
+  const styles = StyleSheet.create({
+    headerRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.md,
+    },
+    headerIcon: {
+      width: 36,
+      height: 36,
+      borderRadius: radius.lg,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.amberSoft,
+    },
+    headerCopy: {
+      flex: 1,
+      gap: spacing.xs,
+    },
+    title: {
+      fontSize: typography.title,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    subtitle: {
+      fontSize: typography.caption,
+      lineHeight: 17,
+      color: colors.textMuted,
+    },
+    metricRow: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+    },
+    metric: {
+      flex: 1,
+      minHeight: 58,
+      justifyContent: 'center',
+      gap: spacing.xs / 2,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle,
+      paddingHorizontal: spacing.md,
+      backgroundColor: colors.surfaceMuted,
+    },
+    metricValue: {
+      fontSize: typography.title,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    metricLabel: {
+      fontSize: typography.caption,
+      fontWeight: '700',
+      color: colors.textSubtle,
+    },
+    list: {
+      borderTopWidth: hairlineWidth,
+      borderTopColor: colors.borderSubtle,
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.md,
+      paddingVertical: spacing.md,
+    },
+    rowBorder: {
+      borderBottomWidth: hairlineWidth,
+      borderBottomColor: colors.borderSubtle,
+    },
+    rowIcon: {
+      width: 30,
+      height: 30,
+      borderRadius: radius.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surfaceMuted,
+    },
+    rowCopy: {
+      flex: 1,
+      gap: spacing.xs / 2,
+    },
+    rowTitle: {
+      fontSize: typography.body,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    rowSummary: {
+      fontSize: typography.caption,
+      lineHeight: 17,
+      color: colors.textMuted,
+    },
+    rowUnlocks: {
+      fontSize: typography.caption,
+      lineHeight: 17,
+      color: colors.textSubtle,
+    },
+    footerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+    },
+    footerText: {
+      flex: 1,
+      fontSize: typography.caption,
+      lineHeight: 17,
+      color: colors.textSubtle,
+    },
+    footerError: {
+      color: colors.warning,
+    },
+    copyButton: {
+      minWidth: 126,
+    },
+  });
+  return { styles };
+}

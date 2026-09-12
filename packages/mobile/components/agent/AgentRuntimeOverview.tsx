@@ -1,13 +1,13 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
-import type { ComponentProps } from 'react';
-import { Ionicons } from '@expo/vector-icons';
+import MindCard from '@/components/ui/MindCard';
+import StatusPill from '@/components/ui/StatusPill';
 import type {
   RuntimeCompanionItem,
   RuntimeCompanionSummary,
 } from '@/lib/agent-runtime-companion';
-import MindCard from '@/components/ui/MindCard';
-import StatusPill from '@/components/ui/StatusPill';
-import { colors, hitSlop, radius, spacing, typography } from '@/lib/theme';
+import { hitSlop, radius, spacing, typography, useThemedStyles, type ThemeColors } from '@/lib/theme';
+import { Ionicons } from '@expo/vector-icons';
+import type { ComponentProps } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 type IoniconsName = ComponentProps<typeof Ionicons>['name'];
 
@@ -30,6 +30,7 @@ export default function AgentRuntimeOverview({
   onRefresh,
   compact = false,
 }: AgentRuntimeOverviewProps) {
+  const { colors, styles } = useThemedStyles(createViewTheme);
   return (
     <MindCard style={compact ? styles.cardCompact : undefined}>
       <View style={styles.headerRow}>
@@ -85,6 +86,7 @@ export default function AgentRuntimeOverview({
 }
 
 function RuntimeTile({ item, compact }: { item: RuntimeCompanionItem; compact: boolean }) {
+  const { colors, statusDotStyle, styles } = useThemedStyles(createViewTheme);
   const iconColor = item.tone === 'success' ? colors.success
     : item.tone === 'warning' ? colors.warning
       : item.tone === 'error' ? colors.errorText
@@ -109,19 +111,7 @@ function RuntimeTile({ item, compact }: { item: RuntimeCompanionItem; compact: b
   );
 }
 
-function statusDotStyle(tone: RuntimeCompanionItem['tone']) {
-  switch (tone) {
-    case 'success':
-      return styles.statusDotSuccess;
-    case 'warning':
-      return styles.statusDotWarning;
-    case 'error':
-      return styles.statusDotError;
-    case 'muted':
-    default:
-      return styles.statusDotMuted;
-  }
-}
+
 
 function formatCheckedAt(timestamp: number): string {
   const seconds = Math.max(0, Math.round((Date.now() - timestamp) / 1000));
@@ -132,127 +122,144 @@ function formatCheckedAt(timestamp: number): string {
   return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-const styles = StyleSheet.create({
-  cardCompact: {
-    padding: spacing.md,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-  },
-  headerCopy: {
-    flex: 1,
-    gap: spacing.xs,
-  },
-  title: {
-    fontSize: typography.title,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  subtitle: {
-    fontSize: typography.caption,
-    lineHeight: 17,
-    color: colors.textMuted,
-  },
-  errorBanner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-    padding: spacing.md,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.errorBorder,
-    backgroundColor: colors.errorSoft,
-  },
-  errorText: {
-    flex: 1,
-    fontSize: typography.caption,
-    lineHeight: 17,
-    color: colors.errorText,
-  },
-  runtimeGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  runtimeTile: {
-    flexBasis: '47%',
-    flexGrow: 1,
-    minHeight: 112,
-    gap: spacing.xs,
-    padding: spacing.md,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.surfaceMuted,
-  },
-  runtimeTileCompact: {
-    minHeight: 86,
-  },
-  runtimeTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  iconShell: {
-    width: 28,
-    height: 28,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surfaceRaised,
-  },
-  iconShellReady: {
-    backgroundColor: colors.successSoft,
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  statusDotSuccess: { backgroundColor: colors.success },
-  statusDotWarning: { backgroundColor: colors.warning },
-  statusDotError: { backgroundColor: colors.error },
-  statusDotMuted: { backgroundColor: colors.textSubtle },
-  runtimeName: {
-    fontSize: typography.body,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  runtimeStatus: {
-    fontSize: typography.caption,
-    fontWeight: '600',
-    color: colors.textMuted,
-  },
-  runtimeHint: {
-    fontSize: typography.caption,
-    lineHeight: 17,
-    color: colors.textSubtle,
-  },
-  footerRow: {
-    minHeight: 28,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-  },
-  footerText: {
-    flex: 1,
-    fontSize: typography.caption,
-    lineHeight: 17,
-    color: colors.textSubtle,
-  },
-  refreshButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.amberSoft,
-  },
-  refreshButtonDisabled: {
-    opacity: 0.5,
-  },
-});
+function createViewTheme(colors: ThemeColors) {
+  function statusDotStyle(tone: RuntimeCompanionItem['tone']) {
+    switch (tone) {
+      case 'success':
+        return styles.statusDotSuccess;
+      case 'warning':
+        return styles.statusDotWarning;
+      case 'error':
+        return styles.statusDotError;
+      case 'muted':
+      default:
+        return styles.statusDotMuted;
+    }
+  }
+
+  const styles = StyleSheet.create({
+    cardCompact: {
+      padding: spacing.md,
+    },
+    headerRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: spacing.md,
+    },
+    headerCopy: {
+      flex: 1,
+      gap: spacing.xs,
+    },
+    title: {
+      fontSize: typography.title,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    subtitle: {
+      fontSize: typography.caption,
+      lineHeight: 17,
+      color: colors.textMuted,
+    },
+    errorBanner: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.sm,
+      padding: spacing.md,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.errorBorder,
+      backgroundColor: colors.errorSoft,
+    },
+    errorText: {
+      flex: 1,
+      fontSize: typography.caption,
+      lineHeight: 17,
+      color: colors.errorText,
+    },
+    runtimeGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.sm,
+    },
+    runtimeTile: {
+      flexBasis: '47%',
+      flexGrow: 1,
+      minHeight: 112,
+      gap: spacing.xs,
+      padding: spacing.md,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle,
+      backgroundColor: colors.surfaceMuted,
+    },
+    runtimeTileCompact: {
+      minHeight: 86,
+    },
+    runtimeTopRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    iconShell: {
+      width: 28,
+      height: 28,
+      borderRadius: radius.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surfaceRaised,
+    },
+    iconShellReady: {
+      backgroundColor: colors.successSoft,
+    },
+    statusDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+    },
+    statusDotSuccess: { backgroundColor: colors.success },
+    statusDotWarning: { backgroundColor: colors.warning },
+    statusDotError: { backgroundColor: colors.error },
+    statusDotMuted: { backgroundColor: colors.textSubtle },
+    runtimeName: {
+      fontSize: typography.body,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    runtimeStatus: {
+      fontSize: typography.caption,
+      fontWeight: '600',
+      color: colors.textMuted,
+    },
+    runtimeHint: {
+      fontSize: typography.caption,
+      lineHeight: 17,
+      color: colors.textSubtle,
+    },
+    footerRow: {
+      minHeight: 28,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.md,
+    },
+    footerText: {
+      flex: 1,
+      fontSize: typography.caption,
+      lineHeight: 17,
+      color: colors.textSubtle,
+    },
+    refreshButton: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.amberSoft,
+    },
+    refreshButtonDisabled: {
+      opacity: 0.5,
+    },
+  });
+  return { statusDotStyle, styles };
+}
