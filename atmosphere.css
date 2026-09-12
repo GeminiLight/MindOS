@@ -37,10 +37,6 @@ html[lang="zh-Hans"] .hero h1 { font-size: clamp(54px, 4.9vw, 70px); line-height
 .button svg { transition: transform .2s; }
 .button:hover svg { transform: translateX(3px); }
 .hero-band .agent-strip { position: relative; border-top-color: var(--hero-line); border-bottom: 0; padding-block: 25px; }
-.hero-band .agent-logos a { color: var(--hero-muted); transition: color .15s, transform .2s; }
-.hero-band .agent-logos a:hover { color: var(--hero-foreground); transform: translateY(-2px); }
-.hero-band .agent-logos img { background: transparent; border-radius: var(--radius); padding: 3px; }
-:root[data-theme="dark"] .hero-band .agent-logos img { background: var(--hero-foreground); }
 .constellation { --scene-x: 0deg; --scene-y: 0deg; position: relative; min-width: 0; height: 520px; perspective: 1100px; }
 .scene-caption { position: absolute; top: 9px; left: 14%; display: flex; align-items: center; gap: 10px; color: var(--hero-muted); font-size: 11px; letter-spacing: .06em; }
 .constellation-stage { position: absolute; inset: 0 -7%; transform: rotateX(var(--scene-y)) rotateY(var(--scene-x)); transition: transform .25s ease-out; transform-style: preserve-3d; }
@@ -150,5 +146,5 @@ html[lang="zh-Hans"] .hero h1 { font-size: clamp(54px, 4.9vw, 70px); line-height
 }
 @media (prefers-reduced-motion: reduce) {
   .constellation-stage { transform: none; }
-  .button-primary:hover,.button:hover svg,.hero-band .agent-logos a:hover { transform: none; }
+  .button-primary:hover,.button:hover svg { transform: none; }
 }

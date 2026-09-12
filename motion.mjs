@@ -106,10 +106,4 @@ export function mountPageMotion() {
       schedule();
     });
   });
-  document.querySelector('[data-constellation]')?.addEventListener('pointerenter', event => {
-    if (event.pointerType === 'touch') return;
-    animate(document.querySelector('.mesh-core-spark'), [
-      { transform: 'scale(.9)' }, { transform: 'scale(1.12)', offset: .45 }, { transform: 'scale(1)' },
-    ], 280);
-  });
 }

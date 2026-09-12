@@ -59,14 +59,6 @@ html[lang="zh-Hans"] .hero h1 .hero-accent { font-family: var(--font-sans); font
 .hero-actions { display: flex; gap: 25px; align-items: center; flex-wrap: wrap; margin-top: 30px; }
 .trust-list { list-style: none; display: flex; flex-wrap: wrap; gap: 20px; margin: 22px 0 0; padding: 0; font-size: 12px; color: var(--muted-foreground); }
 .trust-list li { display: inline-flex; gap: 6px; align-items: center; }
-.trust-list li span { color: var(--amber-text); }
-.agent-strip { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding-block: 28px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
-.agent-strip p { font-size: 13px; font-weight: 500; }
-.agent-strip > div > span { font-size: 12px; color: var(--muted-foreground); }
-.agent-logos { display: flex; align-items: center; flex-wrap: wrap; gap: 26px; }
-.agent-logos a { display: inline-flex; align-items: center; gap: 9px; font-size: 14px; text-decoration: none; min-height: 44px; }
-.agent-logos img { object-fit: contain; }
-[data-theme="dark"] .agent-logos img { background: var(--foreground); padding: 3px; border-radius: var(--radius); }
 .section-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 40px; margin-bottom: 42px; }
 .section-intro { max-width: 360px; font-size: 16px; line-height: 1.8; color: var(--muted-foreground); padding-bottom: 3px; }
 .js-ready .tab-list { display: flex !important; }
@@ -152,8 +144,6 @@ html[lang="zh-Hans"] .principles blockquote { font-family: var(--font-sans); fon
 .faq-list details:last-child { border-bottom: 1px solid var(--border); }
 .faq-list summary { list-style: none; display: flex; justify-content: space-between; gap: 25px; padding: 22px 0; cursor: pointer; font-size: 15px; font-weight: 500; }
 .faq-list summary::-webkit-details-marker { display: none; }
-.faq-list summary span { color: var(--amber-text); font-size: 20px; line-height: 1.2; transition: transform .15s; }
-.faq-list details[open] summary span { transform: rotate(45deg); }
 .faq-list details p { color: var(--muted-foreground); font-size: 14px; line-height: 1.85; padding-bottom: 24px; padding-right: 28px; }
 .site-footer { background: var(--card); border-top: 1px solid var(--border); padding-block: 38px 24px; }
 .footer-top { display: flex; align-items: center; flex-wrap: wrap; gap: 20px 32px; }
@@ -179,7 +169,6 @@ html[lang="zh-Hans"] .principles blockquote { font-family: var(--font-sans); fon
   .header-download { display: none; }
   .hero h1 { font-size: 62px; }
   html[lang="zh-Hans"] .hero h1 { font-size: 56px; }
-  .agent-strip { align-items: flex-start; flex-direction: column; gap: 12px; }
   .evolution-grid { gap: 45px; }
   .download-grid { gap: 30px; }
   .terminal-download { padding-left: 26px; }
@@ -224,9 +213,6 @@ html[lang="zh-Hans"] .principles blockquote { font-family: var(--font-sans); fon
   .hero-intro { font-size: 15px; max-width: 410px; }
   .hero-definition { font-size: 16px; }
   .hero-eyebrow { font-size: 10px; margin-bottom: 22px; }
-  .agent-strip { padding-block: 22px; }
-  .agent-logos { gap: 8px 20px; }
-  .agent-logos a { font-size: 12px; }
   .section { --section-space: 62px; }
   .section-heading { flex-direction: column; align-items: flex-start; gap: 20px; }
   .section-intro { max-width: 460px; font-size: 15px; }

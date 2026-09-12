@@ -1,3 +1,5 @@
+import { mountSceneMotion } from './scene.mjs';
+import { mountAgentMarquee } from './brands.mjs';
 import { copyText, releaseDetails } from './lib.mjs';
 import { mountPageMotion, mountTabIndicator, revealPanel, stopMotion } from './motion.mjs';
 
@@ -126,13 +128,14 @@ if (releaseLink) {
     .then(data => {
       const release = releaseDetails(data);
       if (!release) return;
-      releaseLink.textContent = 'Desktop v' + release.version + ' ↗';
+      const icon = releaseLink.querySelector('svg');
+      releaseLink.replaceChildren('Desktop v' + release.version + ' ', ...(icon ? [icon] : []));
       releaseLink.href = release.url;
     })
     .catch(() => { /* Keep the native latest-release link and all download routes. */ })
     .finally(() => clearTimeout(timeout));
 }
-// Pointer feedback is decorative: no idle animation, touch interception, or reduced-motion movement.
+// Pointer tilt stays independent of the optional ambient scene animation.
 const scene = document.querySelector('[data-constellation]');
 if (scene) {
   const motion = window.matchMedia('(hover: hover) and (prefers-reduced-motion: no-preference)');
@@ -160,3 +163,5 @@ if (scene) {
 }
 html.classList.add('js-ready');
 mountPageMotion();
+mountAgentMarquee();
+mountSceneMotion();

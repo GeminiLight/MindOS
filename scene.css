@@ -1,0 +1,37 @@
+/* Explicitly requested ambient animation; UI transitions elsewhere stay short. */
+.mesh-signals,.mesh-pulses,.scene-motion-toggle { display: none; }
+[data-scene-ready]:not([data-scene-reduced]) .mesh-signals,
+[data-scene-ready]:not([data-scene-reduced]) .mesh-pulses { display: inline; }
+[data-scene-ready]:not([data-scene-reduced]) .scene-motion-toggle { display: inline-flex; }
+.scene-motion-toggle { position: absolute; top: -6px; right: 5%; z-index: 10; width: 36px; height: 36px; min-width: 44px; min-height: 44px; color: var(--hero-muted); }
+.scene-motion-toggle .ui-icon { width: 14px; height: 14px; }
+.scene-motion-toggle .ui-icon:last-child { display: none; }
+.scene-motion-toggle[aria-pressed="true"] .ui-icon:first-child { display: none; }
+.scene-motion-toggle[aria-pressed="true"] .ui-icon:last-child { display: block; }
+.mesh-ribbon,.mesh-pulse { transform-box: view-box; transform-origin: 340px 247px; }
+.mesh-signal { stroke: var(--hero-amber); stroke-width: 1.6; stroke-linecap: round; stroke-dasharray: 28 222; opacity: .75; }
+.mesh-signal-head { stroke: var(--hero-core); stroke-width: 4; stroke-dasharray: 1 249; opacity: 1; filter: drop-shadow(0 0 3px var(--hero-amber)); --signal-phase: 28px; }
+.signal-lane-0 { --signal-delay: -2.2s; }
+.signal-lane-1 { --signal-delay: -5.4s; }
+.signal-lane-2 { --signal-delay: -7.3s; }
+.mesh-pulse { fill: none; stroke: var(--hero-amber); stroke-width: .8; opacity: 0; }
+[data-scene-ready]:not([data-scene-reduced]) .mesh-signal { animation: scene-signal 9s linear infinite; animation-delay: var(--signal-delay); }
+[data-scene-ready]:not([data-scene-reduced]) .signal-lane-1 .mesh-signal { animation-direction: reverse; animation-duration: 12s; }
+[data-scene-ready]:not([data-scene-reduced]) .mesh-ribbon { animation: scene-breathe 7s ease-in-out infinite; }
+[data-scene-ready]:not([data-scene-reduced]) .mesh-pulse { animation: scene-pulse 4s ease-out infinite; }
+[data-scene-ready]:not([data-scene-reduced]) .mesh-pulse-late { animation-delay: -2s; }
+[data-scene-ready]:not([data-scene-reduced]) .mesh-core-spark { animation: scene-spark 8s ease-in-out infinite; }
+[data-scene-resting] .mesh-signal,[data-scene-resting] .mesh-ribbon,
+[data-scene-resting] .mesh-pulse,[data-scene-resting] .mesh-core-spark { animation-play-state: paused !important; }
+@keyframes scene-signal { from { stroke-dashoffset: var(--signal-phase, 0px); } to { stroke-dashoffset: calc(var(--signal-phase, 0px) - 1000px); } }
+@keyframes scene-breathe { 0%,100% { transform: scale(1,1); } 50% { transform: scale(1.018,.955); } }
+@keyframes scene-pulse { 0% { transform: scale(1); opacity: .55; } 85%,100% { transform: scale(2.5); opacity: 0; } }
+@keyframes scene-spark { 0% { transform: rotate(0deg) scale(1); } 50% { transform: rotate(90deg) scale(1.12); } 100% { transform: rotate(180deg) scale(1); } }
+@media (max-width: 640px) {
+  .scene-motion-toggle { top: -14px; right: 0; }
+  .mesh-signal-head { stroke-width: 4.5; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mesh-signals,.mesh-pulses,.scene-motion-toggle { display: none !important; }
+  .mesh-ribbon,.mesh-core-spark { animation: none !important; transform: none !important; }
+}

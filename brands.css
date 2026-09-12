@@ -1,0 +1,56 @@
+/* Continuous brand motion is a user-requested exception to short UI transitions. */
+.ui-icon { width: 18px; height: 18px; flex: 0 0 auto; vertical-align: middle; }
+.trust-list .ui-icon { width: 14px; height: 14px; color: var(--amber-text); }
+.context-chip .ui-icon { width: 13px; height: 13px; }
+.chip-memory .ui-icon { transform: rotate(-90deg); }
+.phase-result .ui-icon { color: var(--amber-text); margin-right: 4px; }
+.platform-symbol { display: inline-flex; align-items: center; justify-content: center; }
+.platform-symbol .ui-icon { width: 22px; height: 22px; }
+.faq-list summary .ui-icon { color: var(--amber-text); transition: transform .15s; }
+.faq-list details[open] summary .ui-icon { transform: rotate(45deg); }
+.download-heading a .ui-icon,.footer-links .ui-icon { width: 14px; height: 14px; }
+.agent-strip { display: block; }
+.agent-strip-heading { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 18px; }
+.agent-strip-heading p { color: var(--hero-foreground); font-size: 14px; }
+.agent-strip-heading > div > span { display: block; margin-top: 5px; font-size: 12px; color: var(--hero-muted); }
+.agent-strip-actions { display: flex; align-items: center; gap: 18px; flex-shrink: 0; }
+.agent-strip-actions .text-link { font-size: 12px; color: var(--hero-muted); white-space: nowrap; }
+.agent-strip-actions .text-link:hover { color: var(--hero-foreground); }
+.marquee-toggle { display: none; color: var(--hero-muted); border: 1px solid var(--hero-border); border-radius: var(--radius-lg); }
+[data-ready]:not([data-reduced]) .marquee-toggle { display: inline-flex; }
+.marquee-toggle .ui-icon:last-child { display: none; }
+.marquee-toggle[aria-pressed="true"] .ui-icon:first-child { display: none; }
+.marquee-toggle[aria-pressed="true"] .ui-icon:last-child { display: block; }
+.agent-viewport { overflow-x: auto; overflow-y: hidden; padding: 8px 0; scrollbar-width: thin; scrollbar-color: var(--hero-border) transparent; border-radius: var(--radius); }
+.agent-track { display: flex; width: max-content; }
+.agent-list { display: flex; flex: 0 0 auto; align-items: center; list-style: none; margin: 0; padding: 0; }
+.agent-list li { display: flex; align-items: center; gap: 12px; padding-inline: 30px; min-height: 52px; font-size: 20px; font-weight: 500; color: var(--hero-foreground); white-space: nowrap; }
+.agent-name { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+.agent-status { font-size: 10px; font-weight: 400; line-height: 1.4; color: var(--hero-muted); }
+.agent-artwork { display: inline-flex; width: 36px; height: 36px; align-items: center; justify-content: center; flex: 0 0 auto; }
+.agent-artwork img { width: 32px; height: 32px; object-fit: contain; }
+.agent-artwork img[src$="codex.png"] { width: 40px; height: 40px; max-width: none; }
+.brand-dark { display: none; }
+[data-theme="dark"] .brand-light { display: none; }
+[data-theme="dark"] .brand-dark { display: block; }
+[data-agent-copy] { display: none; }
+[data-ready]:not([data-manual]):not([data-reduced]) .agent-viewport { overflow: hidden; mask-image: linear-gradient(to right, transparent, currentColor 32px, currentColor calc(100% - 32px), transparent); }
+[data-ready]:not([data-manual]):not([data-reduced]) [data-agent-copy] { display: flex; }
+[data-ready]:not([data-manual]):not([data-reduced]) .agent-track { animation: agent-procession 48s linear infinite; }
+[data-paused] .agent-track,[data-hidden] .agent-track,[data-offscreen] .agent-track { animation-play-state: paused !important; }
+@keyframes agent-procession { to { transform: translateX(-50%); } }
+@media (max-width: 640px) {
+  .agent-strip-heading { gap: 12px; margin-bottom: 10px; align-items: flex-start; }
+  .agent-strip-heading p { font-size: 12px; }
+  .agent-strip-heading > div > span { font-size: 11px; max-width: 210px; }
+  .agent-strip-actions { gap: 4px; }
+  .agent-strip-actions .text-link { font-size: 11px; }
+  .agent-strip-actions .text-link .ui-icon { display: none; }
+  .agent-list li { padding-inline: 22px; font-size: 18px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .agent-track { animation: none !important; transform: none !important; }
+  [data-agent-copy],.marquee-toggle { display: none !important; }
+  [data-ready] .agent-viewport { overflow-x: auto !important; mask-image: none !important; }
+  .faq-list summary .ui-icon { transition: none; }
+}
