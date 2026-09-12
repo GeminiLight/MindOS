@@ -1,7 +1,7 @@
 'use client';
 
 import type React from 'react';
-import { Select, Input, PasswordInput } from './Primitives';
+import { Select, Input, PasswordInput, Field } from './Primitives';
 import { PROVIDER_PRESETS, ALL_PROVIDER_IDS, type ProviderId } from '@/lib/agent/providers';
 import ModelInput from '@/components/shared/ModelInput';
 import type { CustomProviderFormState } from './useCustomProviderForm';
@@ -24,13 +24,7 @@ function ProviderField({
 }) {
   return (
     <div className={`min-w-0 space-y-1.5 ${className}`}>
-      <div className="text-xs font-medium text-muted-foreground">{label}</div>
-      {children}
-      {hint && (
-        <p className={`text-2xs leading-relaxed ${hintError ? 'text-destructive' : 'text-muted-foreground'}`}>
-          {hint}
-        </p>
-      )}
+      <Field label={label} hint={hint} hintError={hintError}>{children}</Field>
     </div>
   );
 }

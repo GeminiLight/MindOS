@@ -37,6 +37,8 @@ import { notifyFilesChanged } from '@/lib/files-changed';
 import { restartWalkthrough } from '@/lib/stores/walkthrough-store';
 import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 import { highlightSearchSnippet } from '@/lib/search-highlight';
+import { useFocusTrap } from '@/lib/hooks/useFocusTrap';
+import { SearchFailureNotice } from '@/components/shared/SearchFailureNotice';
 
 interface SearchModalProps {
   open: boolean;
@@ -67,6 +69,7 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
+  const [searchFailed, setSearchFailed] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [tab, setTab] = useState<PaletteTab>('search');
   const [actionIndex, setActionIndex] = useState(0);
@@ -80,6 +83,8 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
   const [choosingMenuItemIndex, setChoosingMenuItemIndex] = useState<number | null>(null);
   const [menuChoiceError, setMenuChoiceError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, open && searchFailed);
   const resultsRef = useRef<HTMLDivElement>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -343,6 +348,7 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
     if (open) {
       setTimeout(() => inputRef.current?.focus(), 50);
       setQuery('');
+      setSearchFailed(false);
       setResults([]);
       setLoading(false);
       setSelectedIndex(0);
@@ -361,6 +367,7 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
 
   // Debounced search
   const doSearch = useCallback((q: string) => {
+    setSearchFailed(false);
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
     searchAbort.current?.abort();
     const requestId = searchRequestId.current + 1;
@@ -385,6 +392,7 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
       } catch {
         if (controller.signal.aborted || searchRequestId.current !== requestId) return;
         setResults([]);
+        setSearchFailed(true);
       } finally {
         if (!controller.signal.aborted && searchRequestId.current === requestId) {
           setLoading(false);
@@ -416,7 +424,7 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         onClose();
-      } else if (e.key === 'Tab') {
+      } else if (e.key === 'Tab' && !searchFailed) {
         // Tab switches between Search/Actions tabs
         e.preventDefault();
         setTab(prev => prev === 'search' ? 'actions' : 'search');
@@ -446,7 +454,7 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [open, onClose, results, selectedIndex, navigate, tab, actions, actionIndex]);
+  }, [open, onClose, results, selectedIndex, navigate, tab, actions, actionIndex, searchFailed]);
 
   useLayoutEffect(() => {
     if (tab === 'search') {
@@ -476,7 +484,7 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
           className="fixed inset-0 z-app-modal flex items-end md:items-start justify-center md:pt-[15vh] modal-backdrop"
           onClick={(e) => e.target === e.currentTarget && onClose()}
         >
-          <div role="dialog" aria-modal="true" aria-label="Command palette" className="w-full md:max-w-xl md:mx-4 bg-card border-t md:border border-border rounded-t-xl md:rounded-xl shadow-xl overflow-hidden max-h-[85vh] md:max-h-none flex flex-col">
+          <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Command palette" className="w-full md:max-w-xl md:mx-4 bg-card border-t md:border border-border rounded-t-xl md:rounded-xl shadow-xl overflow-hidden max-h-[85vh] md:max-h-none flex flex-col">
         {/* Mobile drag indicator */}
         <div className="flex justify-center pt-2 pb-0 md:hidden">
           <div className="w-8 h-1 rounded-full bg-muted-foreground/20" />
@@ -567,8 +575,10 @@ export default function SearchModal({ open, onClose }: SearchModalProps) {
                 </div>
               )}
 
+              {searchFailed && !loading && <SearchFailureNotice onRetry={() => { inputRef.current?.focus(); doSearch(query); }} />}
+
               {/* No results state */}
-              {results.length === 0 && query && !loading && (
+              {results.length === 0 && query && !loading && !searchFailed && (
                 <div className="flex flex-col items-center justify-center px-4 py-12 text-center">
                   <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-muted mb-4">
                     <Search size={20} className="text-muted-foreground/60" />

@@ -81,7 +81,7 @@ export function InboxFileRow({
         tabIndex={0}
         onClick={onSelect}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
+          if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
             e.preventDefault();
             onSelect();
           }

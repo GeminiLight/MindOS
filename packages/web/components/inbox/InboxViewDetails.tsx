@@ -34,11 +34,11 @@ export function InboxItemDetailsPanel({
     return (
       <section className="overflow-hidden rounded-xl border border-dashed border-border/60 bg-card/35 shadow-none">
         <div className="p-7 text-center">
-          <span className="mx-auto flex h-8 w-8 items-center justify-center rounded-lg bg-muted/35 text-muted-foreground/45">
+          <span className="mx-auto flex h-8 w-8 items-center justify-center rounded-lg bg-muted/35 text-muted-foreground">
             <Eye size={16} />
           </span>
           <p className="mt-3 text-sm font-medium text-foreground/70">{t.inbox.understandingEmptyTitle}</p>
-          <p className="mt-1 text-xs leading-relaxed text-muted-foreground/55">{t.inbox.understandingEmptyDesc}</p>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{t.inbox.understandingEmptyDesc}</p>
         </div>
       </section>
     );
@@ -51,13 +51,13 @@ export function InboxItemDetailsPanel({
           <Eye size={15} className="text-[var(--amber)]" />
           <h3 className="text-sm font-semibold text-foreground">{t.inbox.itemDetailsTitle}</h3>
         </div>
-        <p className="mt-1 text-xs leading-relaxed text-muted-foreground/60">
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
           {t.inbox.itemDetailsDesc}
         </p>
       </div>
 
       <div className="px-4 py-4">
-        <p className="text-2xs font-medium uppercase tracking-wider text-muted-foreground/55">
+        <p className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">
           {t.inbox.understandingTitle}
         </p>
         <div className="mt-1 flex min-w-0 items-center gap-2">
@@ -67,14 +67,16 @@ export function InboxItemDetailsPanel({
           </p>
         </div>
         {file.source && (
-          <p className="mt-1 truncate text-2xs text-muted-foreground/60" title={file.source.url}>
+          <p className="mt-1 truncate text-2xs text-muted-foreground" title={file.source.url}>
             {getInboxSourceLabel(file.source)} · {file.source.domain ?? file.source.url}
           </p>
         )}
-        <p className="mt-1 text-2xs text-muted-foreground/60">
+        <p className="mt-1 text-2xs text-muted-foreground">
           {formatSize(file.size)} · {formatRelativeTime(file.modifiedAt, t.home.relativeTime)}
         </p>
       </div>
+
+      <InboxContentPreview key={file.path} file={file} />
 
       <div className="border-y border-border/45">
         <ReviewFactRow label={t.inbox.suggestedType} value={understanding.type} />
@@ -83,7 +85,7 @@ export function InboxItemDetailsPanel({
       </div>
 
       <div className="px-4 py-4">
-        <p className="mb-2 text-2xs font-medium uppercase tracking-wider text-muted-foreground/55">
+        <p className="mb-2 text-2xs font-medium uppercase tracking-wider text-muted-foreground">
           {t.inbox.relatedSignals}
         </p>
         <div className="flex flex-wrap gap-1.5">
@@ -95,7 +97,6 @@ export function InboxItemDetailsPanel({
         </div>
       </div>
 
-      <InboxContentPreview key={file.path} file={file} />
 
       <div className="grid grid-cols-1 gap-2 border-t border-border/45 px-4 py-4 sm:grid-cols-3">
         <button
@@ -173,11 +174,11 @@ function InboxContentPreview({ file }: { file: InboxFile }) {
   return (
     <div className="border-t border-border/45 px-4 py-4">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="text-2xs font-medium uppercase tracking-wider text-muted-foreground/55">
+        <p className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">
           {t.inbox.contentPreviewTitle}
         </p>
         {isContentPreviewable(file.name) && (
-          <span className="text-2xs text-muted-foreground/45">{getFileExt(file.name) || 'text'}</span>
+          <span className="text-2xs text-muted-foreground">{getFileExt(file.name) || 'text'}</span>
         )}
       </div>
       {preview.status === 'loading' ? (
@@ -188,16 +189,16 @@ function InboxContentPreview({ file }: { file: InboxFile }) {
         </div>
       ) : preview.status === 'ready' ? (
         preview.content ? (
-          <pre className="max-h-[260px] overflow-auto whitespace-pre-wrap rounded-lg border border-border/45 bg-background/65 p-3 font-mono text-[11px] leading-relaxed text-foreground/78">
+          <pre className="max-h-[260px] overflow-auto whitespace-pre-wrap rounded-lg border border-border/45 bg-background/65 p-3 font-sans text-sm leading-relaxed text-foreground">
             {preview.content}
           </pre>
         ) : (
-          <div className="rounded-lg border border-border/45 bg-background/60 px-3 py-4 text-center text-xs text-muted-foreground/55">
+          <div className="rounded-lg border border-border/45 bg-background/60 px-3 py-4 text-center text-xs text-muted-foreground">
             {t.inbox.contentPreviewEmpty}
           </div>
         )
       ) : (
-        <div className="rounded-lg border border-border/45 bg-background/60 px-3 py-4 text-center text-xs leading-relaxed text-muted-foreground/55">
+        <div className="rounded-lg border border-border/45 bg-background/60 px-3 py-4 text-center text-xs leading-relaxed text-muted-foreground">
           {preview.status === 'unsupported' ? t.inbox.contentPreviewUnavailable : t.inbox.contentPreviewFailed}
         </div>
       )}
@@ -228,7 +229,7 @@ export function HistoryRow({ entry }: { entry: OrganizeHistoryEntry }) {
           <Check size={13} className="text-success/70 shrink-0" />
         )}
         <div className="flex-1 min-w-0 flex items-center gap-1.5">
-          <span className={`text-xs truncate ${isUndone ? 'text-muted-foreground/50 line-through' : 'text-foreground/80'}`}>
+          <span className={`text-xs truncate ${isUndone ? 'text-muted-foreground line-through' : 'text-foreground/80'}`}>
             {entry.sourceFiles.length === 1 ? entry.sourceFiles[0] : t.importHistory.nFiles(entry.sourceFiles.length)}
           </span>
           {sourceBadge && (
@@ -386,7 +387,7 @@ export function InboxErrorBanner({
 function ReviewFactRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="grid grid-cols-[92px_minmax(0,1fr)] items-start gap-3 border-b border-border/35 px-4 py-2.5 last:border-b-0">
-      <p className="text-2xs font-medium uppercase tracking-wider text-muted-foreground/50">{label}</p>
+      <p className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
       <p className="min-w-0 text-sm font-medium leading-snug text-foreground">{value}</p>
     </div>
   );

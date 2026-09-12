@@ -40,6 +40,7 @@ import { isPathAffected, notifyFilesChanged, subscribeFilesChanged } from '@/lib
 import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 import { highlightSearchSnippet } from '@/lib/search-highlight';
 import { requestRuntimeCommandInsert } from '@/lib/runtime-command-events';
+import { SearchFailureNotice } from '@/components/shared/SearchFailureNotice';
 
 /** Format file path as breadcrumb for cleaner display */
 function formatPath(fullPath: string): { name: string; breadcrumb: string[] } {
@@ -139,6 +140,7 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
+  const [searchFailed, setSearchFailed] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [runtimeCommands, setRuntimeCommands] = useState<RuntimeCommandPaletteItem[]>([]);
@@ -284,6 +286,7 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
 
   // Debounced search
   const doSearch = useCallback((q: string) => {
+    setSearchFailed(false);
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
     searchAbort.current?.abort();
     const requestId = searchRequestId.current + 1;
@@ -308,6 +311,7 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
       } catch {
         if (controller.signal.aborted || searchRequestId.current !== requestId) return;
         setResults([]);
+        setSearchFailed(true);
       } finally {
         if (!controller.signal.aborted && searchRequestId.current === requestId) {
           setLoading(false);
@@ -629,6 +633,8 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
         )}
       </div>
 
+      {searchFailed && !loading && <SearchFailureNotice onRetry={() => { inputRef.current?.focus(); doSearch(query); }} />}
+
       {/* Results */}
       <div className="sidebar-scroll-area min-h-0 flex-1 overflow-y-auto px-2 py-2" role="listbox" aria-label="Search results">
         {/* Empty state with prompt */}
@@ -645,7 +651,7 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
         )}
 
         {/* No results state */}
-        {results.length === 0 && visibleRuntimeCommands.length === 0 && visiblePluginCommands.length === 0 && query && !loading && (
+        {results.length === 0 && visibleRuntimeCommands.length === 0 && visiblePluginCommands.length === 0 && query && !loading && !searchFailed && (
           <div className="flex h-full flex-col items-center justify-center px-5 py-10 text-center">
             <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-md border border-border/60 bg-muted/45">
               <Search size={18} className="text-muted-foreground/60" />

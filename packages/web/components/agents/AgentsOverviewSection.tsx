@@ -135,13 +135,12 @@ export default function AgentsOverviewSection({
 
   return (
     <div className="space-y-6">
-      <SystemIntelligencePanel
-        copy={copy}
-        nodes={systemNodes}
-      />
-
-      <RecentActivityFeed />
       <NextActionsStrip copy={copy} actions={nextActions} />
+      <RecentActivityFeed />
+      <details className="group border-t border-border pt-3">
+        <summary className="cursor-pointer rounded-md py-2 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{copy.systemModelTitle}</summary>
+        <div className="pt-3"><SystemIntelligencePanel copy={copy} nodes={systemNodes} /></div>
+      </details>
     </div>
   );
 }

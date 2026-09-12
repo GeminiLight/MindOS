@@ -1,5 +1,6 @@
 'use client';
 
+import { UserRound, Inbox, RefreshCw, Repeat2, Lightbulb, Rocket, Search, UsersRound, ShieldCheck, Sparkles } from 'lucide-react';
 import { useState } from 'react';
 import { openAskModal } from '@/hooks/useAskModal';
 
@@ -14,6 +15,7 @@ interface UseCaseCardProps {
 
 export default function UseCaseCard({ icon, image, title, description, prompt, tryItLabel }: UseCaseCardProps) {
   const [imgError, setImgError] = useState(false);
+  const Icon = ({ '👤': UserRound, '📥': Inbox, '🔄': RefreshCw, '🔁': Repeat2, '💡': Lightbulb, '🚀': Rocket, '🔍': Search, '🤝': UsersRound, '🛡️': ShieldCheck } as Record<string, typeof Sparkles>)[icon] ?? Sparkles;
 
   return (
     <div
@@ -33,21 +35,19 @@ export default function UseCaseCard({ icon, image, title, description, prompt, t
       ) : null}
 
       <div className="flex items-start gap-3">
-        <span className="text-xl leading-none shrink-0 mt-0.5" suppressHydrationWarning>
-          {icon}
-        </span>
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground" aria-hidden><Icon size={17} /></span>
         <div className="flex-1 min-w-0">
-          <h3 className="text-sm font-semibold truncate text-foreground" title={title}>
+          <h3 className="text-sm font-semibold leading-snug text-foreground" title={title}>
             {title}
           </h3>
-          <p className="text-xs leading-relaxed mt-1 line-clamp-2 text-muted-foreground" title={description}>
+          <p className="text-sm leading-relaxed mt-2 text-muted-foreground" title={description}>
             {description}
           </p>
         </div>
       </div>
       <button
         onClick={() => openAskModal(prompt, 'user')}
-        className="self-start inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 hover:opacity-80 cursor-pointer bg-[var(--amber-dim)] text-[var(--amber-text)]"
+        className="mt-auto self-start inline-flex min-h-10 items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer bg-[var(--amber-dim)] text-[var(--amber-text)]"
       >
         {tryItLabel} →
       </button>

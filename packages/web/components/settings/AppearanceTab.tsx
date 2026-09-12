@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ChevronDown, ChevronRight, Sun, Moon, Monitor, Type, ALargeSmall, Columns3, Globe, BookOpen, Palette } from 'lucide-react';
 import type { Locale } from '@/lib/i18n';
 import { FONTS, FONT_SIZES, AppearanceTabProps } from './types';
@@ -26,15 +26,16 @@ function PillSelector<T extends string>({ options, value, onChange }: {
   onChange: (v: T) => void;
 }) {
   return (
-    <div className="flex gap-2">
+    <div className="flex flex-wrap gap-2">
       {options.map(opt => (
         <button
           key={opt.value}
           type="button"
+          aria-pressed={value === opt.value}
           onClick={() => onChange(opt.value)}
-          className={`flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium rounded-xl transition-all ${
+          className={`flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium rounded-lg transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
             value === opt.value
-              ? 'bg-[var(--amber)] text-[var(--amber-foreground)] shadow-sm'
+              ? 'bg-[var(--amber-subtle)] text-foreground ring-1 ring-[var(--amber)]'
               : 'bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted'
           }`}
         >
@@ -48,12 +49,17 @@ function PillSelector<T extends string>({ options, value, onChange }: {
 
 export function AppearanceTab({ font, setFont, fontSize, setFontSize, contentWidth, setContentWidth, dark, setDark, locale, setLocale, t }: AppearanceTabProps) {
   const [showShortcuts, setShowShortcuts] = useState(false);
-  const [themePref, setThemePref] = useState<string>(() =>
-    typeof window !== 'undefined' ? (localStorage.getItem('theme') ?? 'system') : 'system'
-  );
-  const [localePref, setLocalePref] = useState<string>(() =>
-    typeof window !== 'undefined' ? (localStorage.getItem('locale') ?? 'system') : 'system'
-  );
+  const [themePref, setThemePref] = useState('system');
+  const [localePref, setLocalePref] = useState('system');
+  useEffect(() => {
+    // Match server defaults during hydration, then restore browser preferences.
+    try {
+      setThemePref(localStorage.getItem('theme') ?? 'system');
+      setLocalePref(localStorage.getItem('locale') ?? 'system');
+    } catch {
+      // Restricted storage leaves the visible system defaults intact.
+    }
+  }, []);
   const a = t.settings.appearance;
 
   return (
@@ -116,6 +122,7 @@ export function AppearanceTab({ font, setFont, fontSize, setFontSize, contentWid
               <button
                 key={f.value}
                 type="button"
+                aria-pressed={selected}
                 onClick={() => setFont(f.value)}
                 className={`flex items-center gap-4 w-full px-3 py-2.5 rounded-lg transition-all text-left relative ${
                   selected
@@ -129,7 +136,7 @@ export function AppearanceTab({ font, setFont, fontSize, setFontSize, contentWid
                 )}
                 {/* Large Aa preview */}
                 <span
-                  className={`text-xl font-medium w-10 text-center shrink-0 ${selected ? 'text-foreground' : 'text-muted-foreground/60'}`}
+                  className={`text-xl font-medium w-10 text-center shrink-0 ${selected ? 'text-foreground' : 'text-muted-foreground'}`}
                   style={{ fontFamily: f.style.fontFamily }}
                 >
                   Aa
@@ -143,10 +150,10 @@ export function AppearanceTab({ font, setFont, fontSize, setFontSize, contentWid
                     >
                       {f.label}
                     </span>
-                    <span className="text-xs text-muted-foreground/50">{f.category}</span>
+                    <span className="text-xs text-muted-foreground">{f.category}</span>
                   </div>
                   <p
-                    className={`text-sm truncate mt-0.5 ${selected ? 'text-muted-foreground' : 'text-muted-foreground/40'}`}
+                    className={`text-sm truncate mt-0.5 ${selected ? 'text-muted-foreground' : 'text-muted-foreground'}`}
                     style={{ fontFamily: f.style.fontFamily }}
                   >
                     {a.fontPreview}
@@ -163,9 +170,10 @@ export function AppearanceTab({ font, setFont, fontSize, setFontSize, contentWid
         <div className="px-1">
           {/* Slider */}
           <div className="flex items-center gap-3">
-            <span className="text-xs text-muted-foreground/60 shrink-0" style={{ fontSize: '11px' }}>A</span>
+            <span className="text-xs text-muted-foreground shrink-0" style={{ fontSize: '11px' }}>A</span>
             <input
               type="range"
+              aria-label={a.fontSize}
               min={12}
               max={22}
               step={1}
@@ -180,7 +188,7 @@ export function AppearanceTab({ font, setFont, fontSize, setFontSize, contentWid
                 [&::-moz-range-thumb]:bg-[var(--amber)] [&::-moz-range-thumb]:border-0
                 [&::-moz-range-thumb]:shadow-sm [&::-moz-range-thumb]:cursor-pointer"
             />
-            <span className="text-base text-muted-foreground/60 shrink-0">A</span>
+            <span className="text-base text-muted-foreground shrink-0">A</span>
           </div>
           {/* Current value */}
           <div className="text-center mt-1.5">
@@ -204,9 +212,10 @@ export function AppearanceTab({ font, setFont, fontSize, setFontSize, contentWid
         <div className="px-1">
           {/* Slider */}
           <div className="flex items-center gap-3">
-            <span className="text-xs text-muted-foreground/60 shrink-0">▬</span>
+            <span className="text-xs text-muted-foreground shrink-0">▬</span>
             <input
               type="range"
+              aria-label={a.contentWidth}
               min={50}
               max={100}
               step={5}
@@ -221,7 +230,7 @@ export function AppearanceTab({ font, setFont, fontSize, setFontSize, contentWid
                 [&::-moz-range-thumb]:bg-[var(--amber)] [&::-moz-range-thumb]:border-0
                 [&::-moz-range-thumb]:shadow-sm [&::-moz-range-thumb]:cursor-pointer"
             />
-            <span className="text-xs text-muted-foreground/60 shrink-0">▬▬▬</span>
+            <span className="text-xs text-muted-foreground shrink-0">▬▬▬</span>
           </div>
           {/* Current value */}
           <div className="text-center mt-1.5">
@@ -232,7 +241,7 @@ export function AppearanceTab({ font, setFont, fontSize, setFontSize, contentWid
 
       </SettingCard>
 
-      <p className="text-xs text-muted-foreground/40 px-0.5">{a.browserNote}</p>
+      <p className="text-xs text-muted-foreground px-0.5">{a.browserNote}</p>
 
       {/* ── Keyboard Shortcuts ── */}
       <div className="border-t border-border pt-4">

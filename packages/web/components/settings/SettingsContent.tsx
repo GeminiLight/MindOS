@@ -20,12 +20,13 @@ import { useSettingsDraft } from './useSettingsDraft';
 import { requestCommandCenterOpen, requestPluginEntriesOpen } from '@/lib/plugins/ui-events';
 import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 import { MAIN_BODY_CONTENT_WIDTH_EVENT } from '@/lib/main-body-layout';
+import { SettingsPageLayout } from './SettingsPageLayout';
 
 interface SettingsContentProps {
   visible: boolean;
   initialTab?: Tab;
   initialPluginPanel?: PluginPanel;
-  variant: 'modal' | 'panel';
+  variant: 'modal' | 'panel' | 'page';
   onClose?: () => void;
   onOpenPluginEntries?: () => void;
   onOpenCommandCenter?: () => void;
@@ -53,7 +54,7 @@ export default function SettingsContent({
   onOpenPluginEntries,
   onOpenCommandCenter,
 }: SettingsContentProps) {
-  const [tab, setTab] = useState<Tab>('ai');
+  const [tab, setTab] = useState<Tab>(initialTab ?? 'ai');
   const tabRef = useRef(tab);
   tabRef.current = tab;
   const draft = useSettingsDraft();
@@ -117,6 +118,7 @@ export default function SettingsContent({
   }, []);
 
   const isPanel = variant === 'panel';
+  const isPage = variant === 'page';
 
   const loadSettings = useCallback(async () => {
     const requestId = ++loadRequestId.current;
@@ -158,13 +160,20 @@ export default function SettingsContent({
   }, [visible, loadSettings]);
 
   useEffect(() => {
-    if (visible && initialTab) switchTab(initialTab);
-  }, [visible, initialTab]);
+    if (!visible) return;
+    // A browser Back to /settings has no tab parameter. It must restore AI,
+    // while panel hosts without an initialTab retain their local selection.
+    if (isPage || initialTab) {
+      setTab(initialTab ?? 'ai');
+      contentRef.current?.scrollTo?.(0, 0);
+    }
+  }, [visible, initialTab, isPage]);
 
   const switchTab = useCallback((id: Tab) => {
     setTab(id);
     contentRef.current?.scrollTo?.(0, 0);
-  }, []);
+    if (isPage) smoothPush(`/settings?tab=${id}`);
+  }, [isPage, smoothPush]);
 
   useEffect(() => {
     const fontMap: Record<string, string> = {
@@ -292,7 +301,9 @@ export default function SettingsContent({
 
   /* ── Shared content & footer ── */
   const renderContent = () => (
-    <div ref={contentRef} className={`flex-1 overflow-y-auto min-h-0 ${isPanel ? 'px-4 py-4 space-y-4' : 'px-6 py-5 space-y-5'}`}>
+    <div ref={contentRef} className={`flex-1 overflow-y-auto min-h-0 ${isPanel ? 'px-4 py-4' : isPage ? 'px-4 py-5 md:px-8 md:py-7' : 'px-6 py-5'}`}>
+      <div className={isPage ? 'mx-auto w-full max-w-3xl space-y-5' : isPanel ? 'space-y-4' : 'space-y-5'}>
+      {isPage && <h2 className="text-lg font-semibold text-foreground">{activeTabLabel}</h2>}
       {status === 'load-error' && (tab === 'ai' || tab === 'knowledge' || tab === 'plugins') ? (
         <div className="flex flex-col items-center gap-2 py-8 text-center">
           <AlertCircle size={isPanel ? 18 : 20} className="text-destructive" />
@@ -337,6 +348,7 @@ export default function SettingsContent({
           {tab === 'uninstall' && <UninstallTab />}
         </>
       )}
+      </div>
     </div>
   );
 
@@ -408,7 +420,24 @@ export default function SettingsContent({
     );
   };
 
-  /* ── Panel variant: unchanged (horizontal tabs) ── */
+  if (isPage) {
+    return (
+      <SettingsPageLayout
+        title={t.settings.title}
+        categoryLabel={locale === 'zh' ? '设置分类' : 'Settings category'}
+        groups={TAB_GROUPS}
+        categories={TABS}
+        activeTab={tab}
+        onChange={switchTab}
+        status={renderInlineSaveStatus('full')}
+        footer={renderFooter()}
+      >
+        {renderContent()}
+      </SettingsPageLayout>
+    );
+  }
+
+  /* ── Panel variant: horizontal tabs ── */
   if (isPanel) {
     return (
       <>

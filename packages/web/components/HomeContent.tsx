@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useId, useRef } from 'react';
 import { useLocale } from '@/lib/stores/locale-store';
-import { FolderSync, PenLine, BarChart3, Sparkles, ArrowUpRight } from 'lucide-react';
+import { FolderSync, PenLine, BarChart3, Sparkles, ArrowUpRight, FileText, ChevronDown } from 'lucide-react';
 import OnboardingView from './OnboardingView';
 import Link from 'next/link';
 import GuideCard from './GuideCard';
@@ -26,6 +26,7 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
   const { t } = useLocale();
   const smoothPush = useSmoothRouterPush();
   const [activeTab, setActiveTab] = useState(0);
+  const [showSuggestions, setShowSuggestions] = useState(recent.length === 0);
   const [maximized, setMaximized] = useState(false);
   const tabsId = useId();
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -116,9 +117,32 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
       {/* ── Bottom chrome: hidden when maximized ── */}
       {!maximized && (
         <>
+          {recent.length > 0 && (
+            <section className="mx-auto w-full max-w-4xl px-4 pt-6 md:px-0" aria-label={t.home.continueEditing}>
+              <h2 className="mb-2 text-xs font-medium text-muted-foreground">{t.home.continueEditing}</h2>
+              <div className="divide-y divide-border/50">
+                {recent.slice(0, 3).map(file => (
+                  <Link key={file.path} href={`/view/${encodePath(file.path)}`} className="flex min-h-11 items-center gap-3 rounded-md px-2 py-2 text-sm text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                    <FileText size={15} className="shrink-0 text-muted-foreground" aria-hidden />
+                    <span className="min-w-0 flex-1 truncate">{file.path.split('/').pop()}</span>
+                    <span className="max-w-[40%] truncate text-xs text-muted-foreground">{file.path.includes('/') ? file.path.slice(0, file.path.lastIndexOf('/')) : ''}</span>
+                    <ArrowUpRight size={14} className="shrink-0 text-muted-foreground" aria-hidden />
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
+          {categories.length > 0 && (
+            <div className="mx-auto w-full max-w-4xl px-4 pt-5 md:px-0">
+              <button type="button" aria-expanded={showSuggestions} aria-controls={`${tabsId}-suggestions`} onClick={() => setShowSuggestions(v => !v)} className="inline-flex min-h-10 items-center gap-2 rounded-md px-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <Sparkles size={14} aria-hidden />{t.home.promptIdeas}
+                <ChevronDown size={14} className={showSuggestions ? 'rotate-180' : ''} aria-hidden />
+              </button>
+            </div>
+          )}
           {/* Tabs + Prompt Grid */}
-          {categories.length > 0 && current && (
-            <div className="flex-shrink-0 flex justify-center px-4 md:px-6 pt-6">
+          {showSuggestions && categories.length > 0 && current && (
+            <div id={`${tabsId}-suggestions`} className="flex-shrink-0 flex justify-center px-4 md:px-6 pt-3">
               <div className="w-full max-w-4xl">
 
                 {/* Pill Tabs */}

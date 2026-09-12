@@ -455,9 +455,7 @@ describe('Agents content dashboard', () => {
   it('renders overview with four onward IA targets and clickable system model', () => {
     const html = renderToStaticMarkup(<AgentsContentPage tab="overview" />);
     const a = messages.en.agentsContent;
-    const capabilitiesHint = a.navHints.capabilities.replace('&', '&amp;');
     const capabilitiesLabel = a.overview.capabilitiesLabel.replace('&', '&amp;');
-    const channelsHint = a.navHints.channels.replace('&', '&amp;');
 
     expect(html).toContain('data-content-page-shell="agents"');
     expect(html).toContain('content-width');
@@ -467,17 +465,15 @@ describe('Agents content dashboard', () => {
     expect(html).toContain(a.navAriaLabel);
     expect(html).not.toContain(a.backToOverview);
     expect(html).not.toContain(a.navHints.overview);
-    expect(html).toContain(a.navHints.assistant);
-    expect(html).toContain(a.navHints.agent);
-    expect(html).toContain(capabilitiesHint);
-    expect(html).toContain(channelsHint);
+    expect(html).toContain('<summary');
+    expect(html).toContain('min-h-10');
     expect(html).not.toContain('MCP :8781');
     expect(html).not.toContain('href="/agents"');
     expect(html).toContain('href="/agents?tab=assistant"');
     expect(html).toContain('href="/agents?tab=agent"');
     expect(html).toContain('href="/agents?tab=capabilities"');
     expect(html).toContain('href="/agents?tab=channels"');
-    expect(html).toContain('xl:grid xl:w-auto xl:grid-cols-4');
+    expect(html).toContain('flex w-max min-w-full items-center gap-1');
     expect(html).not.toContain('lg:grid lg:w-auto lg:grid-cols-4');
     expect(html).toContain(a.overview.systemModelTitle);
     expect(html).toContain(a.overview.assistantLabel);
@@ -500,9 +496,9 @@ describe('Agents content dashboard', () => {
     const a = messages.en.agentsContent;
 
     expect(html).toContain(a.backToOverview);
-    expect(html).not.toContain(a.navAriaLabel);
-    expect(html).not.toContain('href="/agents?tab=assistant"');
-    expect(html).not.toContain('href="/agents?tab=capabilities"');
+    expect(html).toContain(a.navAriaLabel);
+    expect(html).toContain('href="/agents?tab=assistant"');
+    expect(html).toContain('href="/agents?tab=capabilities"');
     expect(html).toContain(a.runtime.title);
     expect(html).toContain(a.runtime.mindosName);
     expect(html).toContain('Codex');
@@ -585,8 +581,8 @@ describe('Agents content dashboard', () => {
     const a = messages.en.agentsContent;
 
     expect(html).toContain(a.backToOverview);
-    expect(html).not.toContain(a.navAriaLabel);
-    expect(html).not.toContain('href="/agents?tab=assistant"');
+    expect(html).toContain(a.navAriaLabel);
+    expect(html).toContain('href="/agents?tab=assistant"');
     expect(html).toContain(a.mcp.tabs.byAgent);
     expect(html).toContain(a.mcp.tabs.byServer);
     expect(html).not.toContain(a.mcp.connectionGraph);
@@ -612,8 +608,8 @@ describe('Agents content dashboard', () => {
     const a = messages.en.agentsContent;
 
     expect(html).toContain(a.backToOverview);
-    expect(html).not.toContain(a.navAriaLabel);
-    expect(html).not.toContain('href="/agents?tab=capabilities"');
+    expect(html).toContain(a.navAriaLabel);
+    expect(html).toContain('href="/agents?tab=capabilities"');
     expect(html).toContain(a.presets.title);
     expect(html).toContain(a.presets.presetRail);
     expect(html).toContain(a.presets.libraryHint);

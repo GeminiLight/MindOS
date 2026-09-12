@@ -149,13 +149,25 @@ export default function WikiHomeContent({ spaces, recent, mindSystemSpaces }: Wi
             >
               <ArrowRight size={14} className="text-[var(--amber)]/60" />
               <span>{t.home.continueEditing}</span>
-              <span className="text-xs opacity-40 truncate max-w-32" suppressHydrationWarning>
+              <span className="text-xs text-muted-foreground truncate max-w-32" suppressHydrationWarning>
                 {lastFile.path.split('/').pop()}
               </span>
             </Link>
           )}
         </div>
       </header>
+
+      {/* ══════════ Pinned Files ══════════ */}
+      <PinnedFilesSection />
+
+      {/* ── Visual divider ── */}
+      <div className="border-t border-border/30 mb-8" />
+
+      {/* ══════════ Recently Edited (flat list) ══════════ */}
+      {recent.length > 0 && (
+        <RecentlyEditedSection recent={recent} formatTime={formatTime} />
+      )}
+
 
       {/* ══════════ Built-in Mind Spaces ══════════ */}
       <BuiltInMindSpacesSection spaces={mindSystemSpaces} />
@@ -247,7 +259,7 @@ export default function WikiHomeContent({ spaces, recent, mindSystemSpaces }: Wi
                           {space.description}
                         </span>
                       )}
-                      <span className="text-xs text-muted-foreground/50 mt-0.5 block tabular-nums">
+                      <span className="text-xs text-muted-foreground mt-0.5 block tabular-nums">
                         {t.home.nFiles(space.fileCount)}
                         {latestLabel && ` · ${latestLabel}`}
                       </span>
@@ -273,17 +285,6 @@ export default function WikiHomeContent({ spaces, recent, mindSystemSpaces }: Wi
 
       {/* ══════════ Inbox ══════════ */}
       <InboxSection />
-
-      {/* ══════════ Pinned Files ══════════ */}
-      <PinnedFilesSection />
-
-      {/* ── Visual divider ── */}
-      <div className="border-t border-border/30 mb-8" />
-
-      {/* ══════════ Recently Edited (flat list) ══════════ */}
-      {recent.length > 0 && (
-        <RecentlyEditedSection recent={recent} formatTime={formatTime} />
-      )}
 
       {/* Footer */}
       <div className="py-6 border-t border-border/20 flex items-center gap-1.5 text-xs font-display text-muted-foreground/30">

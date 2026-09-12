@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useCallback, useMemo, useId } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo, useId, createContext, useContext } from 'react';
 import { ChevronDown, Check, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -9,19 +9,29 @@ export function SectionLabel({ children }: { children: React.ReactNode }) {
   return <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">{children}</p>;
 }
 
+const FieldContext = createContext<{ labelId?: string; hintId?: string; invalid?: boolean; controlId?: string }>({});
+
 export function Field({ label, hint, hintError, htmlFor, children }: { label: React.ReactNode; hint?: string; hintError?: boolean; htmlFor?: string; children: React.ReactNode }) {
+  const uid = useId();
   return (
+    <FieldContext.Provider value={{ labelId: `${uid}-label`, hintId: hint ? `${uid}-hint` : undefined, invalid: hintError, controlId: htmlFor }}>
     <div className="space-y-1.5">
-      <label htmlFor={htmlFor} className="text-sm text-foreground font-medium">{label}</label>
+      <label id={`${uid}-label`} htmlFor={htmlFor} className="text-sm text-foreground font-medium">{label}</label>
       {children}
-      {hint && <p className={`text-xs ${hintError ? 'text-destructive' : 'text-muted-foreground'}`}>{hint}</p>}
+      {hint && <p id={`${uid}-hint`} className={`text-xs ${hintError ? 'text-destructive' : 'text-muted-foreground'}`}>{hint}</p>}
     </div>
+    </FieldContext.Provider>
   );
 }
 
 export function Input({ className = '', ...props }: React.InputHTMLAttributes<HTMLInputElement>) {
+  const field = useContext(FieldContext);
   return (
     <input
+      id={field.controlId}
+      aria-labelledby={props['aria-label'] ? undefined : field.labelId}
+      aria-describedby={field.hintId}
+      aria-invalid={field.invalid || undefined}
       {...props}
       className={`w-full px-3 py-2 text-sm bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 ${className}`}
     />
@@ -40,11 +50,16 @@ export function PasswordInput({ value, onChange, placeholder, disabled, classNam
   className?: string;
   size?: 'sm' | 'md';
 }) {
+  const field = useContext(FieldContext);
   const [show, setShow] = useState(false);
   const sm = size === 'sm';
   return (
     <div className={`flex items-center border border-border rounded-lg bg-background focus-within:ring-1 focus-within:ring-ring overflow-hidden ${className}`}>
       <input
+        id={field.controlId}
+        aria-labelledby={field.labelId}
+        aria-describedby={field.hintId}
+        aria-invalid={field.invalid || undefined}
         type={show ? 'text' : 'password'}
         value={value}
         onChange={e => onChange(e.target.value)}
@@ -57,11 +72,11 @@ export function PasswordInput({ value, onChange, placeholder, disabled, classNam
       {!!value && (
         <button
           type="button"
-          tabIndex={-1}
+          aria-pressed={show}
           onMouseDown={e => e.preventDefault()}
           onClick={() => setShow(v => !v)}
           disabled={disabled}
-          className={`shrink-0 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50 ${
+          className={`shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50 ${
             sm ? 'p-1.5' : 'p-2'
           }`}
           title={show ? 'Hide' : 'Show'}
@@ -75,7 +90,10 @@ export function PasswordInput({ value, onChange, placeholder, disabled, classNam
 
 interface SelectOption { value: string; label: string }
 
-export function Select({ value, onChange, children, className = '', disabled, size = 'md' }: {
+export function Select({ value, onChange, children, className = '', disabled, size = 'md', id, 'aria-label': ariaLabel, 'aria-labelledby': ariaLabelledBy }: {
+  id?: string;
+  'aria-label'?: string;
+  'aria-labelledby'?: string;
   value?: string;
   onChange?: (e: { target: { value: string } }) => void;
   children?: React.ReactNode;
@@ -83,6 +101,7 @@ export function Select({ value, onChange, children, className = '', disabled, si
   disabled?: boolean;
   size?: 'sm' | 'md';
 }) {
+  const field = useContext(FieldContext);
   const uid = useId();
   const [open, setOpen] = useState(false);
   const [focusIdx, setFocusIdx] = useState(-1);
@@ -119,13 +138,14 @@ export function Select({ value, onChange, children, className = '', disabled, si
   }, [open, focusIdx]);
 
   const select = useCallback((idx: number) => {
-    if (idx >= 0 && idx < options.length) {
+    if (!disabled && idx >= 0 && idx < options.length) {
       onChange?.({ target: { value: options[idx].value } });
       setOpen(false);
     }
-  }, [options, onChange]);
+  }, [options, onChange, disabled]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (disabled) return;
     if (!open) {
       if (['Enter', ' ', 'ArrowDown', 'ArrowUp'].includes(e.key)) {
         e.preventDefault();
@@ -138,10 +158,12 @@ export function Select({ value, onChange, children, className = '', disabled, si
       case 'ArrowDown': e.preventDefault(); setFocusIdx(i => Math.min(i + 1, options.length - 1)); break;
       case 'ArrowUp':   e.preventDefault(); setFocusIdx(i => Math.max(i - 1, 0)); break;
       case 'Enter': case ' ': e.preventDefault(); select(focusIdx); break;
-      case 'Escape': e.preventDefault(); setOpen(false); break;
+      case 'Home': e.preventDefault(); setFocusIdx(0); break;
+      case 'End': e.preventDefault(); setFocusIdx(options.length - 1); break;
+      case 'Escape': e.preventDefault(); e.stopPropagation(); setOpen(false); break;
       case 'Tab': setOpen(false); break;
     }
-  }, [open, options.length, selectedIdx, focusIdx, select]);
+  }, [open, options.length, selectedIdx, focusIdx, select, disabled]);
 
   return (
     <div ref={containerRef} className={`relative ${className}`}>
@@ -150,19 +172,29 @@ export function Select({ value, onChange, children, className = '', disabled, si
         disabled={disabled}
         onClick={() => { setOpen(o => !o); setFocusIdx(selectedIdx >= 0 ? selectedIdx : 0); }}
         onKeyDown={handleKeyDown}
+        id={id ?? field.controlId}
+        aria-describedby={field.hintId}
+        aria-invalid={field.invalid || undefined}
+        role="combobox"
+        aria-label={ariaLabel}
+        aria-labelledby={ariaLabelledBy ?? (ariaLabel ? undefined : field.labelId)}
+        aria-controls={open && !disabled ? `${uid}-list` : undefined}
+        aria-activedescendant={open && !disabled && focusIdx >= 0 ? `${uid}-opt-${focusIdx}` : undefined}
         aria-haspopup="listbox"
-        aria-expanded={open}
+        aria-expanded={open && !disabled}
         className={`${size === 'sm' ? 'px-1.5 py-0.5 text-xs rounded cursor-pointer' : 'w-full px-3 py-2 text-sm rounded-lg'} bg-background border border-border text-foreground text-left flex items-center justify-between gap-2 outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-not-allowed`}
       >
         <span className={`truncate ${selectedLabel ? '' : 'text-muted-foreground'}`}>{selectedLabel || '—'}</span>
         <ChevronDown size={size === 'sm' ? 10 : 14} className={`shrink-0 text-muted-foreground transition-transform duration-150 ${open ? 'rotate-180' : ''}`} />
       </button>
 
-      {open && (
+      {open && !disabled && (
         <div
           ref={listRef}
           role="listbox"
-          aria-activedescendant={focusIdx >= 0 ? `${uid}-opt-${focusIdx}` : undefined}
+          id={`${uid}-list`}
+          aria-label={ariaLabel}
+          aria-labelledby={ariaLabelledBy ?? (ariaLabel ? undefined : field.labelId)}
           className={`absolute z-20 ${size === 'sm' ? 'min-w-[8rem]' : 'w-full'} mt-1 py-1 border border-border rounded-lg bg-card shadow-lg max-h-60 overflow-auto animate-in fade-in-0 zoom-in-95 duration-100`}
         >
           {options.map((opt, idx) => {
@@ -175,7 +207,9 @@ export function Select({ value, onChange, children, className = '', disabled, si
                 role="option"
                 aria-selected={isSelected}
                 type="button"
+                tabIndex={-1}
                 onMouseDown={e => { e.preventDefault(); select(idx); }}
+                onClick={() => select(idx)}
                 onMouseEnter={() => setFocusIdx(idx)}
                 className={`w-full ${size === 'sm' ? 'px-2 py-1 text-xs' : 'px-3 py-1.5 text-sm'} text-left flex items-center gap-2 transition-colors ${
                   isFocused ? 'bg-accent text-accent-foreground' : 'text-foreground'
@@ -318,7 +352,7 @@ export function SettingCardBody({ children, inset = true, className = '' }: {
 }) {
   const hasExplicitGap = /\bspace-y-/.test(className);
   return (
-    <div className={`${inset ? 'pl-11' : ''} ${hasExplicitGap ? '' : 'space-y-4'} ${className}`}>
+    <div className={`${inset ? 'sm:pl-11' : ''} ${hasExplicitGap ? '' : 'space-y-4'} ${className}`}>
       {children}
     </div>
   );

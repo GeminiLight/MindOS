@@ -238,7 +238,7 @@ describe('Echo segment page actions', () => {
     expect(backLink).not.toBeNull();
     expect(backLink?.textContent).toContain(messages.zh.echoPages.backToOverviewLabel);
     expect(backLink?.getAttribute('aria-label')).toBe(messages.zh.echoPages.backToOverviewAriaLabel);
-    expect(insightBackLink).toBeNull();
+    expect(insightBackLink?.getAttribute('aria-current')).toBe('page');
 
     const actionButton = host.querySelector<HTMLButtonElement>('[data-testid="echo-insight-generate-button"]');
     expect(actionButton).not.toBeNull();
@@ -283,7 +283,7 @@ describe('Echo segment page actions', () => {
     expect(overviewBackLink).not.toBeNull();
     expect(overviewBackLink?.textContent).toContain(messages.zh.echoPages.backToOverviewLabel);
     expect(overviewBackLink?.getAttribute('aria-label')).toBe(messages.zh.echoPages.backToOverviewAriaLabel);
-    expect(host.querySelector('a[href="/echo/growth"]')).toBeNull();
+    expect(host.querySelector('nav a[href="/echo/growth"]')).not.toBeNull();
 
     await act(async () => {
       root.render(<EchoSegmentPageClient segment="practice" />);
@@ -293,7 +293,7 @@ describe('Echo segment page actions', () => {
     expect(overviewBackLink).not.toBeNull();
     expect(overviewBackLink?.textContent).toContain(messages.zh.echoPages.backToOverviewLabel);
     expect(overviewBackLink?.getAttribute('aria-label')).toBe(messages.zh.echoPages.backToOverviewAriaLabel);
-    expect(host.querySelector('a[href="/echo/growth"]')).toBeNull();
+    expect(host.querySelector('nav a[href="/echo/growth"]')).not.toBeNull();
   });
 
   it('renders Promotion as a playbook and practice surface', async () => {

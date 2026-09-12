@@ -4,7 +4,8 @@ import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, Sparkles } from 'lucide-react';
 import type { VariantProps } from 'class-variance-authority';
-import { ECHO_SEGMENT_HREF, type EchoSegment } from '@/lib/echo-segments';
+import { ECHO_PRIMARY_SEGMENT_ORDER, ECHO_SEGMENT_HREF, type EchoSegment } from '@/lib/echo-segments';
+import { useLocale } from '@/lib/stores/locale-store';
 import type { Messages } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -65,6 +66,9 @@ export function EchoPageHeader({
   actions?: ReactNode;
 }) {
   const backLink = headerBackLink(segment, p);
+  const { t } = useLocale();
+  const e = t.panels.echo;
+  const labels = { overview: e.overviewTitle, imprint: e.imprintTitle, growth: e.growthTitle, practice: e.practiceTitle, threads: p.threadsChatLabel };
   return (
     <EchoHero
       pageTitle={title}
@@ -76,7 +80,16 @@ export function EchoPageHeader({
         </div>
       ) : undefined}
       actions={actions}
-    />
+    >
+      <nav aria-label={e.title} className="mt-5 flex gap-1 overflow-x-auto pb-1">
+        {ECHO_PRIMARY_SEGMENT_ORDER.map(item => (
+          <Link key={item} href={ECHO_SEGMENT_HREF[item]} aria-current={segment === item || (item === 'growth' && segment === 'threads') ? 'page' : undefined}
+            className={`inline-flex min-h-10 shrink-0 items-center rounded-lg px-3 text-sm transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${segment === item || (item === 'growth' && segment === 'threads') ? 'bg-[var(--amber-subtle)] font-medium text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}>
+            {labels[item]}
+          </Link>
+        ))}
+      </nav>
+    </EchoHero>
   );
 }
 

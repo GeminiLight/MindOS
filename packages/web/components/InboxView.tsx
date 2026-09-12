@@ -72,6 +72,7 @@ import {
   inferInboxFileIntent,
   inferSuggestedIntent,
 } from '@/components/inbox/InboxViewModel';
+import { ResponsiveInboxDetails } from '@/components/inbox/ResponsiveInboxDetails';
 import { InboxErrorBanner, InboxItemDetailsPanel, InboxProcessNav, HistoryRow } from '@/components/inbox/InboxViewDetails';
 import { InboxFileRow } from '@/components/inbox/InboxFileRow';
 import { ContentPageShell, LoadingPageShell } from '@/components/shared/ContentPageShell';
@@ -146,6 +147,18 @@ function ScopedInboxView({ identity }: { identity: ReturnType<typeof useCaptureS
   const [savingText, setSavingText] = useState(false);
   const captureSaveInFlight = useRef(false);
   const [inboxError, setInboxError] = useState<string | null>(null);
+  const detailTriggerRef = useRef<HTMLElement | null>(null);
+  const selectForPreview = (path: string) => {
+    detailTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setSelectedPath(path);
+  };
+  const returnToQueue = () => {
+    setSelectedPath(null);
+    requestAnimationFrame(() => {
+      detailTriggerRef.current?.focus({ preventScroll: true });
+      detailTriggerRef.current?.scrollIntoView({ block: 'nearest' });
+    });
+  };
   const [selectedPath, setSelectedPath] = useState<string | null>(() => getInitialSelectedInboxPath());
   const [selectedQueuePaths, setSelectedQueuePaths] = useState<string[]>([]);
   const [activeView, setActiveView] = useState<InboxViewMode>(() => getInitialInboxViewMode());
@@ -745,7 +758,7 @@ function ScopedInboxView({ identity }: { identity: ReturnType<typeof useCaptureS
             }
             data-inbox-main-layout
           >
-            <div className={`min-w-0 space-y-5 ${activeView === 'capture' ? 'h-full' : ''}`}>
+            <div className={`min-w-0 space-y-5 ${activeView === 'capture' ? 'h-full' : ''} ${selectedFile && (activeView === 'queue' || activeView === 'shelved') ? 'hidden xl:block' : ''}`}>
               {activeView === 'capture' && (
                 <>
                   <div
@@ -970,7 +983,7 @@ function ScopedInboxView({ identity }: { identity: ReturnType<typeof useCaptureS
                   selectedPath={selectedPath}
                   selectedQueuePaths={selectedQueuePathSet}
                   selectedQueueFiles={selectedQueueFiles}
-                  onSelectFile={(file) => setSelectedPath(file.path)}
+                  onSelectFile={(file) => selectForPreview(file.path)}
                   onToggleQueueSelection={toggleQueueSelection}
                   onSelectAll={selectAllQueueFiles}
                   onClearSelection={clearQueueSelection}
@@ -996,7 +1009,7 @@ function ScopedInboxView({ identity }: { identity: ReturnType<typeof useCaptureS
                   inboxError={inboxError}
                   animateList={animateList}
                   selectedPath={selectedPath}
-                  onSelectFile={(file) => setSelectedPath(file.path)}
+                  onSelectFile={(file) => selectForPreview(file.path)}
                   onRestore={(file) => restoreFiles([file.path])}
                   onDelete={handleDeleteFile}
                   onRetry={() => {
@@ -1076,7 +1089,7 @@ function ScopedInboxView({ identity }: { identity: ReturnType<typeof useCaptureS
             )}
 
             {activeView === 'queue' && (
-              <aside className="lg:sticky lg:top-6 lg:self-start">
+              <ResponsiveInboxDetails selectedPath={selectedFile?.path ?? null} backLabel={t.inbox.viewQueue} onBack={returnToQueue}>
                 <InboxItemDetailsPanel
                   file={selectedFile}
                   understanding={selectedUnderstanding}
@@ -1084,11 +1097,11 @@ function ScopedInboxView({ identity }: { identity: ReturnType<typeof useCaptureS
                   onShelve={(file) => shelveFiles([file.path])}
                   onDelete={(file) => handleDeleteFile(file.name)}
                 />
-              </aside>
+              </ResponsiveInboxDetails>
             )}
 
             {activeView === 'shelved' && (
-              <aside className="lg:sticky lg:top-6 lg:self-start">
+              <ResponsiveInboxDetails selectedPath={selectedFile?.path ?? null} backLabel={activeView === 'shelved' ? t.inbox.viewShelved : t.inbox.viewQueue} onBack={returnToQueue}>
                 <InboxItemDetailsPanel
                   file={selectedFile}
                   understanding={selectedUnderstanding}
@@ -1097,7 +1110,7 @@ function ScopedInboxView({ identity }: { identity: ReturnType<typeof useCaptureS
                   onRestore={(file) => restoreFiles([file.path])}
                   onDelete={(file) => handleDeleteFile(file.name)}
                 />
-              </aside>
+              </ResponsiveInboxDetails>
             )}
           </div>
         </ContentPageShell>

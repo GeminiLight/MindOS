@@ -39,7 +39,7 @@ export default async function SettingsPage({
 
   return (
     <div className="h-full min-h-0 flex flex-col">
-      <SettingsContent visible variant="panel" initialTab={initialTab} initialPluginPanel={initialPluginPanel} />
+      <SettingsContent visible variant="page" initialTab={initialTab} initialPluginPanel={initialPluginPanel} />
     </div>
   );
 }

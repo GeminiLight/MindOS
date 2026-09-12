@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 import fs from 'fs';
+import { createHash } from 'node:crypto';
 import { getFileContent, saveFileContent, isDirectory, getDirEntries, createFile, getFileTree, getSpacePreview, getMindRoot } from '@/lib/fs';
 import { resolveExistingSafe } from '@/lib/core/security';
 import type { FileNode } from '@/lib/types';
@@ -111,6 +112,7 @@ export default async function ViewPage({ params }: PageProps) {
           saveAction={saveAction}
           initialEditing
           isDraft
+          draftScope={createHash('sha256').update(getMindRoot()).digest('hex').slice(0, 24)}
           draftDirectories={draftDirectories}
           createDraftAction={createDraftAction}
         />

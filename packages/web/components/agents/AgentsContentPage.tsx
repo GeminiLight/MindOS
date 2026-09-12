@@ -35,14 +35,6 @@ import type { AgentInfo } from '@/components/settings/types';
 import { ContentPageShell } from '@/components/shared/ContentPageShell';
 import { shouldHandleSmoothNavigation, useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 
-const DEFAULT_AGENT_NAV_HINTS = {
-  overview: 'Map',
-  assistant: 'Profiles',
-  agent: 'Runtime endpoints',
-  capabilities: 'Skills & MCP',
-  channels: 'Messaging',
-} as const;
-
 export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) {
   const { t } = useLocale();
   const a = t.agentsContent;
@@ -219,16 +211,10 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
           ) : null}
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">{pageHeader.title}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{pageHeader.subtitle}</p>
-          {tab === 'overview' ? (
-            <AgentsPageNav
+          <AgentsPageNav
               tab={tab}
               copy={a}
-              enabledSkillCount={enabledSkillCount}
-              mcpRunning={!!mcp.status?.running}
-              mcpEnabled={mcpEnabled}
-              presetCount={assistantCount}
             />
-          ) : null}
         </header>
       )}
 
@@ -437,72 +423,47 @@ function agentOverviewToneClass(tone: 'runtime' | 'client' | 'acp' | 'a2a'): str
   return 'border-[var(--tool-read)]/20 bg-[var(--tool-read)]/10 text-[var(--tool-read)]';
 }
 
-function AgentsPageNav({
-  tab,
-  copy,
-  enabledSkillCount,
-  mcpRunning,
-  mcpEnabled,
-  presetCount,
-}: {
+function AgentsPageNav({ tab, copy }: {
   tab: AgentsDashboardTab;
   copy: ReturnType<typeof useLocale>['t']['agentsContent'];
-  enabledSkillCount: number;
-  mcpRunning: boolean;
-  mcpEnabled: boolean;
-  presetCount: number;
 }) {
   const smoothPush = useSmoothRouterPush();
-  const navHints = copy.navHints ?? DEFAULT_AGENT_NAV_HINTS;
   const activeGroup = getAgentsNavGroup(tab);
   const navItems: Array<{
     id: AgentsNavGroup;
     href: string;
     label: string;
-    hint: string;
     icon: React.ReactNode;
-    badge?: string;
-    tone?: 'ok' | 'warn' | 'neutral';
   }> = [
     {
       id: 'assistant',
       href: '/agents?tab=assistant',
       label: copy.navAssistant ?? copy.navPresets,
-      hint: navHints.assistant ?? navHints.presets,
       icon: <Sparkles size={14} />,
-      badge: `${presetCount}`,
-      tone: 'neutral',
     },
     {
       id: 'agent',
       href: '/agents?tab=agent',
       label: copy.navAgent ?? copy.navMcp,
-      hint: navHints.agent ?? navHints.mcp,
       icon: <Cable size={14} />,
-      tone: 'neutral',
     },
     {
       id: 'capabilities',
       href: '/agents?tab=capabilities',
       label: copy.navCapabilities ?? copy.navSkills,
-      hint: navHints.capabilities ?? navHints.skills,
       icon: <Server size={14} />,
-      badge: `${enabledSkillCount}`,
-      tone: mcpEnabled && !mcpRunning ? 'warn' : mcpRunning || enabledSkillCount > 0 ? 'ok' : 'neutral',
     },
     {
       id: 'channels',
       href: '/agents?tab=channels',
       label: copy.navChannels,
-      hint: navHints.channels ?? 'Messaging',
       icon: <MessageSquare size={14} />,
-      tone: 'neutral',
     },
   ];
 
   return (
     <nav aria-label={copy.navAriaLabel} className="mt-5 overflow-x-auto pb-1">
-      <div className="flex w-max min-w-full overflow-hidden rounded-xl border border-border/60 bg-card/35 shadow-sm xl:grid xl:w-auto xl:grid-cols-4">
+      <div className="flex w-max min-w-full items-center gap-1">
         {navItems.map(item => (
           <Link
             key={item.id}
@@ -513,32 +474,20 @@ function AgentsPageNav({
               event.preventDefault();
               if (activeGroup !== item.id) smoothPush(item.href);
             }}
-            className={`group min-h-[70px] w-[156px] shrink-0 border-r border-border/45 px-3 py-2.5 transition-colors last:border-r-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring xl:w-auto xl:px-4 xl:py-3 ${
+            className={`group flex min-h-10 shrink-0 items-center gap-2 rounded-lg px-3 py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
               activeGroup === item.id
                 ? 'bg-[var(--amber)]/[0.08] text-foreground'
                 : 'text-muted-foreground hover:bg-muted/45 hover:text-foreground'
             }`}
           >
-            <span className="flex items-center justify-between gap-2">
-              <span className={`inline-flex h-7 w-7 items-center justify-center rounded-lg ${
-                activeGroup === item.id ? 'bg-[var(--amber)] text-[var(--amber-foreground)]' : 'bg-background text-muted-foreground group-hover:text-foreground'
+            <span className="flex items-center gap-2">
+              <span className={`inline-flex items-center justify-center ${
+                activeGroup === item.id ? 'text-foreground' : 'text-muted-foreground group-hover:text-foreground'
               }`}>
                 {item.icon}
               </span>
-              {item.badge ? (
-                <span className={`rounded-full px-2 py-0.5 text-2xs font-medium tabular-nums ${
-                  item.tone === 'ok'
-                    ? 'bg-success/10 text-success'
-                    : item.tone === 'warn'
-                      ? 'bg-[var(--amber)]/10 text-[var(--amber-text)]'
-                      : 'bg-muted text-muted-foreground'
-                }`}>
-                  {item.badge}
-                </span>
-              ) : null}
             </span>
-            <span className="mt-2 block text-xs font-medium text-foreground">{item.label}</span>
-            <span className="mt-0.5 block truncate text-2xs text-muted-foreground/65 xl:block">{item.hint}</span>
+            <span className="text-sm font-medium">{item.label}</span>
           </Link>
         ))}
       </div>

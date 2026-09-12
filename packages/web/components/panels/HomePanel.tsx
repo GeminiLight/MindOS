@@ -512,6 +512,7 @@ function HomeSessionViewToolbar({
   onRefreshSessions,
   refreshingSessions,
   searchActive,
+  hasSessions,
 }: {
   viewMode: HomeSessionViewMode;
   onViewModeChange: (value: HomeSessionViewMode) => void;
@@ -520,6 +521,7 @@ function HomeSessionViewToolbar({
   onRefreshSessions: () => void;
   refreshingSessions: boolean;
   searchActive: boolean;
+  hasSessions: boolean;
 }) {
   const { t } = useLocale();
   const groupByProject = viewMode === 'project';
@@ -547,9 +549,9 @@ function HomeSessionViewToolbar({
       </div>
 
       <div className="flex shrink-0 items-center gap-0.5">
-        <HomeHeaderIconButton label={t.sidebar.homeNewSession} onClick={onNewSession}>
+        {hasSessions && <HomeHeaderIconButton label={t.sidebar.homeNewSession} onClick={onNewSession}>
           <Plus size={13} aria-hidden="true" />
-        </HomeHeaderIconButton>
+        </HomeHeaderIconButton>}
         <HomeHeaderIconButton
           label={t.sidebar.homeSearchSessions}
           onClick={onSearchSessions}
@@ -1046,6 +1048,7 @@ export default function HomePanel({
         <>
           <HomeAgentFilter value={agentFilter} onChange={setAgentFilter} counts={agentCounts} acpFilters={acpFilters} />
           <HomeSessionViewToolbar
+            hasSessions={sortedSessions.length > 0}
             viewMode={sessionViewMode}
             onViewModeChange={setSessionViewMode}
             onNewSession={handleNewSession}
@@ -1082,6 +1085,7 @@ export default function HomePanel({
                 <button
                   type="button"
                   onClick={handleNewSession}
+                  aria-label={t.sidebar.homeNewSession}
                   className="hit-target-box inline-flex min-h-8 items-center gap-1.5 px-3 text-xs font-medium text-[var(--amber-foreground)] [--hit-target-bg:var(--amber)] [--hit-target-hover-bg:var(--amber)] [--hit-target-radius:var(--radius-md)]"
                 >
                   <Plus size={13} aria-hidden="true" />
