@@ -545,6 +545,27 @@ describe('MindOS server contract: product operations', () => {
     });
   });
 
+  it('asks for target_dir files by their vault path on every platform', () => {
+    // Regression: path.join() emitted "Workflows\\README.md" on Windows, so any
+    // service keyed by vault paths (which always use "/") returned nothing.
+    const requested: string[] = [];
+    const services = {
+      collectAllFiles: () => ['Workflows/README.md'],
+      readTextFile: (filePath: string) => {
+        requested.push(filePath);
+        if (filePath === 'Workflows/README.md') return '# Workflows';
+        throw new Error('missing');
+      },
+    };
+
+    const result = handleBootstrapGet(new URLSearchParams('target_dir=Workflows'), services);
+
+    expect(result.status).toBe(200);
+    expect(result.body).toMatchObject({ target_readme: '# Workflows' });
+    expect(requested).toContain('Workflows/README.md');
+    expect(requested.every((filePath) => !filePath.includes('\\'))).toBe(true);
+  });
+
   it('handles local connection metadata without Web dependencies', () => {
     const first = handleConnectGet({ mindRoot: '/mind/one' }).body!;
     expect(first.rootId).toMatch(/^[a-f0-9]{24}$/);

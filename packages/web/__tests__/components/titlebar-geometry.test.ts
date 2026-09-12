@@ -114,8 +114,8 @@ describe('titlebar geometry contract (no content may slide under the fixed row)'
       'components/DirView.tsx': ['sticky top-[52px] md:top-0'],
       // floats just below the shared /view header
       'components/FindInPage.tsx': ['sticky top-[calc(52px+var(--workspace-header-h))] md:top-[var(--workspace-header-h)]'],
-      // 24px breathing room below the scrollport top
-      'components/InboxView.tsx': ['lg:sticky lg:top-6'],
+      // The responsive details component owns the desktop-only sticky preview.
+      'components/inbox/ResponsiveInboxDetails.tsx': ['xl:sticky xl:top-6'],
       // help TOC keeps the previous 50px local breathing room
       'components/help/HelpContent.tsx': ['sticky top-[50px]'],
     };

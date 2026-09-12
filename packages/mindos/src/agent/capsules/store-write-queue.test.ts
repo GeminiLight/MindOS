@@ -1,7 +1,6 @@
 import fs, { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { performance } from 'node:perf_hooks';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { closeAllMindosDatabases } from '../../foundation/storage/sqlite.js';
 import {
@@ -107,21 +106,30 @@ describe('agent run capsule async write queue', () => {
     expect(listAgentRunCapsules(mindRoot)).toEqual([capsule]);
   });
 
-  it('keeps the synchronous section of create far below the old clone+stringify+write cost', () => {
-    // ~6MB chat (100 messages x ~60KB): the old synchronous path measured
-    // 10-25ms on the audit machine (structuredClone + JSON.stringify +
-    // writeFileSync + linkSync before the first SSE byte).
+  it('defers reading a large transcript until the queued write is flushed', async () => {
+    // Observe transcript traversal directly: a wall-clock threshold also measures
+    // scheduling pauses from other test workers, and cannot prove work was deferred.
+    let contentReads = 0;
     const messages = Array.from({ length: 100 }, (_, index) => ({
       role: index % 2 === 0 ? 'user' : 'assistant',
-      content: `message ${index}: ${'lorem ipsum dolor sit amet '.repeat(Math.round((60 * 1024) / 26))}`,
+      get content() {
+        contentReads += 1;
+        return `message ${index}: ${'lorem ipsum dolor sit amet '.repeat(Math.round((60 * 1024) / 26))}`;
+      },
     }));
     const base = capsuleInput();
-    const started = performance.now();
     createAgentRunCapsule(mindRoot, capsuleInput({
       request: { ...base.request, messages },
     }));
-    const elapsed = performance.now() - started;
-    expect(elapsed).toBeLessThan(5);
+    expect(contentReads).toBe(0);
+    const stub = readFileSync(storedPath('capsule-run-1'), 'utf-8');
+    expect(Buffer.byteLength(stub)).toBeLessThan(4096);
+    expect(JSON.parse(stub).request.messages).toEqual([]);
+
+    await flushCapsuleWrites('capsule-run-1');
+    expect(contentReads).toBeGreaterThan(0);
+    const stored = JSON.parse(readFileSync(storedPath('capsule-run-1'), 'utf-8'));
+    expect(stored.request.messages).toEqual(messages);
   });
 
   it('serializes finalize behind the pending create on the same run chain', async () => {
