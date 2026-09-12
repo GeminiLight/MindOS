@@ -45,3 +45,11 @@ Obsidian 语料扫描默认不自动运行，仅保留 **Obsidian Corpus (Manual
 - 一个任务后 runner 自动注销。检查运行结论和公开仓同步提交，再删除临时容器；未接到任务或异常退出时，通过仓库 runner API 删除离线注册。不要留下常驻执行服务。
 
 这是不消耗 GitHub 托管运行分钟的手动恢复入口；本机需开机且 Docker 在线，CPU、存储和网络由本机承担。不会恢复 Windows/macOS 托管 PR 检查，也不会自动启用 Obsidian 扫描。额度恢复后可继续使用默认托管入口。
+
+### 2026-09-12 实际恢复记录
+
+用户无法付款后授权使用本机隔离运行器。PR #349 已合入 main（`d1b057c4`）；58 项相关测试及 actionlint 通过。官方 runner 2.337.0 Linux ARM64 发布包通过 SHA-256 验证，在普通用户、零宿主挂载、丢弃 capabilities 的 Docker 容器中执行。
+
+[首次手动同步运行](https://github.com/GeminiLight/mindos-dev/actions/runs/34701975848) 成功（15:21–15:24 UTC）；公开仓 main 更新到 `d651c80c`，gh-pages 更新到 `013b8281`，网站树与源 main 的 landing 树完全一致，公开仓 Obsidian 手动工作流文件也与源文件 SHA 相同。运行器完成一次任务后自动注销，API 返回 0 个 runner，容器已删除。未修改付款方式、预算，也未发布 npm/Desktop 版本。
+
+本次对话期望 workflow：恢复同步，已完成。后续需要同步时重新启动单次运行器并手动派发；其他 GitHub 托管 PR 检查仍受账户额度限制。
