@@ -119,3 +119,10 @@ Validation: all 28 website/workflow contracts and 32 browser tests pass. Twelve 
 
 
 Integration: PR #347 merged into main at `1e80ebe7` on 2026-09-12. The main worktree fast-forwarded without changing existing paper or untracked audit work; 28 website/workflow contracts passed again. Sync/publication run [34687572479](https://github.com/GeminiLight/mindos-dev/actions/runs/34687572479) did not start because GitHub reports failed recent payments or an insufficient spending limit. Public sync and website deployment remain pending; rerun the latest main sync after the account issue is resolved.
+
+
+## Flow-only hero refinement — 2026-09-13
+
+Removed the 22 static SVG orbit nodes and their unused style. Filaments, moving signal heads, trails and the central shared-context mark remain. The bilingual headline now explicitly connects thinking here to agents acting on that context, ending with shared evolution. Mobile font minima were lowered only for the narrowest screens so each phrase stays on one line from 320px. No motion lifecycle or integration behavior changed.
+
+Validation: 28 website/workflow contracts and 36 browser tests pass, including 16 bilingual/theme screenshots at 320/390/768/1440px. The original headline assertion failed before implementation; the 320px Chinese line-wrap check caught and verified the narrow-screen sizing correction. Screenshot paths: `/tmp/mindos-website-{en|zh}-{320|390|768|1440}-{light|dark}.png`.
