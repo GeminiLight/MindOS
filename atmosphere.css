@@ -44,7 +44,6 @@ html[lang="zh-Hans"] .hero h1 { font-size: clamp(54px, 4.9vw, 70px); line-height
 .mesh-grid { stroke: var(--hero-line); stroke-width: .6; stroke-dasharray: 2 5; }
 .mesh-filament { stroke: var(--hero-filament); stroke-width: .7; }
 .mesh-bloom { stroke: var(--hero-filament); stroke-width: 18; opacity: .24; }
-.mesh-node { fill: var(--hero-core); filter: drop-shadow(0 0 5px var(--hero-amber)); }
 .core-stop { stop-color: var(--hero-amber); stop-opacity: .3; }
 .core-stop:last-child { stop-opacity: 0; }
 .mesh-core-ring { fill: var(--hero-background); stroke: var(--hero-amber); stroke-width: .7; }
@@ -128,8 +127,8 @@ html[lang="zh-Hans"] .hero h1 { font-size: clamp(54px, 4.9vw, 70px); line-height
 }
 @media (max-width: 600px) {
   .hero { grid-template-columns: 1fr; gap: 20px; padding-top: 38px; padding-bottom: 24px; }
-  .hero h1 { font-size: clamp(43px, 12vw, 64px); }
-  html[lang="zh-Hans"] .hero h1 { font-size: clamp(42px, 11.5vw, 60px); }
+  .hero h1 { font-size: clamp(38px, 12vw, 64px); }
+  html[lang="zh-Hans"] .hero h1 { font-size: clamp(34px, 11vw, 60px); }
   .hero-eyebrow { font-size: 9px; margin-bottom: 22px; }
   .hero-intro { max-width: 450px; }
   .constellation { height: 335px; width: 100%; }

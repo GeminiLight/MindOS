@@ -8,7 +8,7 @@ MindOS — Human–Agent Co-evolution, Built on Shared Context
 
 A local-first, open-source knowledge workspace for human–agent co-evolution. Share context across AI agents, review their work, and turn experience into reusable knowledge.
 
-Your thinking. Their action. Our evolution.
+You think here. Agents act on it. Evolve together.
 
 The local-first knowledge workspace for you and your agents.
 
@@ -157,7 +157,7 @@ MindOS｜人类与 Agent 共同演进的本地知识工作台
 
 MindOS 是面向 Human–Agent Co-evolution 的本地优先开源知识工作台。共享上下文，审阅 Agent 行动，将复盘经验沉淀为下一次协作的知识。
 
-你思考， Agent 行动， 一起进化。
+你在此思考。 Agent 依此行动。 共同进化。
 
 属于你与 Agent 的本地知识工作台。
 
