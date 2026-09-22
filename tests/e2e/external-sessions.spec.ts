@@ -1,10 +1,10 @@
 import { test, expect } from '@playwright/test';
 
 // Native stores and Agent turns are fixtures: this never writes an external Agent's files.
-for (const id of ['claude', 'codex', 'opencode']) {
+for (const id of ['claude', 'codex', 'opencode', 'gemini', 'kimi', 'qwen-code', 'codebuddy', 'openclaw']) {
   test(`${id}: browses all projects, retries pages and opens the original session`, async ({ page, context }) => {
     test.setTimeout(90_000);
-    const runtime = { id, name: id === 'claude' ? 'Claude Code' : id === 'codex' ? 'Codex' : 'OpenCode', kind: id === 'opencode' ? 'acp' : id, status: 'available', capabilities: {}, lifecycle: {}, compatibility: {} };
+    const runtime = { id, name: id === 'claude' ? 'Claude Code' : id === 'codex' ? 'Codex' : id === 'opencode' ? 'OpenCode' : id, kind: id === 'claude' || id === 'codex' ? id : 'acp', status: 'available', capabilities: {}, lifecycle: {}, compatibility: {} };
     await context.addInitScript(runtime => {
       localStorage.setItem('theme', 'light'); localStorage.setItem('locale', 'en');
       localStorage.setItem('mindos:last-agent-runtime', JSON.stringify(runtime));
@@ -14,12 +14,13 @@ for (const id of ['claude', 'codex', 'opencode']) {
     await page.route('**/api/**', route => route.fulfill({ json: {} }));
     await page.route('**/api/setup', route => route.fulfill({ json: { setupPending: false, walkthroughCompleted: true, guideState: { active: false, dismissed: true } } }));
     await page.route('**/api/agent-runtimes?*', route => route.fulfill({ json: { runtimes: [runtime], installed: [], notInstalled: [] } }));
+    await page.route('**/api/acp/session', route => route.fulfill({ status: 501, json: { error: 'Agent does not support session/list' } }));
     let saved: { runtimeSessionBinding?: { externalSessionId: string; cwd: string }; messages?: Array<{ content: string }> } | undefined;
     await page.route('**/api/agent/sessions', route => {
       if (route.request().method() === 'POST') { saved = route.request().postDataJSON().session; return route.fulfill({ json: { ok: true } }); }
       return route.fulfill({ json: [] });
     });
-    const entry = (n: number) => ({ id: `${id}-${n}`, title: `${runtime.name} design ${n}`, name: `${runtime.name} design ${n}`, preview: `Design system iteration ${n}`, cwd: '/workspace/original-project', updatedAt: Date.now() - n * 1000 });
+    const entry = (n: number) => ({ source: 'native-transcript', id: `${id}-${n}`, title: `${runtime.name} design ${n}`, name: `${runtime.name} design ${n}`, preview: `Design system iteration ${n}`, cwd: '/workspace/original-project', updatedAt: Date.now() - n * 1000 });
     let failPage = true;
     let failRefresh = false;
     const listRequests: URL[] = [];

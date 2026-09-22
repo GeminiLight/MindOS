@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Cpu, Gauge, RotateCcw, SlidersHorizontal } from 'lucide-react';
+import AcpAdditionalOptions from './AcpAdditionalOptions';
 import AskOptionCapsule, { type AskOptionCapsuleOption } from '@/components/ask/AskOptionCapsule';
 import type {
   AcpRuntimeOptions,
@@ -13,7 +14,6 @@ import type {
 const STORAGE_PREFIX = 'mindos-acp-runtime-options.v1';
 const FALLBACK_MODEL_CONFIG_ID = 'model';
 const FALLBACK_EFFORT_CONFIG_ID = 'reasoning_effort';
-const DEFAULT_EFFORT = 'medium';
 
 interface AcpRuntimeOptionsCapsuleProps {
   projection?: RuntimeSessionProjection | null;
@@ -87,22 +87,13 @@ function optionLabel(option: { id: string; label?: string }): string {
   return option.label?.trim() || option.id;
 }
 
-function agentModeLabel(option: { id: string; label?: string }): string {
-  const id = option.id.trim().toLowerCase();
-  const label = optionLabel(option);
-  const normalizedLabel = label.trim().toLowerCase();
-  if (id === 'build' || id === 'default' || normalizedLabel === 'default') return 'Build';
-  if (id === 'plan' || normalizedLabel === 'plan') return 'Plan';
-  return label;
-}
-
-function optionsFor(key: ControlKey, control: RuntimeSessionProjectionControl): Array<AskOptionCapsuleOption<string>> {
+function optionsFor(control: RuntimeSessionProjectionControl): Array<AskOptionCapsuleOption<string>> {
   return control.options
     .filter((option) => option.id.trim())
-    .slice(0, 40)
     .map((option) => ({
       value: option.id,
-      label: key === 'mode' ? agentModeLabel(option) : optionLabel(option),
+      label: optionLabel(option),
+      description: option.description,
     }));
 }
 
@@ -142,58 +133,10 @@ function canSetControl(key: ControlKey, control: RuntimeSessionProjectionControl
   return Boolean(configIdForControl(key, control));
 }
 
-function defaultModelControl(value: AcpRuntimeOptions): RuntimeSessionProjectionControl {
-  return {
-    status: 'available',
-    owner: 'external',
-    source: 'adapter-declared',
-    currentValue: value.configValues?.[FALLBACK_MODEL_CONFIG_ID],
-    options: [],
-    summary: 'Override the selected ACP agent model for the next turn.',
-  };
-}
-
-function defaultModeControl(value: AcpRuntimeOptions): RuntimeSessionProjectionControl {
-  return {
-    status: 'available',
-    owner: 'external',
-    source: 'adapter-declared',
-    currentValue: value.modeId ?? 'build',
-    options: [
-      { id: 'build', label: 'Build' },
-      { id: 'plan', label: 'Plan' },
-    ],
-    summary: 'Choose how the selected ACP agent should work for the next turn.',
-  };
-}
-
-function defaultEffortControl(value: AcpRuntimeOptions): RuntimeSessionProjectionControl {
-  return {
-    status: 'available',
-    owner: 'external',
-    source: 'adapter-declared',
-    configId: FALLBACK_EFFORT_CONFIG_ID,
-    currentValue: value.configValues?.[FALLBACK_EFFORT_CONFIG_ID] ?? DEFAULT_EFFORT,
-    options: [
-      { id: 'low', label: 'Low' },
-      { id: 'medium', label: 'Medium' },
-      { id: 'high', label: 'High' },
-      { id: 'xhigh', label: 'X High' },
-    ],
-    summary: 'Choose the reasoning effort sent to the selected ACP agent.',
-  };
-}
-
 function shouldShowControl(key: ControlKey, control: RuntimeSessionProjectionControl | undefined): control is RuntimeSessionProjectionControl {
   if (!control || control.status !== 'available') return false;
   if (key === 'model') return true;
   return control.options.length > 0;
-}
-
-function isFallbackEffortControl(key: ControlKey, control: RuntimeSessionProjectionControl): boolean {
-  return key === 'thoughtLevel'
-    && control.source === 'adapter-declared'
-    && control.configId === FALLBACK_EFFORT_CONFIG_ID;
 }
 
 function withConfigValue(value: AcpRuntimeOptions, configId: string, next: string): AcpRuntimeOptions {
@@ -320,26 +263,17 @@ export default function AcpRuntimeOptionsCapsule({
 }: AcpRuntimeOptionsCapsuleProps) {
   const controls = projection?.controls;
   const entries = useMemo<Array<RuntimeControlEntry>>(() => {
-    const modelControl = controls?.model?.status === 'available'
-      ? controls.model
-      : defaultModelControl(value);
-    const modeControl = controls?.mode?.status === 'available' && controls.mode.options.length > 0
-      ? controls.mode
-      : defaultModeControl(value);
-    const effortControl = controls?.thoughtLevel?.status === 'available' && controls.thoughtLevel.options.length > 0
-      ? controls.thoughtLevel
-      : defaultEffortControl(value);
-    return ([
-      ['mode', modeControl],
-      ['model', modelControl],
-      ['thoughtLevel', effortControl],
-    ] as const).filter((entry): entry is RuntimeControlEntry => shouldShowControl(entry[0], entry[1]));
-  }, [controls, value]);
+    if (!controls) return [];
+    return (['mode', 'model', 'thoughtLevel'] as const)
+      .map(key => [key, controls[key]] as const)
+      .filter((entry): entry is RuntimeControlEntry => shouldShowControl(entry[0], entry[1]));
+  }, [controls]);
   const visibleEntries = useMemo(() => (
-    controlKeys?.length
-      ? entries.filter(([key]) => controlKeys.includes(key))
-      : entries
+    controlKeys?.length ? entries.filter(([key]) => controlKeys.includes(key)) : entries
   ), [controlKeys, entries]);
+  const knownIds = new Set(entries.map(([key, control]) => configIdForControl(key, control)).filter(Boolean));
+  const additionalOptions = (controlKeys?.length && !controlKeys.includes('model') ? [] : projection?.configOptions ?? []).filter(option => option.type === 'select' && !knownIds.has(option.configId) && option.options.length > 0);
+
   const runtimeName = projection?.runtimeName ?? runtime?.name ?? 'ACP agent';
   const runtimeId = projection?.runtimeId ?? runtime?.id;
 
@@ -347,11 +281,7 @@ export default function AcpRuntimeOptionsCapsule({
     const nextConfigValues = { ...(value.configValues ?? {}) };
     const configId = configIdForControl(key, control);
     if (configId) {
-      if (isFallbackEffortControl(key, control) && next === DEFAULT_EFFORT) {
-        delete nextConfigValues[configId];
-      } else {
-        nextConfigValues[configId] = next;
-      }
+      nextConfigValues[configId] = next;
     }
     const nextModeId = key === 'mode' && !control.configId
       ? next
@@ -362,7 +292,18 @@ export default function AcpRuntimeOptionsCapsule({
     }));
   }, [onChange, value]);
 
-  if (visibleEntries.length === 0) return null;
+  useEffect(() => {
+    // An explicitly empty list withdraws all config controls. Undefined means
+    // the Agent has not reported its configuration yet, so preserve preferences.
+    if (!projection?.configOptions || (controlKeys?.length && !controlKeys.includes('model'))) return;
+    const allowed = new Map(projection.configOptions.map(option => [option.configId, option.options]));
+    const next = Object.fromEntries(Object.entries(value.configValues ?? {}).filter(([id, selected]) => allowed.get(id)?.some(option => option.id === selected)));
+    if (Object.keys(next).length !== Object.keys(value.configValues ?? {}).length) {
+      onChange(compactAcpRuntimeOptions({ ...value, configValues: next }));
+    }
+  }, [projection?.configOptions, controlKeys, value, onChange]);
+
+  if (visibleEntries.length === 0 && additionalOptions.length === 0) return null;
 
   return (
     <div
@@ -384,9 +325,9 @@ export default function AcpRuntimeOptionsCapsule({
           );
         }
         const selected = selectedValue(key, control, value);
-        const options = optionsFor(key, control);
+        const options = optionsFor(control);
         const selectedOption = control.options.find((option) => option.id === selected);
-        const label = compactLabel(selectedOption ? (key === 'mode' ? agentModeLabel(selectedOption) : optionLabel(selectedOption)) : selected || controlTitle(key));
+        const label = compactLabel(selectedOption ? optionLabel(selectedOption) : selected || controlTitle(key));
         const editable = canSetControl(key, control);
         const configId = configIdForControl(key, control);
         const locallyActive = key === 'mode'
@@ -409,6 +350,9 @@ export default function AcpRuntimeOptionsCapsule({
           />
         );
       })}
+      {additionalOptions.length > 0 && <AcpAdditionalOptions options={additionalOptions} value={value} disabled={disabled}
+        onChange={(id, next) => { if (!disabled) onChange(withConfigValue(value, id, next)); }} />}
+
     </div>
   );
 }

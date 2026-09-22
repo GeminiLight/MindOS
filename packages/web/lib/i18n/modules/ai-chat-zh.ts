@@ -159,6 +159,7 @@ export const aiChatZh = {
     fileName: '文件名',
     saveGenerating: '正在生成摘要...',
     saveRetry: '重试',
+    agentOptions: { title: 'Agent 选项', hint: '用于下一条消息；可选项由当前 Agent 提供。' },
     externalSessions: {
       retry: '重试',
       loadedCount: (n: number, more: boolean) => more ? `已加载 ${n} 个会话` : `${n} 个会话`,

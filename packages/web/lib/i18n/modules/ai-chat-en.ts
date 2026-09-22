@@ -160,6 +160,7 @@ export const aiChatEn = {
     fileName: 'Filename',
     saveGenerating: 'Generating summary...',
     saveRetry: 'Retry',
+    agentOptions: { title: 'Agent options', hint: 'Used for the next message. Choices come from this Agent.' },
     externalSessions: {
       retry: 'Retry',
       loadedCount: (n: number, more: boolean) => `${n} session${n === 1 ? '' : 's'}${more ? ' loaded' : ''}`,

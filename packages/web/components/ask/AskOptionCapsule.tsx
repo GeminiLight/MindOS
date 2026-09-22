@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, useLayoutEffect, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 type DropdownPos = {
   top: number;
   left: number;
+  maxHeight: number;
   direction: 'up' | 'down';
 };
 
@@ -55,17 +56,17 @@ export default function AskOptionCapsule<T extends string>({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const close = useCallback(() => setOpen(false), []);
+  const close = useCallback(() => { setOpen(false); triggerRef.current?.focus(); }, []);
 
   const reposition = useCallback(() => {
     if (!triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
     const spaceAbove = rect.top;
     const spaceBelow = window.innerHeight - rect.bottom;
-    const estimatedH = 240;
-    const direction: DropdownPos['direction'] = spaceAbove > spaceBelow && spaceAbove > estimatedH ? 'up' : 'down';
+    const direction: DropdownPos['direction'] = spaceAbove > spaceBelow ? 'up' : 'down';
     setPos({
-      left: Math.min(rect.left, window.innerWidth - 280),
+      left: Math.max(8, Math.min(rect.left, window.innerWidth - (dropdownRef.current?.getBoundingClientRect().width || 320) - 8)),
+      maxHeight: Math.max(0, (direction === 'up' ? spaceAbove : spaceBelow) - 14),
       top: direction === 'up' ? rect.top - 6 : rect.bottom + 6,
       direction,
     });
@@ -91,11 +92,11 @@ export default function AskOptionCapsule<T extends string>({
   useEffect(() => {
     if (!open) return;
     const handler = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
+      if (event.key === 'Escape') { event.preventDefault(); close(); }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [open]);
+  }, [open, close]);
 
   useEffect(() => {
     if (!open) return;
@@ -107,19 +108,40 @@ export default function AskOptionCapsule<T extends string>({
     };
   }, [open, reposition]);
 
+  useLayoutEffect(() => {
+    if (!open || !pos) return;
+    reposition();
+    const menu = dropdownRef.current;
+    const selected = menu?.querySelector<HTMLElement>('[aria-selected="true"]:not(:disabled)');
+    (selected ?? menu?.querySelector<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled)'))?.focus();
+    // Position becoming available marks the first portal mount, not subsequent scrolling.
+  }, [open, Boolean(pos), reposition]);
+  useEffect(() => { if (disabled) setOpen(false); }, [disabled]);
+
   const selectedActive = active || open;
 
-  const dropdown = open && pos ? (
+  const dropdown = open && !disabled && pos ? (
     <div
       ref={dropdownRef}
       role={options ? 'listbox' : 'dialog'}
       aria-label={ariaLabel ?? title}
+      onKeyDown={event => {
+        if (!options || !['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+        event.preventDefault();
+        const items = Array.from(dropdownRef.current?.querySelectorAll<HTMLButtonElement>('[role="option"]:not(:disabled)') ?? []);
+        const current = items.indexOf(document.activeElement as HTMLButtonElement);
+        const index = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 : (current + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+        items[index]?.focus();
+      }}
       className={cn(
-        'fixed z-[60] pointer-events-auto rounded-lg border border-border bg-card py-1 shadow-lg animate-in fade-in-0 zoom-in-95 duration-100',
+        'fixed z-50 overflow-y-auto overscroll-contain pointer-events-auto rounded-lg border border-border bg-card py-1 shadow-lg animate-in fade-in-0 zoom-in-95 duration-100',
         dropdownWidthClassName,
       )}
       style={{
         left: pos.left,
+        maxWidth: 'calc(100vw - 16px)',
+        minWidth: 'min(220px, calc(100vw - 16px))',
+        maxHeight: pos.maxHeight,
         ...(pos.direction === 'up'
           ? { bottom: window.innerHeight - pos.top }
           : { top: pos.top }),
@@ -142,12 +164,12 @@ export default function AskOptionCapsule<T extends string>({
                 aria-selected={selected}
                 disabled={option.disabled}
                 onClick={() => {
-                  if (option.disabled) return;
+                  if (disabled || option.disabled) return;
                   onChange?.(option.value);
-                  setOpen(false);
+                  close();
                 }}
                 className={cn(
-                  'flex w-full items-start gap-2.5 px-3 py-2 text-left text-xs transition-colors',
+                  'flex w-full items-start gap-2.5 px-3 py-2 text-left text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
                   option.disabled
                     ? 'cursor-not-allowed opacity-45'
                     : 'hover:bg-muted',
@@ -186,7 +208,8 @@ export default function AskOptionCapsule<T extends string>({
         }}
         data-hit-active={selectedActive ? 'true' : undefined}
         title={tooltip}
-        aria-expanded={open}
+        aria-label={ariaLabel}
+        aria-expanded={open && !disabled}
         aria-haspopup={options ? 'listbox' : 'dialog'}
         className={cn(
           'hit-target-box relative z-10 inline-flex min-h-6 items-center gap-1 px-2.5 py-0.5',

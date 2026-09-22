@@ -4,9 +4,10 @@ import { join } from 'node:path';
 import { loadSqliteDriver } from '../../../../foundation/storage/sqlite-driver.js';
 import { parseClaudeMessagesFromRecords, parseOpenCodeTextRows, type OpenCodeTextRow } from './normalizer.js';
 import type { ExternalRuntimeSessionRecord } from './types.js';
+import { getRuntimeSessionTranscriptAdapter } from './registry.js';
 
 export class NativeSessionBrowserError extends Error {
-  constructor(message: string, readonly status: 400 | 404 | 500) { super(message); }
+  constructor(message: string, readonly status: 400 | 404 | 500 | 501) { super(message); }
 }
 
 export interface NativeSessionBrowserOptions {
@@ -67,8 +68,12 @@ export async function browseNativeSessions(
       nextCursor: candidates.length > limit ? String(offset + limit) : null,
     };
   }
-  if (options.runtimeId !== 'opencode') throw new NativeSessionBrowserError('This runtime does not expose a native session browser.', 400);
-  return browseOpenCode(options, offset, limit);
+  if (options.runtimeId === 'opencode') return browseOpenCode(options, offset, limit);
+  const adapter = getRuntimeSessionTranscriptAdapter(options.runtimeId);
+  if (!adapter || adapter.status !== 'supported') throw new NativeSessionBrowserError('This runtime does not expose a native session browser.', 501);
+  const sessions = await adapter.listSessions({ ...options, offset, limit: limit + 1, metadataOnly: !options.sessionId });
+  if (options.sessionId && sessions.length === 0) throw new NativeSessionBrowserError('Session no longer exists or cannot be read. Refresh the list.', 404);
+  return { sessions: sessions.slice(0, limit), nextCursor: !options.sessionId && sessions.length > limit ? String(offset + limit) : null };
 }
 
 function claudeEntry(info: ClaudeSessionInfo): ExternalRuntimeSessionRecord {

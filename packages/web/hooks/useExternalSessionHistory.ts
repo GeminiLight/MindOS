@@ -36,7 +36,8 @@ export function useExternalSessionHistory(runtime: AgentRuntimeIdentity | null, 
         for (const entry of page.entries) byId.set(entry.id, entry);
         return [...byId.values()];
       });
-      failedPage.current = undefined;
+      failedPage.current = page.warning ? page.nextCursor ?? next : undefined;
+      if (page.warning) { setError(page.warning); setCanRetry(true); }
       setCursor(page.nextCursor);
     } catch (cause) {
       if (generation === request.current.generation) {

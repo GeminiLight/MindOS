@@ -102,7 +102,7 @@ async function openClawSessionCandidates(
     }
   }
 
-  const files = await readdir(sessionsDir, { withFileTypes: true }).catch(() => []);
+  const files = await readdir(sessionsDir, { withFileTypes: true }).catch(error => { if (error.code === 'ENOENT') return []; throw error; });
   for (const file of files) {
     if (!file.isFile() || !isPrimaryOpenClawTranscriptFile(file.name)) continue;
     const fallbackSessionId = file.name.replace(/\.jsonl$/, '');
@@ -124,14 +124,14 @@ export async function listOpenClawSessions(
 
   for (const stateDir of OPENCLAW_STATE_DIRS) {
     const agentsRoot = join(home, stateDir, 'agents');
-    const agents = await readdir(agentsRoot, { withFileTypes: true }).catch(() => []);
+    const agents = await readdir(agentsRoot, { withFileTypes: true }).catch(error => { if (error.code === 'ENOENT') return []; throw error; });
     for (const agent of agents) {
       if (!agent.isDirectory()) continue;
       const sessionsDir = join(agentsRoot, agent.name, 'sessions');
       if (!existsSync(sessionsDir)) continue;
       const candidates = await openClawSessionCandidates(sessionsDir, agent.name, options);
       for (const candidate of candidates) {
-        const recordsFromFile = await readJsonl(candidate.filePath);
+        const recordsFromFile = await readJsonl(candidate.filePath, options.metadataOnly);
         const fallbackSessionId = basename(candidate.filePath).replace(/\.jsonl$/, '');
         const metadataSessionId = typeof candidate.metadata?.sessionId === 'string'
           ? candidate.metadata.sessionId
@@ -145,8 +145,7 @@ export async function listOpenClawSessions(
         const headerCwd = isRecord(header) && typeof header.cwd === 'string' ? header.cwd : undefined;
         const cwd = (typeof candidate.metadata?.cwd === 'string' ? candidate.metadata.cwd : undefined)
           ?? headerCwd
-          ?? firstStringFromRecords(recordsFromFile, ['cwd', 'projectRoot', 'project_root'])
-          ?? options.cwd;
+          ?? firstStringFromRecords(recordsFromFile, ['cwd', 'projectRoot', 'project_root']);
         if (shouldSkipForRequestedCwd({
           requestedCwd: options.cwd,
           transcriptCwd: cwd,
@@ -172,18 +171,20 @@ export async function listOpenClawSessions(
             ?? timestampField(candidate.metadata?.startTime)
             ?? firstTimestampFromRecords(recordsFromFile, ['timestamp', 'createdAt', 'created_at'])
             ?? fileStat?.birthtimeMs,
-          updatedAt: timestampField(candidate.metadata?.updatedAt)
+          updatedAt: (options.metadataOnly ? fileStat?.mtimeMs : undefined)
+            ?? timestampField(candidate.metadata?.updatedAt)
             ?? timestampField(candidate.metadata?.mtime)
             ?? newestTimestampField(recordsFromFile, 'timestamp')
             ?? fileStat?.mtimeMs,
           messages,
+          metadataOnly: options.metadataOnly,
           transcriptSource: 'openclaw',
         }));
       }
     }
   }
 
-  return sortAndLimit(records, options.limit);
+  return sortAndLimit(records, options.limit, options);
 }
 
 export const OPENCLAW_SESSION_TRANSCRIPT_ADAPTER: RuntimeSessionTranscriptAdapter = {

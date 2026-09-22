@@ -292,6 +292,9 @@ const ACP_RUNTIME_SESSION_ADAPTER: RuntimeSessionHistoryAdapter = {
     return mergeRuntimeSessionEntries(acpResult.value, externalEntries);
   },
   async readHistory(entry, runtime) {
+    if (entry.raw && typeof entry.raw === 'object' && (entry.raw as { source?: string }).source === 'native-transcript') {
+      return CLAUDE_RUNTIME_SESSION_ADAPTER.readHistory!(entry, runtime);
+    }
     let normalizedEntry = normalizeRuntimeSessionEntry(entry, runtime)
       ?? normalizeRuntimeSessionEntry(entry.raw ?? entry, runtime)
       ?? { ...entry, runtime };

@@ -43,6 +43,10 @@ export type ExternalRuntimeSessionListOptions = {
   sessionId?: string;
   limit?: number;
   homeDir?: string;
+  /** Internal metadata browser: bounded previews, no accumulated histories. */
+  metadataOnly?: boolean;
+  offset?: number;
+  query?: string;
 };
 
 export type RuntimeSessionTranscriptAdapter = {

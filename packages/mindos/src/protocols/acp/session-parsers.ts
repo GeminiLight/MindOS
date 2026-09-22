@@ -155,14 +155,15 @@ export function parseCurrentModeId(raw: unknown): string | undefined {
 }
 
 export function parseConfigOptions(raw: unknown): AcpConfigOption[] | undefined {
-  if (!Array.isArray(raw) || raw.length === 0) return undefined;
+  if (!Array.isArray(raw)) return undefined;
   return raw
-    .filter((o): o is Record<string, unknown> => !!o && typeof o === 'object')
+    .filter((o): o is Record<string, unknown> => isRecord(o) && (o.type === undefined || o.type === 'select') && typeof (o.configId ?? o.id) === 'string' && !['__proto__', 'constructor', 'prototype'].includes(String(o.configId ?? o.id)))
     .map(o => ({
       type: 'select' as const,
       configId: String(o.configId ?? o.id ?? ''),
       category: String(o.category ?? 'other'),
       label: typeof o.label === 'string' ? o.label : typeof o.name === 'string' ? o.name : undefined,
+      ...(typeof o.description === 'string' ? { description: o.description.slice(0, 1000) } : {}),
       currentValue: String(o.currentValue ?? ''),
       options: parseConfigOptionEntries(o.options),
     }))
@@ -172,17 +173,20 @@ export function parseConfigOptions(raw: unknown): AcpConfigOption[] | undefined 
 function parseConfigOptionEntries(raw: unknown): AcpConfigOption['options'] {
   if (!Array.isArray(raw)) return [];
   const entries: AcpConfigOption['options'] = [];
-  const pushEntry = (option: unknown) => {
+  const pushEntry = (option: unknown, group?: string) => {
     if (!option || typeof option !== 'object' || Array.isArray(option)) return;
     const record = option as Record<string, unknown>;
-    const id = String(record.id ?? record.value ?? '').trim();
+    const rawId = record.id ?? record.value;
+    if (typeof rawId !== 'string') return;
+    const id = rawId.trim();
     const label = String(record.label ?? record.name ?? id).trim();
-    if (id) entries.push({ id, label: label || id });
+    if (id) entries.push({ id, label: label || id, ...(typeof record.description === 'string' ? { description: record.description.slice(0, 1000) } : {}), ...(group ? { group } : {}) });
   };
   for (const item of raw) {
     if (item && typeof item === 'object' && !Array.isArray(item) && Array.isArray((item as Record<string, unknown>).options)) {
       for (const nested of (item as Record<string, unknown>).options as unknown[]) {
-        pushEntry(nested);
+        const group = item as Record<string, unknown>;
+        pushEntry(nested, typeof group.name === 'string' ? group.name : undefined);
       }
       continue;
     }
@@ -226,6 +230,7 @@ function normalizeAvailableCommand(entry: unknown): AcpAvailableCommand | null {
     id,
     name,
     ...(description ? { description } : {}),
+    ...(isRecord(record.input) && typeof record.input.hint === 'string' ? { inputHint: record.input.hint.slice(0, 300) } : typeof record.inputHint === 'string' ? { inputHint: record.inputHint.slice(0, 300) } : {}),
   };
 }
 

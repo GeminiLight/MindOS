@@ -160,7 +160,7 @@ describe('AcpRuntimeOptionsCapsule', () => {
   it('writes config-backed mode selection as configValues instead of modeId', () => {
     const view = renderCapsule(baseProjection);
 
-    clickButtonContaining('Build');
+    clickButtonContaining('Default');
     clickButtonContaining('Code');
 
     expect(view.onChange).toHaveBeenLastCalledWith({
@@ -181,7 +181,7 @@ describe('AcpRuntimeOptionsCapsule', () => {
     };
     const view = renderCapsule(projection);
 
-    clickButtonContaining('Build');
+    clickButtonContaining('Default');
     clickButtonContaining('Code');
 
     expect(view.onChange).toHaveBeenLastCalledWith({ modeId: 'code' });
@@ -189,50 +189,31 @@ describe('AcpRuntimeOptionsCapsule', () => {
     view.cleanup();
   });
 
-  it('shows a default Build/Plan agent mode control before ACP projection is available', () => {
+  it('does not invent model, mode or effort capabilities before an Agent reports them', () => {
     const view = renderCapsule(null);
-
-    expect(view.host.textContent).toContain('Default');
-    expect(view.host.textContent).toContain('Medium');
-
-    clickButtonContaining('Build');
-    clickButtonContaining('Plan');
-
-    expect(view.onChange).toHaveBeenLastCalledWith({ modeId: 'plan' });
-
+    expect(view.host.querySelectorAll('button')).toHaveLength(0);
+    expect(view.host.textContent).not.toContain('Medium');
     view.cleanup();
   });
 
-  it('shows fallback ACP model and effort controls before projection is available', () => {
-    const view = renderCapsule(null);
+  it('exposes additional Agent settings and their descriptions without changing unrelated selections', () => {
+    const view = renderCapsule({ ...baseProjection, configOptions: [
+      { type: 'select', configId: 'context_size', category: 'model_config', label: 'Context window', description: 'Maximum context', currentValue: 'small', options: [{ id: 'small', label: 'Small' }, { id: 'large', label: 'Large', description: 'More context' }] },
+    ] }, vi.fn(), { configValues: { model: 'smart' } });
+    expect(view.host.textContent).not.toContain('Context window');
+    clickButtonContaining('Agent options');
+    const select = document.body.querySelector('select[aria-label="Context window"]') as HTMLSelectElement;
+    expect(select).toBeTruthy();
+    act(() => { select.value = 'large'; select.dispatchEvent(new Event('change', { bubbles: true })); });
+    expect(view.onChange).toHaveBeenLastCalledWith({ configValues: { model: 'smart', context_size: 'large' } });
+    view.cleanup();
+  });
 
-    clickButtonContaining('Medium');
-    clickButtonContaining('High');
-    expect(view.onChange).toHaveBeenLastCalledWith({
-      configValues: { reasoning_effort: 'high' },
-    });
-
-    clickButtonContaining('Default');
-    const input = document.body.querySelector('input[placeholder="model id"]') as HTMLInputElement;
-    expect(input).toBeTruthy();
-
-    act(() => {
-      const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
-      valueSetter?.call(input, 'gpt-acp-test');
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-      input.dispatchEvent(new Event('change', { bubbles: true }));
-    });
-
-    const applyButton = Array.from(document.body.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('Apply')) as HTMLButtonElement;
-    act(() => {
-      applyButton.click();
-    });
-
-    expect(view.onChange).toHaveBeenLastCalledWith({
-      configValues: { model: 'gpt-acp-test' },
-    });
-
+  it('keeps every reported model available beyond the previous 40-option cap', () => {
+    const options = Array.from({ length: 45 }, (_, i) => ({ id: `model-${i}`, label: `Model ${i}` }));
+    const view = renderCapsule({ ...baseProjection, controls: { ...baseProjection.controls, model: { ...baseProjection.controls.model, currentValue: 'model-0', options } } });
+    clickButtonContaining('Model 0'); clickButtonContaining('Model 44');
+    expect(view.onChange).toHaveBeenLastCalledWith({ configValues: { model: 'model-44' } });
     view.cleanup();
   });
 
@@ -274,4 +255,10 @@ describe('AcpRuntimeOptionsCapsule', () => {
 
     view.cleanup();
   });
+});
+it('clears obsolete local config overrides when the Agent declares a replacement list', () => {
+  const onChange = vi.fn();
+  const rendered = renderCapsule({ ...baseProjection, configOptions: [{ type: 'select', configId: 'context', category: 'other', currentValue: 'small', options: [{ id: 'small', label: 'Standard' }] }] }, onChange, { configValues: { removed: 'old', context: 'invalid' } });
+  expect(onChange).toHaveBeenCalledWith({});
+  rendered.cleanup();
 });

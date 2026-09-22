@@ -103,3 +103,11 @@ it('cancels a pending search debounce when the user explicitly refreshes', async
   await act(async () => { await vi.advanceTimersByTimeAsync(200); });
   expect(list).toHaveBeenCalledTimes(calls);
 });
+it('retries only the incomplete source without discarding the successful source', async () => {
+  list.mockResolvedValueOnce({ entries: [{ id: 'local', runtime: claude }], nextCursor: 'source-cursor', warning: 'Protocol offline' });
+  await render(); expect(latest.error).toBe('Protocol offline'); expect(latest.canRetry).toBe(true);
+  list.mockResolvedValueOnce({ entries: [{ id: 'remote', runtime: claude }], nextCursor: null });
+  await act(async () => latest.retry());
+  expect(list.mock.lastCall?.[1]?.cursor).toBe('source-cursor');
+  expect(latest.entries.map(e => e.id)).toEqual(['local', 'remote']); expect(latest.error).toBeNull();
+});

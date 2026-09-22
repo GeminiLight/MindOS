@@ -16,6 +16,7 @@ export interface SkillSlashItem {
 
 export interface RuntimeCommandSlashItem {
   type: 'runtime-command';
+  inputHint?: string;
   name: string;
   description: string;
 }
@@ -86,6 +87,7 @@ export function useSlashCommand(options: UseSlashCommandOptions = {}) {
         .map((command) => ({
           name: command.name.trim().replace(/^\//, ''),
           description: command.description?.trim() || 'Runtime command',
+          inputHint: command.inputHint,
         }))
         .filter((command) => command.name)
         .map((command) => {
@@ -105,6 +107,7 @@ export function useSlashCommand(options: UseSlashCommandOptions = {}) {
           type: 'runtime-command',
           name: item.command.name,
           description: item.command.description,
+          inputHint: item.command.inputHint,
         }));
       const items: SlashItem[] = (q
         ? allSkills

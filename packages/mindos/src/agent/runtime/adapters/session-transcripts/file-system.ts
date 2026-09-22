@@ -1,39 +1,59 @@
-import { existsSync } from 'node:fs';
-import { readdir, readFile } from 'node:fs/promises';
+import { createReadStream, existsSync } from 'node:fs';
+import { readdir, readFile, stat } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 import type { MaybeRecord } from './types.js';
 import { isRecord } from './normalizer.js';
 
 export const MAX_JSONL_LINES = 20_000;
-export const MAX_DISCOVERED_TRANSCRIPTS = 500;
+
+
+const MAX_RECORD_BYTES = 2 * 1024 * 1024;
+const MAX_HISTORY_BYTES = 64 * 1024 * 1024;
 
 export async function readJsonFile(path: string): Promise<MaybeRecord | null> {
   try {
+    if ((await stat(path)).size > MAX_HISTORY_BYTES) throw new Error('This history exceeds the reading limit. Open it in the Agent.');
     const parsed = JSON.parse(await readFile(path, 'utf8'));
-    return isRecord(parsed) ? parsed : null;
-  } catch {
-    return null;
+    if (!isRecord(parsed)) throw new Error('Invalid history object.');
+    return parsed;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw error;
   }
 }
 
-export async function readJsonl(path: string): Promise<MaybeRecord[]> {
+/** Summaries use the first messages; full histories never silently truncate. */
+export async function readJsonl(path: string, metadataOnly = false): Promise<MaybeRecord[]> {
+  const records: MaybeRecord[] = [];
+  const stream = createReadStream(path, { encoding: 'utf8' });
+  let buffer = '', count = 0, total = 0;
+  const accept = (line: string) => {
+    if (!line.trim()) return;
+    if (Buffer.byteLength(line) > MAX_RECORD_BYTES) throw new Error('This history record exceeds the reading limit. Open it in the Agent.');
+    count++;
+    if (count > MAX_JSONL_LINES) throw new Error('This history exceeds the reading limit. Open it in the Agent for the full context.');
+    try { const parsed = JSON.parse(line); if (isRecord(parsed)) records.push(parsed); } catch { /* A partial CLI write may be retried later. */ }
+  };
   try {
-    const text = await readFile(path, 'utf8');
-    const records: MaybeRecord[] = [];
-    for (const line of text.split(/\r?\n/).slice(0, MAX_JSONL_LINES)) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-      try {
-        const parsed = JSON.parse(trimmed);
-        if (isRecord(parsed)) records.push(parsed);
-      } catch {
-        // Ignore malformed tail lines from in-progress CLI writes.
+    for await (const chunk of stream) {
+      total += Buffer.byteLength(chunk);
+      if (total > MAX_HISTORY_BYTES) throw new Error('This history exceeds the reading limit. Open it in the Agent.');
+      buffer += chunk;
+      let end: number;
+      while ((end = buffer.indexOf('\n')) >= 0) {
+        accept(buffer.slice(0, end)); buffer = buffer.slice(end + 1);
+        if (metadataOnly && count >= 64) break;
       }
+      if (metadataOnly && count >= 64) break;
+      if (Buffer.byteLength(buffer) > MAX_RECORD_BYTES) throw new Error('This history record exceeds the reading limit. Open it in the Agent.');
     }
+    if (!metadataOnly || count < 64) accept(buffer);
+    if (count && !records.length) throw new Error('Invalid or corrupt session history. Retry after the Agent finishes writing.');
     return records;
-  } catch {
-    return [];
-  }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    throw error;
+  } finally { stream.destroy(); }
 }
 
 export function projectBaseFromCwd(cwd?: string): string | null {
@@ -91,7 +111,7 @@ export async function directJsonlFiles(dir: string, sessionId?: string): Promise
     const filePath = join(dir, fileName);
     return existsSync(filePath) ? [filePath] : [];
   }
-  const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
+  const entries = await readdir(dir, { withFileTypes: true }).catch(error => { if (error.code === 'ENOENT') return []; throw error; });
   return entries
     .filter((entry) => entry.isFile() && entry.name.endsWith('.jsonl'))
     .map((entry) => join(dir, entry.name));
@@ -109,10 +129,8 @@ export async function discoverJsonlFiles(input: {
   if (input.sessionId?.trim() && !wantedName) return [];
 
   async function visit(dir: string, depth: number): Promise<void> {
-    if (result.length >= MAX_DISCOVERED_TRANSCRIPTS) return;
-    const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
+    const entries = await readdir(dir, { withFileTypes: true }).catch(error => { if (error.code === 'ENOENT') return []; throw error; });
     for (const entry of entries) {
-      if (result.length >= MAX_DISCOVERED_TRANSCRIPTS) return;
       const path = join(dir, entry.name);
       if (entry.isDirectory()) {
         if (depth >= input.maxDepth || input.skipDir?.(entry.name)) continue;

@@ -368,7 +368,7 @@ export async function listSessionsForAgent(
   if (!isAcpCapabilitySupported(agentCapabilities?.sessionCapabilities?.list)) {
     rememberAcpHandshakeHealth({
       agentId: entry.id,
-      status: 'failed',
+      status: 'ready',
       stage: 'session-list',
       startedAt,
       message: 'Agent does not support session/list',
@@ -457,6 +457,7 @@ async function runPrompt(
     onSessionUpdate: (params) => {
       const update = sdkNotificationToUpdate(sessionId, params);
       applySessionUpdate(session, update);
+      if (['available_commands_update', 'current_mode_update', 'config_option_update'].includes(update.type)) updateSessionState(session, session.state);
       onUpdate?.(update);
       if ((update.type === 'agent_message_chunk' || update.type === 'text') && update.text) {
         aggregatedText += update.text;
@@ -524,9 +525,9 @@ export async function cancelPrompt(sessionId: string): Promise<void> {
 export async function setMode(sessionId: string, modeId: string): Promise<void> {
   const { session, conn } = getSessionAndConn(sessionId);
   const wireSessionId = session.agentSessionId ?? sessionId;
-  await conn.connection.setSessionMode({ sessionId: wireSessionId, modeId });
+  await callAcpRpc(() => conn.connection.setSessionMode({ sessionId: wireSessionId, modeId }), { label: 'session/set_mode', timeoutMs: getSessionTimeouts(sessionId).sessionOpen });
   session.currentModeId = modeId;
-  session.lastActivityAt = new Date().toISOString();
+  updateSessionState(session, session.state);
 }
 
 export async function setConfigOption(
@@ -537,18 +538,25 @@ export async function setConfigOption(
   const { session, conn } = getSessionAndConn(sessionId);
   const wireSessionId = session.agentSessionId ?? sessionId;
 
-  const result = await conn.connection.setSessionConfigOption({
+  if (session.configOptions) {
+    const option = session.configOptions.find(item => item.configId === configId);
+    if (!option || !option.options.some(item => item.id === value)) {
+      throw new Error(`The selected ${configId} option is no longer available. Refresh the Agent options and choose again.`);
+    }
+  }
+
+  const result = await callAcpRpc(() => conn.connection.setSessionConfigOption({
     sessionId: wireSessionId,
     configId,
     value,
-  });
+  }), { label: 'session/set_config_option', timeoutMs: getSessionTimeouts(sessionId).sessionOpen });
 
   const configOptions = parseConfigOptions(result.configOptions);
   if (configOptions) {
     session.configOptions = configOptions;
     session.currentModeId = currentModeFromConfig(configOptions) ?? session.currentModeId;
   }
-  session.lastActivityAt = new Date().toISOString();
+  updateSessionState(session, session.state);
   return session.configOptions ?? [];
 }
 

@@ -38,7 +38,7 @@ export async function listCodeBuddySessions(
 
   const records: ExternalRuntimeSessionRecord[] = [];
   for (const filePath of files) {
-    const recordsFromFile = await readJsonl(filePath);
+    const recordsFromFile = await readJsonl(filePath, options.metadataOnly);
     const fallbackSessionId = basename(filePath).replace(/\.jsonl$/, '');
     const sessionId = sessionIdFromRecords(recordsFromFile, fallbackSessionId);
     if (options.sessionId && sessionId !== options.sessionId && fallbackSessionId !== options.sessionId) continue;
@@ -49,7 +49,7 @@ export async function listCodeBuddySessions(
       'project_root',
       'workingDirectory',
       'working_directory',
-    ]) ?? options.cwd;
+    ]);
     if (shouldSkipForRequestedCwd({
       requestedCwd: options.cwd,
       transcriptCwd: cwd,
@@ -73,16 +73,18 @@ export async function listCodeBuddySessions(
       cwd,
       createdAt: firstTimestampFromRecords(recordsFromFile, ['startTime', 'createdAt', 'created_at', 'timestamp'])
         ?? fileStat?.birthtimeMs,
-      updatedAt: newestTimestampField(recordsFromFile, 'updatedAt')
+      updatedAt: (options.metadataOnly ? fileStat?.mtimeMs : undefined)
+          ?? newestTimestampField(recordsFromFile, 'updatedAt')
         ?? newestTimestampField(recordsFromFile, 'updated_at')
         ?? newestTimestampField(recordsFromFile, 'timestamp')
         ?? fileStat?.mtimeMs,
       messages,
+      metadataOnly: options.metadataOnly,
       transcriptSource: 'codebuddy-code',
     }));
   }
 
-  return sortAndLimit(records, options.limit);
+  return sortAndLimit(records, options.limit, options);
 }
 
 export const CODEBUDDY_SESSION_TRANSCRIPT_ADAPTER: RuntimeSessionTranscriptAdapter = {

@@ -486,7 +486,30 @@ describe('ACP Session (SDK-based)', () => {
     });
   });
 
+  it('keeps a healthy Agent ready when session listing is unsupported', async () => {
+    vi.mocked(findAcpAgent).mockResolvedValueOnce(MOCK_ENTRY);
+    await expect(listSessionsForAgent('test-agent')).rejects.toThrow('does not support session/list');
+    expect(getCachedAcpHandshakeHealth('test-agent')?.status).toBe('ready');
+  });
   describe('setConfigOption', () => {
+    it('notifies configuration changes and bounds unresponsive config requests', async () => {
+      const session = await createSessionFromEntry(MOCK_ENTRY, { timeouts: { sessionOpen: 10 } });
+      const changed = vi.fn(); setAcpSessionChangedEmitterForTest(changed);
+      try {
+        await setConfigOption(session.id, 'model', 'new');
+        expect(changed).toHaveBeenCalledWith(expect.objectContaining({ sessionId: session.id }));
+        session.configOptions = undefined;
+        mockSetSessionConfigOption.mockImplementationOnce(() => new Promise(() => {}));
+        await expect(setConfigOption(session.id, 'model', 'new')).rejects.toThrow(/timed out/i);
+      } finally { setAcpSessionChangedEmitterForTest(undefined); }
+    });
+    it('rejects an option removed by the latest Agent update before sending it', async () => {
+      mockNewSession.mockResolvedValueOnce({ sessionId: 'native', configOptions: [{ id: 'model', type: 'select', currentValue: 'small', options: [{ value: 'small', name: 'Small' }] }] });
+      const session = await createSessionFromEntry(MOCK_ENTRY);
+      await expect(setConfigOption(session.id, 'model', 'removed')).rejects.toThrow(/no longer available/);
+      expect(mockSetSessionConfigOption).not.toHaveBeenCalled();
+    });
+
     it('calls SDK setSessionConfigOption and returns updated options', async () => {
       mockSetSessionConfigOption.mockResolvedValueOnce({
         configOptions: [

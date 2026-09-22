@@ -7,6 +7,7 @@ import type {
 import type {
   AcpAvailableCommand,
   AcpConfigOptionEntry,
+  AcpConfigOption,
   AcpPermissionEvent,
   AcpSessionMcpServerSummary,
   AcpSessionSnapshot,
@@ -96,6 +97,7 @@ export type RuntimeSessionProjection = {
     mode: RuntimeSessionProjectionControl;
     thoughtLevel: RuntimeSessionProjectionControl;
   };
+  configOptions?: AcpConfigOption[];
   slashCommands: RuntimeSessionProjectionCommands;
   toolEvents: RuntimeSessionProjectionToolEvents;
   permissionEvents: RuntimeSessionProjectionPermissionEvents;
@@ -123,8 +125,9 @@ export async function handleRuntimeSessionProjectionsGet(
       services.listRuntimes(),
       services.getAcpSessionSnapshots?.() ?? [],
     ]);
-    const payload = buildRuntimeSessionProjectionsPayload({ runtimes, acpSessions });
     const sessionFilter = searchParams.get('sessionId')?.trim();
+    const selectedSessions = sessionFilter ? acpSessions.filter(session => session.sessionId === sessionFilter || session.agentSessionId === sessionFilter) : acpSessions;
+    const payload = buildRuntimeSessionProjectionsPayload({ runtimes, acpSessions: selectedSessions });
     const projections = filterProjectionsByRuntime(payload.projections, searchParams.get('runtime')).filter((projection) => (
       !sessionFilter || projection.session?.sessionId === sessionFilter || projection.session?.externalSessionId === sessionFilter
     ));
@@ -182,6 +185,7 @@ function buildRuntimeSessionProjection(
       },
     } : {}),
     controls,
+    ...(acpSession ? { configOptions: acpSession.configOptions } : {}),
     slashCommands,
     toolEvents,
     permissionEvents,
@@ -230,7 +234,7 @@ function controlFromAcpSessionOrDescriptor(
     };
   }
 
-  if (key === 'model' && runtime.adapterContract.protocol.models.length > 0) {
+  if (!acpSession && key === 'model' && runtime.adapterContract.protocol.models.length > 0) {
     return {
       status: 'available',
       owner: 'external',

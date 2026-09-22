@@ -25,12 +25,14 @@ interface UseRuntimeSessionProjectionOptions {
   runtime: AgentRuntimeIdentity | null | undefined;
   /** Fallback poll interval while the event stream is down; `0` disables the fallback. */
   refreshMs?: number;
+  sessionId?: string;
 }
 
 export function useRuntimeSessionProjection({
   visible,
   runtime,
   refreshMs = RUNTIME_SESSION_PROJECTION_FALLBACK_POLL_MS,
+  sessionId,
 }: UseRuntimeSessionProjectionOptions) {
   const [projections, setProjections] = useState<RuntimeSessionProjection[]>([]);
   const [loading, setLoading] = useState(false);
@@ -54,6 +56,7 @@ export function useRuntimeSessionProjection({
     setLoading(true);
     try {
       const params = new URLSearchParams({ runtime: runtimeId });
+      if (sessionId) params.set('sessionId', sessionId);
       const res = await fetch(`/api/agent-runtimes/session-projections?${params.toString()}`, {
         cache: 'no-store',
       });
@@ -72,9 +75,10 @@ export function useRuntimeSessionProjection({
     } finally {
       if (seqRef.current === seq) setLoading(false);
     }
-  }, [enabled, runtimeId]);
+  }, [enabled, runtimeId, sessionId]);
 
   useEffect(() => {
+    seqRef.current++;
     if (!enabled) {
       setProjections([]);
       setLoading(false);
@@ -82,6 +86,7 @@ export function useRuntimeSessionProjection({
       return;
     }
     void refresh();
+    return () => { seqRef.current++; };
   }, [enabled, refresh]);
 
   useEffect(() => {
@@ -120,10 +125,10 @@ export function useRuntimeSessionProjection({
   const selectedProjection = useMemo(() => {
     if (!runtime) return null;
     return projections.find((projection) => (
-      projection.runtimeId === runtime.id
-      || projection.runtimeKind === runtime.kind
-    )) ?? projections[0] ?? null;
-  }, [projections, runtime]);
+      projection.runtimeId === runtime.id && projection.runtimeKind === runtime.kind
+      && (!sessionId || projection.session?.sessionId === sessionId || projection.session?.externalSessionId === sessionId)
+    )) ?? null;
+  }, [projections, runtime, sessionId]);
 
   return {
     projections,

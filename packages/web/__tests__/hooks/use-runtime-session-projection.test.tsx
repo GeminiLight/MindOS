@@ -12,9 +12,9 @@ import type { AgentRuntimeIdentity } from '@/lib/types';
 
 const ACP_RUNTIME: AgentRuntimeIdentity = { id: 'gemini', name: 'Gemini CLI', kind: 'acp' };
 
-function Probe({ visible, runtime }: { visible: boolean; runtime: AgentRuntimeIdentity | null }) {
-  const state = useRuntimeSessionProjection({ visible, runtime });
-  return <div data-loading={state.loading ? 'true' : 'false'} data-count={state.projections.length} />;
+function Probe({ visible, runtime, sessionId }: { visible: boolean; runtime: AgentRuntimeIdentity | null; sessionId?: string }) {
+  const state = useRuntimeSessionProjection({ visible, runtime, sessionId });
+  return <div data-selected={state.selectedProjection?.runtimeId ?? ""} data-loading={state.loading ? 'true' : 'false'} data-count={state.projections.length} />;
 }
 
 function projectionResponse() {
@@ -57,6 +57,15 @@ describe('useRuntimeSessionProjection', () => {
     vi.useRealTimers();
   });
 
+  it('ignores an in-flight projection after the panel is disabled', async () => {
+    let finish!: (value: Response) => void;
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(resolve => { finish = resolve; })));
+    await act(async () => { root.render(<Probe visible runtime={ACP_RUNTIME} />); });
+    await act(async () => { root.render(<Probe visible={false} runtime={ACP_RUNTIME} />); });
+    await act(async () => { finish(projectionResponse()); });
+    expect(host.firstElementChild?.getAttribute('data-count')).toBe('0');
+  });
+
   async function mountConnected(fetchMock: ReturnType<typeof vi.fn>) {
     vi.stubGlobal('EventSource', MockEventSource);
     vi.stubGlobal('fetch', fetchMock);
@@ -71,6 +80,14 @@ describe('useRuntimeSessionProjection', () => {
     });
     return source;
   }
+
+  it('requests the bound native session and never substitutes another ACP runtime', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ projections: [{ runtimeId: 'other', runtimeKind: 'acp' }] })));
+    vi.stubGlobal('fetch', fetchMock);
+    await act(async () => { root.render(<Probe visible runtime={ACP_RUNTIME} sessionId="original" />); await vi.advanceTimersByTimeAsync(0); });
+    expect(String(fetchMock.mock.calls[0][0])).toContain('sessionId=original');
+    expect(host.querySelector('div')?.dataset.selected).toBe('');
+  });
 
   it('fetches once on mount and stays quiet for 35 idle seconds while the stream is connected', async () => {
     const fetchMock = vi.fn(async () => projectionResponse());

@@ -1,5 +1,6 @@
 import type {
   ExternalRuntimeSessionRecord,
+  ExternalRuntimeSessionListOptions,
   ImportedRuntimeSessionMessage,
   ImportedRuntimeSessionRole,
   MaybeRecord,
@@ -104,15 +105,24 @@ function roleFromGeminiType(type: unknown): ImportedRuntimeSessionRole | null {
 }
 
 export function parseGeminiMessagesFromRecords(records: MaybeRecord[]): ImportedRuntimeSessionMessage[] {
-  let latestMessages: unknown[] = [];
+  const byId = new Map<string, MaybeRecord>();
+  let anonymous = 0;
+  const add = (items: unknown[]) => {
+    for (const item of items) if (isRecord(item)) byId.set(typeof item.id === 'string' ? item.id : `anonymous-${anonymous++}`, item);
+  };
   for (const record of records) {
-    const direct = Array.isArray(record.messages) ? record.messages : undefined;
-    const nestedSet = isRecord(record.$set) && Array.isArray(record.$set.messages)
-      ? record.$set.messages
-      : undefined;
-    if (direct) latestMessages = direct;
-    if (nestedSet) latestMessages = nestedSet;
+    if (typeof record.$rewindTo === 'string') {
+      const keys = [...byId.keys()];
+      const index = keys.indexOf(record.$rewindTo);
+      if (index < 0) byId.clear();
+      else for (const key of keys.slice(index)) byId.delete(key);
+    } else if (Array.isArray(record.messages)) {
+      byId.clear(); add(record.messages);
+    } else if (isRecord(record.$set) && Array.isArray(record.$set.messages)) {
+      byId.clear(); add(record.$set.messages);
+    } else if (roleFromGeminiType(record.type) || roleFromGeminiType(record.role)) add([record]);
   }
+  const latestMessages = [...byId.values()];
 
   const messages: ImportedRuntimeSessionMessage[] = [];
   for (const item of latestMessages) {
@@ -353,6 +363,7 @@ export function toExternalRecord(input: {
   updatedAt?: string | number;
   messages: ImportedRuntimeSessionMessage[];
   transcriptSource: ExternalRuntimeSessionRecord['transcriptSource'];
+  metadataOnly?: boolean;
 }): ExternalRuntimeSessionRecord {
   return {
     id: input.id,
@@ -361,11 +372,10 @@ export function toExternalRecord(input: {
     ...(input.cwd ? { cwd: input.cwd } : {}),
     ...(input.createdAt !== undefined ? { createdAt: input.createdAt } : {}),
     ...(input.updatedAt !== undefined ? { updatedAt: input.updatedAt } : {}),
-    messageCount: input.messages.length,
-    ...(input.messages.some((message) => message.role === 'user')
+    ...(!input.metadataOnly ? { messageCount: input.messages.length, turns: input.messages } : {}),
+    ...(!input.metadataOnly && input.messages.some((message) => message.role === 'user')
       ? { turnCount: input.messages.filter((message) => message.role === 'user').length }
       : {}),
-    turns: input.messages,
     source: 'native-transcript',
     transcriptSource: input.transcriptSource,
   };
@@ -374,9 +384,13 @@ export function toExternalRecord(input: {
 export function sortAndLimit(
   records: ExternalRuntimeSessionRecord[],
   limit = DEFAULT_RUNTIME_SESSION_TRANSCRIPT_LIMIT,
+  options?: Pick<ExternalRuntimeSessionListOptions, 'offset' | 'query' | 'metadataOnly'>,
 ): ExternalRuntimeSessionRecord[] {
+  const query = options?.query?.trim().toLowerCase();
+  const offset = options?.offset ?? 0;
+  const count = options?.metadataOnly ? Math.min(101, Math.max(1, limit)) : safeLimit(limit);
   return records
-    .slice()
-    .sort((a, b) => (timestampMs(b.updatedAt) ?? 0) - (timestampMs(a.updatedAt) ?? 0))
-    .slice(0, safeLimit(limit));
+    .filter(record => !query || [record.id, record.title, record.preview, record.cwd].some(value => value?.toLowerCase().includes(query)))
+    .sort((a, b) => (timestampMs(b.updatedAt) ?? 0) - (timestampMs(a.updatedAt) ?? 0) || a.id.localeCompare(b.id))
+    .slice(offset, offset + count);
 }

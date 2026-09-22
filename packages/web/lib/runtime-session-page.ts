@@ -9,7 +9,7 @@ export interface RuntimeSessionPageOptions {
   archived?: boolean;
   signal?: AbortSignal;
 }
-export interface RuntimeSessionPage { entries: RuntimeSessionEntry[]; nextCursor: string | null }
+export interface RuntimeSessionPage { entries: RuntimeSessionEntry[]; nextCursor: string | null; warning?: string }
 
 /** Page metadata first. Native histories are fetched only when a user opens one. */
 export async function listRuntimeSessionPage(runtime: AgentRuntimeIdentity, options: RuntimeSessionPageOptions = {}): Promise<RuntimeSessionPage> {
@@ -58,31 +58,71 @@ function parsePage(body: unknown, runtime: AgentRuntimeIdentity, key: 'data' | '
 }
 
 
+type CombinedCursor = { version: 1; runtime: string; query: string; cwd: string; protocol: string | null; native: string | null };
+
+function combinedCursor(runtime: AgentRuntimeIdentity, options: RuntimeSessionPageOptions, cwd?: string): CombinedCursor {
+  const initial: CombinedCursor = { version: 1, runtime: runtime.id, query: options.query?.trim() ?? '', cwd: cwd ?? '', protocol: '', native: '' };
+  if (!options.cursor) return initial;
+  try {
+    const value = JSON.parse(options.cursor) as CombinedCursor;
+    if (value.version !== 1 || value.runtime !== initial.runtime || value.query !== initial.query || value.cwd !== initial.cwd
+      || ![value.protocol, value.native].every(cursor => cursor === null || typeof cursor === 'string')) throw new Error();
+    return value;
+  } catch { throw new Error('Invalid session page cursor. Refresh the session list.'); }
+}
+
 async function listAcpWithTranscripts(runtime: AgentRuntimeIdentity, options: RuntimeSessionPageOptions, cwd?: string, signal?: AbortSignal): Promise<RuntimeSessionPage> {
-  const params = new URLSearchParams({ runtimeId: runtime.id, limit: '30' });
+  const cursor = combinedCursor(runtime, options, cwd);
+  const params = new URLSearchParams({ runtimeId: runtime.id, page: '1', limit: '30' });
   if (cwd) params.set('cwd', cwd);
-  const read = async (url: string, init: RequestInit) => {
-    const response = await fetch(url, { ...init, signal, cache: 'no-store' });
-    const body = await response.json() as { sessions?: unknown[]; nextCursor?: string; error?: string };
-    if (!response.ok) throw new Error(body.error || `Cannot list ${runtime.name} sessions (${response.status}).`);
-    return body;
+  if (options.query?.trim()) params.set('query', options.query.trim());
+  if (cursor.native) params.set('cursor', cursor.native);
+  type SourcePage = RuntimeSessionPage & { unsupported?: boolean; skipped?: boolean };
+  const read = async (url: string, init: RequestInit): Promise<SourcePage> => {
+    const controller = new AbortController();
+    const abort = () => controller.abort(signal?.reason);
+    signal?.addEventListener('abort', abort, { once: true });
+    if (signal?.aborted) abort();
+    const timer = setTimeout(() => controller.abort(new Error(`${runtime.name} session source timed out. Retry to load the remaining sessions.`)), 12_000);
+    try {
+    const response = await fetch(url, { ...init, signal: controller.signal, cache: 'no-store' });
+    const body = await response.json();
+    if (response.status === 501) return { entries: [], nextCursor: null, unsupported: true };
+    if (!response.ok) throw new Error(body?.error || `Cannot list ${runtime.name} sessions (${response.status}).`);
+    return parsePage(body, runtime, 'sessions');
+    } finally { clearTimeout(timer); signal?.removeEventListener('abort', abort); }
   };
-  const [protocol, native] = await Promise.allSettled([
-    read('/api/acp/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'list_sessions', agentId: runtime.id, ...(cwd ? { cwd } : {}), ...(options.cursor ? { cursor: options.cursor } : {}) }) }),
-    options.cursor ? Promise.resolve({ sessions: [] }) : read(`/api/agent-runtimes/external-sessions?${params}`, {}),
+  const skipped = (): Promise<SourcePage> => Promise.resolve({ entries: [], nextCursor: null, skipped: true });
+  const results = await Promise.allSettled([
+    cursor.protocol === null ? skipped() : read('/api/acp/session', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'list_sessions', agentId: runtime.id, ...(cwd ? { cwd } : {}), ...(cursor.protocol ? { cursor: cursor.protocol } : {}) }),
+    }),
+    cursor.native === null ? skipped() : read(`/api/agent-runtimes/external-sessions?${params}`, {}),
   ]);
   if (signal?.aborted) throw signal.reason;
-  const nativeRows = native.status === 'fulfilled' ? native.value.sessions ?? [] : [];
-  if (protocol.status === 'rejected' && nativeRows.length === 0) throw protocol.reason;
-  const protocolRows = protocol.status === 'fulfilled' ? protocol.value.sessions ?? [] : [];
   const entries = new Map<string, RuntimeSessionEntry>();
-  for (const row of [...protocolRows, ...nativeRows]) {
-    const entry = normalizeRuntimeSessionEntry(row, runtime);
-    if (entry) {
-      const previous = entries.get(entry.id);
+  const failures: string[] = [];
+  let completedSource = false;
+  let supportedSource = false;
+  for (const [index, result] of results.entries()) {
+    const source = index === 0 ? 'protocol' : 'native';
+    if (result.status === 'rejected') {
+      failures.push(result.reason instanceof Error ? result.reason.message : String(result.reason));
+      continue; // Retain the failed source's cursor, including its first page.
+    }
+    const page = result.value;
+    if (!page.skipped) completedSource = true;
+    if (!page.skipped && !page.unsupported) supportedSource = true;
+    if (page.nextCursor && page.nextCursor === cursor[source]) throw new Error('The Agent returned a repeated page. Refresh the session list.');
+    cursor[source] = page.nextCursor;
+    for (const entry of page.entries) {
       const defined = Object.fromEntries(Object.entries(entry).filter(([, value]) => value !== undefined && value !== null));
-      entries.set(entry.id, { ...previous, ...defined } as RuntimeSessionEntry);
+      entries.set(entry.id, { ...entries.get(entry.id), ...defined } as RuntimeSessionEntry);
     }
   }
-  return { entries: [...entries.values()], nextCursor: protocol.status === 'fulfilled' ? protocol.value.nextCursor || null : null };
+  if (failures.length && !supportedSource) throw new Error(failures.join(' '));
+  if (completedSource && !supportedSource && !entries.size) throw new Error(`${runtime.name} does not expose session history through either connected source.`);
+  const nextCursor = cursor.protocol !== null || cursor.native !== null ? JSON.stringify(cursor) : null;
+  return { entries: [...entries.values()], nextCursor, ...(failures.length ? { warning: failures.join(' ') } : {}) };
 }

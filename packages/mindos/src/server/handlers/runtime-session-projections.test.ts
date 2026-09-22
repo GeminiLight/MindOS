@@ -167,3 +167,22 @@ describe('runtime session projections', () => {
     });
   });
 });
+
+it('projects the complete observed configuration list, including custom categories', () => {
+  const session = acpSnapshot();
+  session.configOptions = [{ type: 'select', configId: 'context_size', category: 'model_config', label: 'Context', currentValue: 'large', options: [{ id: 'large', label: 'Large' }] }];
+  const projection = buildRuntimeSessionProjectionsPayload({ runtimes: runtimes(), acpSessions: [session] }).projections.find(p => p.runtimeKind === 'acp');
+  expect(projection?.configOptions).toEqual(session.configOptions);
+});
+it('selects the requested older session before building its configuration projection', async () => {
+  const older = acpSnapshot(); older.agentSessionId = 'original'; older.configOptions = [{ type: 'select', configId: 'context', category: 'other', currentValue: 'short', options: [{ id: 'short', label: 'Short' }] }];
+  const newer = { ...acpSnapshot(), sessionId: 'newer', agentSessionId: 'newer', lastActivityAt: '2026-09-22T01:00:00.000Z' };
+  const result = await handleRuntimeSessionProjectionsGet(new URLSearchParams({ runtime: 'declared-acp', sessionId: 'original' }), { listRuntimes: runtimes, getAcpSessionSnapshots: () => [older, newer] });
+  expect((result.body as { projections: Array<{ session?: { externalSessionId?: string }; configOptions?: unknown }> }).projections[0]).toMatchObject({ session: { externalSessionId: 'original' }, configOptions: older.configOptions });
+});
+it('does not resurrect a descriptor model after the live Agent withdraws it', () => {
+  const session = acpSnapshot(); session.configOptions = [];
+  session.controls.model = { ...session.controls.model, status: 'unavailable', options: [] };
+  const projection = buildRuntimeSessionProjectionsPayload({ runtimes: runtimes(), acpSessions: [session] }).projections.find(p => p.runtimeKind === 'acp');
+  expect(projection?.controls.model.status).toBe('unavailable');
+});

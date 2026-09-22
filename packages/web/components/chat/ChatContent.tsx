@@ -341,7 +341,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     : null;
   const isNativeRuntime = selectedNativeRuntimeKind !== null;
   const supportsAgentMode = isMindosRuntime || isNativeRuntime;
-  const runtimeSessionProjection = useRuntimeSessionProjection({ visible, runtime: selectedAgentRuntime });
+  const runtimeSessionProjection = useRuntimeSessionProjection({ visible, runtime: selectedAgentRuntime, sessionId: getMatchingRuntimeSessionBinding(session.activeSession, selectedAgentRuntime)?.externalSessionId });
   const acpRuntimeCommands = useMemo(() => (
     isAcpRuntime
       ? runtimeSessionProjection.selectedProjection?.slashCommands.commands ?? []

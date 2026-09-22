@@ -50,6 +50,8 @@ export interface AcpMode {
 export interface AcpConfigOptionEntry {
   id: string;
   label: string;
+  description?: string;
+  group?: string;
 }
 
 export interface AcpConfigOption {
@@ -57,6 +59,7 @@ export interface AcpConfigOption {
   configId: string;
   category: 'mode' | 'model' | 'thought_level' | 'other' | string;
   label?: string;
+  description?: string;
   currentValue: string;
   options: AcpConfigOptionEntry[];
 }
@@ -64,6 +67,7 @@ export interface AcpConfigOption {
 export interface AcpAvailableCommand {
   id: string;
   name: string;
+  inputHint?: string;
   description?: string;
 }
 

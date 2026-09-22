@@ -9,9 +9,7 @@ import type {
 } from '../types.js';
 import {
   directJsonlFiles,
-  projectBaseFromCwd,
   readJsonl,
-  sanitizedProjectDirNameFromCwd,
   shouldSkipForRequestedCwd,
 } from '../file-system.js';
 import {
@@ -26,16 +24,6 @@ import {
   toExternalRecord,
 } from '../normalizer.js';
 
-function qwenProjectDirMatches(projectDirName: string, cwd?: string): boolean {
-  const base = projectBaseFromCwd(cwd);
-  if (!base) return true;
-  const sanitized = cwd?.trim() ? sanitizedProjectDirNameFromCwd(cwd).toLowerCase() : '';
-  const normalizedName = projectDirName.toLowerCase();
-  return normalizedName === base.toLowerCase()
-    || normalizedName.includes(base.toLowerCase())
-    || Boolean(sanitized && normalizedName === sanitized);
-}
-
 export async function listQwenSessions(
   options: ExternalRuntimeSessionListOptions,
 ): Promise<ExternalRuntimeSessionRecord[]> {
@@ -43,15 +31,14 @@ export async function listQwenSessions(
   const root = join(home, '.qwen', 'projects');
   if (!existsSync(root)) return [];
 
-  const projectDirs = await readdir(root, { withFileTypes: true }).catch(() => []);
+  const projectDirs = await readdir(root, { withFileTypes: true }).catch(error => { if (error.code === 'ENOENT') return []; throw error; });
   const records: ExternalRuntimeSessionRecord[] = [];
   for (const projectDir of projectDirs) {
     if (!projectDir.isDirectory()) continue;
-    if (!options.sessionId && options.cwd?.trim() && !qwenProjectDirMatches(projectDir.name, options.cwd)) continue;
     const chatsDir = join(root, projectDir.name, 'chats');
     const files = await directJsonlFiles(chatsDir, options.sessionId);
     for (const filePath of files) {
-      const recordsFromFile = await readJsonl(filePath);
+      const recordsFromFile = await readJsonl(filePath, options.metadataOnly);
       const fallbackSessionId = basename(filePath).replace(/\.jsonl$/, '');
       const sessionId = sessionIdFromRecords(recordsFromFile, fallbackSessionId);
       if (options.sessionId && sessionId !== options.sessionId && fallbackSessionId !== options.sessionId) continue;
@@ -62,7 +49,7 @@ export async function listQwenSessions(
         'project_root',
         'workingDirectory',
         'working_directory',
-      ]) ?? options.cwd;
+      ]);
       if (shouldSkipForRequestedCwd({
         requestedCwd: options.cwd,
         transcriptCwd: cwd,
@@ -86,16 +73,18 @@ export async function listQwenSessions(
         cwd,
         createdAt: firstTimestampFromRecords(recordsFromFile, ['startTime', 'createdAt', 'created_at', 'timestamp'])
           ?? fileStat?.birthtimeMs,
-        updatedAt: newestTimestampField(recordsFromFile, 'mtime')
+        updatedAt: (options.metadataOnly ? fileStat?.mtimeMs : undefined)
+          ?? newestTimestampField(recordsFromFile, 'mtime')
           ?? newestTimestampField(recordsFromFile, 'updatedAt')
           ?? newestTimestampField(recordsFromFile, 'timestamp')
           ?? fileStat?.mtimeMs,
         messages,
+        metadataOnly: options.metadataOnly,
         transcriptSource: 'qwen-code',
       }));
     }
   }
-  return sortAndLimit(records, options.limit);
+  return sortAndLimit(records, options.limit, options);
 }
 
 export const QWEN_SESSION_TRANSCRIPT_ADAPTER: RuntimeSessionTranscriptAdapter = {
