@@ -121,10 +121,15 @@ export function SessionHistoryRow({
   return (
     <div
       data-session-history-row
-      role={role}
+      role={role ?? (onLoad ? 'button' : undefined)}
+      tabIndex={onLoad && !editing ? 0 : undefined}
+      onKeyDown={event => {
+        if (editing || event.target !== event.currentTarget || event.nativeEvent.isComposing || event.keyCode === 229) return;
+        if (onLoad && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onLoad(); }
+      }}
       aria-selected={ariaSelected}
       className={cn(
-        'group relative cursor-pointer rounded-md border transition-colors focus-within:bg-muted/55',
+        'group relative cursor-pointer rounded-md border transition-colors focus-within:bg-muted/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         isActive
           ? 'border-[var(--amber)]/15 bg-[var(--amber)]/8'
           : 'border-transparent hover:bg-muted/55',
@@ -146,6 +151,7 @@ export function SessionHistoryRow({
               onChange={event => onEditValueChange?.(event.target.value)}
               onBlur={onCommitRename}
               onKeyDown={event => {
+                if (event.nativeEvent.isComposing || event.keyCode === 229) return;
                 if (event.key === 'Enter') { event.preventDefault(); onCommitRename?.(); }
                 if (event.key === 'Escape') { event.preventDefault(); onCancelRename?.(); }
               }}

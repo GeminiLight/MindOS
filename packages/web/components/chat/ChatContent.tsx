@@ -502,6 +502,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     () => getRuntimeSessionAdapterCapabilities(selectedAgentRuntime),
     [selectedAgentRuntime?.id, selectedAgentRuntime?.kind, selectedAgentRuntime?.name],
   );
+  const historyScrollStateRef = useRef({ key: '', top: 0 });
   const externalHistory = useExternalSessionHistory(
     selectedAgentRuntime, runtimeSessionListCwd(session.activeSession),
     visible && showHistory && runtimeSessionCapabilities.supportsList,
@@ -1622,6 +1623,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
 
       {showHistory && (
         <SessionHistoryPanel
+          scrollStateRef={historyScrollStateRef}
           sessions={runtimeScopedSessions}
           activeSessionId={runtimeScopedActiveSessionId}
           selectedAgentRuntime={selectedAgentRuntime}

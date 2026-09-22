@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback, useMemo, useTransition, useDeferredValue, memo, type ReactNode } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo, useTransition, useDeferredValue, memo, type ReactNode, type RefObject } from 'react';
 import { AlertCircle, Loader2, RefreshCw, Search, Link2, MessageSquare, SquarePen, X } from 'lucide-react';
 import type { AgentRuntimeIdentity, ChatSession } from '@/lib/types';
 import { getDisplayRuntimeSessionBinding } from '@/lib/ask-agent';
@@ -22,7 +22,10 @@ import {
 } from '@/lib/session-list-entry';
 import { SessionHistoryRow } from './SessionHistoryRow';
 
+export type HistoryScrollState = { key: string; top: number };
+
 interface SessionHistoryPanelProps {
+  scrollStateRef?: RefObject<HistoryScrollState>;
   externalScope?: 'all' | 'project';
   externalCwd?: string;
   onRetryRuntimeSessions?: () => void;
@@ -69,7 +72,7 @@ function compareHistoryRows(a: HistoryRow, b: HistoryRow): number {
 // ── Main Component ──
 
 function SessionHistoryPanel({
-  sessions, activeSessionId,
+  sessions, activeSessionId, scrollStateRef,
   externalScope = 'all', externalCwd, onExternalScopeChange, externalProjectAvailable = false,
   externalQuery, onExternalQueryChange, externalHasMore = false, onLoadMoreExternal,
   externalArchived = false, onExternalArchivedChange,
@@ -92,18 +95,29 @@ function SessionHistoryPanel({
   // re-render the list (spec-chat-session-concurrency.md performance bar).
   const runSummary = useRunSummary();
   const [localQuery, setLocalQuery] = useState('');
-  const query = externalQuery ?? localQuery;
+  const [composition, setComposition] = useState<string | null>(null);
+  const composingRef = useRef(false);
+  const committedQuery = externalQuery ?? localQuery;
+  const query = composition ?? committedQuery;
   const setQuery = (value: string) => { setLocalQuery(value); onExternalQueryChange?.(value); };
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const normalizedQuery = query.trim().toLowerCase();
+  const normalizedQuery = committedQuery.trim().toLowerCase();
+  const listRef = useRef<HTMLDivElement>(null);
+  const scrollKey = JSON.stringify([selectedAgentRuntime?.kind, selectedAgentRuntime?.id, externalScope, externalScope === 'project' ? externalCwd : undefined, committedQuery.trim(), externalArchived]);
+  useLayoutEffect(() => {
+    if (!listRef.current || !scrollStateRef) return;
+    if (scrollStateRef.current.key !== scrollKey) scrollStateRef.current = { key: scrollKey, top: 0 };
+    listRef.current.scrollTop = scrollStateRef.current.top;
+  }, [scrollKey, scrollStateRef]);
+  const resultRows = () => Array.from(listRef.current?.querySelectorAll<HTMLElement>('[data-runtime-session-row][tabindex="0"], [data-session-history-row][tabindex="0"]') ?? []);
   const deferredNormalizedQuery = useDeferredValue(normalizedQuery);
   const searchQuery = normalizedQuery ? deferredNormalizedQuery : '';
 
   // Focus search on mount
-  useEffect(() => { searchRef.current?.focus(); }, []);
+  useEffect(() => { searchRef.current?.focus({ preventScroll: true }); }, []);
 
   // Focus rename input
   useEffect(() => { if (editingId) setTimeout(() => inputRef.current?.focus(), 0); }, [editingId]);
@@ -219,7 +233,9 @@ function SessionHistoryPanel({
   // Keyboard: Esc to close
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !editingId) onClose();
+      if (e.key === 'Escape' && !e.defaultPrevented && !e.isComposing && e.keyCode !== 229 && !composingRef.current && !editingId) {
+        e.preventDefault(); e.stopPropagation(); onClose();
+      }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
@@ -261,22 +277,33 @@ function SessionHistoryPanel({
       {/* Search bar */}
       <div className="px-4 pt-2.5 pb-1.5 shrink-0">
         <div className="relative">
-          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/50" />
+          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input
             ref={searchRef}
             type="text"
             aria-label={ask?.historySearch ?? 'Search conversations'}
             value={query}
-            onChange={e => setQuery(e.target.value)}
+            onCompositionStart={event => { composingRef.current = true; setComposition(event.currentTarget.value); }}
+            onCompositionEnd={event => { composingRef.current = false; setComposition(null); setQuery(event.currentTarget.value); }}
+            onChange={event => { if (composingRef.current) setComposition(event.target.value); else setQuery(event.target.value); }}
+            onKeyDown={event => {
+              if (composingRef.current || event.nativeEvent.isComposing || event.keyCode === 229) { event.stopPropagation(); return; }
+              if (event.key === 'Escape' && committedQuery) {
+                event.preventDefault(); event.stopPropagation(); setQuery('');
+              } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                const rows = resultRows(); const row = event.key === 'ArrowDown' ? rows[0] : rows.at(-1);
+                if (row) { event.preventDefault(); row.focus(); }
+              }
+            }}
             placeholder={ask?.historySearch ?? 'Search conversations...'}
             className="h-8 w-full rounded-md border border-border bg-background pl-8 pr-8 text-xs text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-[var(--amber)]/40 focus-visible:ring-2 focus-visible:ring-ring/20"
           />
           {query && (
             <button
               type="button"
-              onClick={() => setQuery('')}
+              onClick={() => { setComposition(null); composingRef.current = false; setQuery(''); searchRef.current?.focus(); }}
               aria-label={ask.externalSessions?.clearSearch ?? 'Clear search'}
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground/40 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="hit-target-box absolute right-1 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <X size={12} />
             </button>
@@ -331,7 +358,17 @@ function SessionHistoryPanel({
       )}
 
       {/* Scrollable list */}
-      <div className="flex-1 overflow-y-auto min-h-0 px-3 pb-3">
+      <div ref={listRef} data-history-scroll className="flex-1 overflow-y-auto min-h-0 px-3 pb-3"
+        onScroll={event => { if (scrollStateRef) scrollStateRef.current = { key: scrollKey, top: event.currentTarget.scrollTop }; }}
+        onKeyDown={event => {
+          if (event.nativeEvent.isComposing || event.keyCode === 229 || !['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+          const rows = resultRows(); const index = rows.indexOf(event.target as HTMLElement);
+          if (index < 0) return; // Renaming and nested actions keep their own keys.
+          event.preventDefault();
+          if (event.key === 'ArrowUp' && index === 0) { searchRef.current?.focus(); return; }
+          const next = event.key === 'Home' ? 0 : event.key === 'End' ? rows.length - 1 : Math.min(rows.length - 1, Math.max(0, index + (event.key === 'ArrowDown' ? 1 : -1)));
+          rows[next]?.focus();
+        }}>
         {hasAnyResults ? (
           <div className="flex flex-col gap-0.5">
             {showRuntimeSessions && runtimeSessionsLoading && filteredRuntimeSessions.length === 0 && (
@@ -477,7 +514,7 @@ function RuntimeSessionRow({
         if (!disabled) onAttach?.(entry);
       }}
       onKeyDown={(event) => {
-        if (disabled) return;
+        if (disabled || event.target !== event.currentTarget || event.nativeEvent.isComposing || event.keyCode === 229) return;
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
           onAttach?.(entry);

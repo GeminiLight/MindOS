@@ -1,0 +1,53 @@
+import { test, expect } from '@playwright/test';
+
+for (const mobile of [false, true]) test(`local history continuity, composition and keyboard (${mobile ? 'mobile dark' : 'desktop'})`, async ({ page, context }) => {
+  test.setTimeout(90_000);
+  const runtime = { id: 'claude', kind: 'claude', name: 'Claude Code', status: 'available', capabilities: {}, lifecycle: {}, compatibility: {} };
+  await context.addInitScript(({ runtime, mobile }) => {
+    localStorage.setItem('theme', mobile ? 'dark' : 'light'); localStorage.setItem('locale', 'en');
+    localStorage.setItem('mindos:last-agent-runtime', JSON.stringify(runtime));
+  }, { runtime, mobile });
+  await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 1000 });
+  const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
+  await page.route('**/api/**', route => route.fulfill({ json: {} }));
+  await page.route('**/api/setup', route => route.fulfill({ json: { setupPending: false, walkthroughCompleted: true, guideState: { active: false, dismissed: true } } }));
+  await page.route('**/api/agent-runtimes?*', route => route.fulfill({ json: { runtimes: [runtime], installed: [], notInstalled: [] } }));
+  await page.route('**/api/agent/sessions', route => route.fulfill({ json: [] }));
+  const requests: URL[] = [];
+  let fail = false;
+  await page.route('**/api/agent-runtimes/external-sessions?*', route => {
+    const url = new URL(route.request().url()); requests.push(url);
+    if (fail) return route.fulfill({ status: 503, json: { error: 'History temporarily offline' } });
+    const search = url.searchParams.get('query'); const second = url.searchParams.has('cursor');
+    const rows = Array.from({ length: search ? 1 : 30 }, (_, i) => ({ id: `native-${i + (second ? 30 : 0)}`, title: search ? `你好 ${search}` : `Local conversation ${i + (second ? 30 : 0)}`, source: 'native-transcript', cwd: '/original', updatedAt: Date.now() - i * 1000 }));
+    return route.fulfill({ json: { sessions: rows, nextCursor: search || second ? null : '30' } });
+  });
+  await page.goto('/chat/new', { waitUntil: 'domcontentloaded' });
+  const history = page.getByTitle('Session history', { exact: true }); await history.click();
+  const rows = page.locator('[data-runtime-session-row]'); await expect(rows).toHaveCount(30);
+  await page.getByRole('button', { name: 'Load more sessions', exact: true }).click(); await expect(rows).toHaveCount(60);
+  const scroll = page.locator('[data-history-scroll]');
+  await scroll.evaluate(el => { el.scrollTop = 650; });
+  await expect.poll(() => scroll.evaluate(el => el.scrollTop)).toBeGreaterThan(600);
+  const before = requests.length;
+  await page.keyboard.press('Escape'); await expect(scroll).toHaveCount(0); await history.click();
+  await expect(rows).toHaveCount(60); await expect.poll(() => scroll.evaluate(el => el.scrollTop)).toBeGreaterThan(600);
+  expect(requests).toHaveLength(before);
+  await page.screenshot({ path: `/tmp/session-flow-${mobile ? 'mobile-dark' : 'desktop'}-restored.png`, animations: 'disabled' });
+  const input = page.getByPlaceholder('Search conversations...'); await expect(input).toBeFocused();
+  await input.dispatchEvent('compositionstart', { data: '' }); await input.fill('ni');
+  await input.dispatchEvent('keydown', { key: 'Escape', isComposing: true });
+  await page.waitForTimeout(300); expect(requests).toHaveLength(before); await expect(scroll).toBeVisible();
+  await input.fill('你好'); await input.dispatchEvent('compositionend', { data: '你好' });
+  await expect(rows).toHaveCount(1); expect(requests.at(-1)?.searchParams.get('query')).toBe('你好');
+  await page.keyboard.press('Escape'); await expect(input).toHaveValue(''); await expect(scroll).toBeVisible();
+  await expect(rows).toHaveCount(30);
+  await input.press('ArrowDown'); await expect(rows.first()).toBeFocused();
+  await page.keyboard.press('End'); await expect(rows.last()).toBeFocused();
+  await page.keyboard.press('Home'); await expect(rows.first()).toBeFocused();
+  await page.keyboard.press('ArrowUp'); await expect(input).toBeFocused();
+  fail = true; await page.getByRole('button', { name: 'Refresh sessions', exact: true }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'History temporarily offline' })).toBeVisible(); await expect(rows).toHaveCount(30);
+  await page.screenshot({ path: `/tmp/session-flow-${mobile ? 'mobile-dark' : 'desktop'}-offline.png`, animations: 'disabled' });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false); expect(errors).toEqual([]);
+});
