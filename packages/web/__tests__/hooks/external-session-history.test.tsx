@@ -60,3 +60,46 @@ describe('external history request ownership', () => {
     expect(list.mock.lastCall?.[1]).toMatchObject({ query: '预算', cursor: undefined, scope: 'all' });
   });
 });
+
+describe('refresh and recovery', () => {
+  it('retains all loaded pages and their cursor after a refresh fails', async () => {
+    list.mockResolvedValueOnce({ entries: [{ id: '1', runtime: claude }], nextCursor: '30' }); await render();
+    list.mockResolvedValueOnce({ entries: [{ id: '2', runtime: claude }], nextCursor: '60' });
+    await act(async () => latest.loadMore());
+    list.mockRejectedValueOnce(new Error('offline'));
+    await act(async () => latest.refresh());
+    expect(latest.entries.map(e => e.id)).toEqual(['1', '2']); expect(latest.cursor).toBe('60');
+    list.mockResolvedValueOnce({ entries: [{ id: 'fresh', runtime: claude }], nextCursor: null });
+    await act(async () => latest.retry());
+    expect(list.mock.lastCall?.[1]?.cursor).toBeUndefined();
+    expect(latest.entries.map(e => e.id)).toEqual(['fresh']);
+  });
+  it('retries the failed next page without discarding earlier pages', async () => {
+    list.mockResolvedValueOnce({ entries: [{ id: '1', runtime: claude }], nextCursor: '30' }); await render();
+    list.mockRejectedValueOnce(new Error('offline')); await act(async () => latest.loadMore());
+    list.mockResolvedValueOnce({ entries: [{ id: '2', runtime: claude }], nextCursor: null });
+    await act(async () => latest.retry());
+    expect(list.mock.lastCall?.[1]?.cursor).toBe('30'); expect(latest.entries).toHaveLength(2);
+  });
+  it('rejects a repeated cursor before publishing an invalid page', async () => {
+    list.mockResolvedValueOnce({ entries: [{ id: '1', runtime: claude }], nextCursor: '30' }); await render();
+    list.mockResolvedValueOnce({ entries: [{ id: 'bad', runtime: claude }], nextCursor: '30' });
+    await act(async () => latest.loadMore());
+    expect(latest.entries.map(e => e.id)).toEqual(['1']); expect(latest.error).toMatch(/repeated/);
+  });
+});
+
+
+it('does not offer a list retry for an unrelated history-open failure', async () => {
+  list.mockResolvedValueOnce({ entries: [], nextCursor: null }); await render();
+  act(() => latest.setError('This conversation could not be opened'));
+  expect(latest.canRetry).toBe(false);
+});
+it('cancels a pending search debounce when the user explicitly refreshes', async () => {
+  list.mockResolvedValue({ entries: [], nextCursor: null }); await render();
+  act(() => latest.setQuery('budget'));
+  await act(async () => latest.refresh());
+  const calls = list.mock.calls.length;
+  await act(async () => { await vi.advanceTimersByTimeAsync(200); });
+  expect(list).toHaveBeenCalledTimes(calls);
+});

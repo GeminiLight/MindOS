@@ -35,6 +35,10 @@ function renderPanel(
   sessions: ChatSession[],
   options: {
     externalScope?: 'all' | 'project';
+    externalCwd?: string;
+    externalArchived?: boolean;
+    externalQuery?: string;
+    onRetryRuntimeSessions?: () => void;
     onExternalScopeChange?: (scope: 'all' | 'project') => void;
     externalHasMore?: boolean;
     onLoadMoreExternal?: () => void;
@@ -490,5 +494,38 @@ describe('external history navigation', () => {
       runtimeSessionBinding: { kind: 'claude-session', runtime: 'claude', runtimeId: 'claude', externalSessionId: 'original', status: 'active', updatedAt: 1 } }],
       { selectedAgentRuntime: runtime, runtimeSessionsSupported: true, runtimeSessions: [{ id: 'original', title: 'Existing', runtime }] });
     expect(panel.host.querySelectorAll('[data-runtime-session-row]')).toHaveLength(0); panel.cleanup();
+  });
+});
+
+
+describe('honest history scope and status', () => {
+  const runtime: AgentRuntimeIdentity = { id: 'codex', name: 'Codex', kind: 'codex' };
+  const local = (id: string, cwd: string, status: 'active' | 'archived' = 'active'): ChatSession => ({
+    id, title: id, createdAt: 1, updatedAt: 1, messages: [], defaultAgentRuntime: runtime,
+    runtimeSessionBinding: { kind: 'codex-thread', runtime: 'codex', runtimeId: 'codex', externalSessionId: id, cwd, status, updatedAt: 1 },
+  });
+  it('applies current-project and archived filters to saved chats as well as native rows', () => {
+    const panel = renderPanel([local('matching', '/project', 'archived'), local('wrong-project', '/other', 'archived'), local('wrong-state', '/project')], {
+      selectedAgentRuntime: runtime, runtimeSessionsSupported: true, externalScope: 'project', externalCwd: '/project', externalArchived: true,
+    });
+    expect(panel.host.textContent).toContain('matching');
+    expect(panel.host.textContent).not.toContain('wrong-project'); expect(panel.host.textContent).not.toContain('wrong-state'); panel.cleanup();
+  });
+  it('keeps a matching native result when its locally renamed copy does not match the query', () => {
+    const panel = renderPanel([local('renamed', '/project')], {
+      selectedAgentRuntime: runtime, runtimeSessionsSupported: true, externalQuery: 'budget',
+      runtimeSessions: [{ id: 'renamed', title: 'Budget planning', runtime }],
+    });
+    expect(panel.host.querySelectorAll('[data-runtime-session-row]')).toHaveLength(1); panel.cleanup();
+  });
+  it('labels partial search counts and exposes an inline retry without unknown message counts', () => {
+    const retry = vi.fn(); const panel = renderPanel([], {
+      selectedAgentRuntime: runtime, runtimeSessionsSupported: true, externalHasMore: true, externalQuery: 'budget',
+      runtimeSessionsError: 'Offline', onRetryRuntimeSessions: retry,
+      runtimeSessions: [{ id: 'budget', title: 'Budget', runtime }, { id: 'other', title: 'Other', runtime }],
+    });
+    expect(panel.host.textContent).toContain('1 matching session loaded'); expect(panel.host.textContent).not.toContain('? msgs');
+    const button = [...panel.host.querySelectorAll('button')].find(b => b.textContent === 'Retry');
+    expect(button).toBeTruthy(); act(() => button?.click()); expect(retry).toHaveBeenCalledOnce(); panel.cleanup();
   });
 });

@@ -161,6 +161,9 @@ export const aiChatEn = {
     saveGenerating: 'Generating summary...',
     saveRetry: 'Retry',
     externalSessions: {
+      retry: 'Retry',
+      loadedCount: (n: number, more: boolean) => `${n} session${n === 1 ? '' : 's'}${more ? ' loaded' : ''}`,
+      matchingCount: (n: number, more: boolean) => `${n} matching session${n === 1 ? '' : 's'}${more ? ' loaded' : ''}`,
       "scope": "Session scope",
       "allProjects": "All projects",
       "currentProject": "Current project",

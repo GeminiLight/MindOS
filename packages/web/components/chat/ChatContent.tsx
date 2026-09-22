@@ -1639,6 +1639,8 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
           onClose={closeHistory}
           onNewChat={handleResetSession}
           onRefreshRuntimeSessions={loadRuntimeSessions}
+          onRetryRuntimeSessions={externalHistory.canRetry ? externalHistory.retry : undefined}
+          externalCwd={runtimeSessionListCwd(session.activeSession)}
           externalScope={externalHistory.scope}
           onExternalScopeChange={externalHistory.setScope}
           externalProjectAvailable={Boolean(runtimeSessionListCwd(session.activeSession))}

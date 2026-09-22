@@ -42,12 +42,19 @@ export async function listRuntimeSessionPage(runtime: AgentRuntimeIdentity, opti
     const body = await response.json().catch(() => ({})) as { error?: string; message?: string };
     throw new Error(body.error || body.message || `Cannot load ${runtime.name} sessions (${response.status}).`);
   }
-  const body = await response.json() as { data?: unknown[]; sessions?: unknown[]; nextCursor?: string };
-  const rows = runtime.kind === 'codex' ? body.data : body.sessions;
-  return {
-    entries: (Array.isArray(rows) ? rows : []).map(row => normalizeRuntimeSessionEntry(row, runtime)).filter((row): row is RuntimeSessionEntry => row !== null),
-    nextCursor: body.nextCursor || null,
-  };
+  return parsePage(await response.json(), runtime, runtime.kind === 'codex' ? 'data' : 'sessions');
+}
+
+
+function parsePage(body: unknown, runtime: AgentRuntimeIdentity, key: 'data' | 'sessions'): RuntimeSessionPage {
+  const invalid = () => new Error(`Unexpected ${runtime.name} session response. Refresh or check the Agent connection.`);
+  if (!body || typeof body !== 'object' || Array.isArray(body)) throw invalid();
+  const record = body as Record<string, unknown>;
+  const rows = record[key];
+  if (!Array.isArray(rows) || (record.nextCursor != null && typeof record.nextCursor !== 'string')) throw invalid();
+  const entries = rows.map(row => normalizeRuntimeSessionEntry(row, runtime));
+  if (entries.some(row => row === null)) throw invalid();
+  return { entries: entries as RuntimeSessionEntry[], nextCursor: (record.nextCursor as string | undefined) || null };
 }
 
 

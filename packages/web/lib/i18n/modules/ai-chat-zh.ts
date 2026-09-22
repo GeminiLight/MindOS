@@ -160,6 +160,9 @@ export const aiChatZh = {
     saveGenerating: '正在生成摘要...',
     saveRetry: '重试',
     externalSessions: {
+      retry: '重试',
+      loadedCount: (n: number, more: boolean) => more ? `已加载 ${n} 个会话` : `${n} 个会话`,
+      matchingCount: (n: number, more: boolean) => more ? `已加载 ${n} 个匹配会话` : `${n} 个匹配会话`,
       "scope": "会话范围",
       "allProjects": "全部项目",
       "currentProject": "当前项目",

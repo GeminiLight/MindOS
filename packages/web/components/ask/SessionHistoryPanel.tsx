@@ -3,6 +3,8 @@
 import { useState, useRef, useEffect, useCallback, useMemo, useTransition, useDeferredValue, memo, type ReactNode } from 'react';
 import { AlertCircle, Loader2, RefreshCw, Search, Link2, MessageSquare, SquarePen, X } from 'lucide-react';
 import type { AgentRuntimeIdentity, ChatSession } from '@/lib/types';
+import { getDisplayRuntimeSessionBinding } from '@/lib/ask-agent';
+import { getEffectiveSessionWorkDir } from '@/lib/session-context';
 import { sessionTitle } from '@/hooks/useAskSession';
 import { useRunSummary } from '@/lib/agent-run-store';
 import { useLocale } from '@/lib/stores/locale-store';
@@ -22,6 +24,8 @@ import { SessionHistoryRow } from './SessionHistoryRow';
 
 interface SessionHistoryPanelProps {
   externalScope?: 'all' | 'project';
+  externalCwd?: string;
+  onRetryRuntimeSessions?: () => void;
   onExternalScopeChange?: (scope: 'all' | 'project') => void;
   externalProjectAvailable?: boolean;
   externalQuery?: string;
@@ -66,7 +70,7 @@ function compareHistoryRows(a: HistoryRow, b: HistoryRow): number {
 
 function SessionHistoryPanel({
   sessions, activeSessionId,
-  externalScope = 'all', onExternalScopeChange, externalProjectAvailable = false,
+  externalScope = 'all', externalCwd, onExternalScopeChange, externalProjectAvailable = false,
   externalQuery, onExternalQueryChange, externalHasMore = false, onLoadMoreExternal,
   externalArchived = false, onExternalArchivedChange,
   selectedAgentRuntime,
@@ -78,7 +82,7 @@ function SessionHistoryPanel({
   onLoad, onDelete, onRename, onTogglePin,
   onForkSession,
   onClose, onNewChat,
-  onRefreshRuntimeSessions, onAttachRuntimeSession, onForkRuntimeSession, onArchiveRuntimeSession,
+  onRefreshRuntimeSessions, onRetryRuntimeSessions, onAttachRuntimeSession, onForkRuntimeSession, onArchiveRuntimeSession,
 }: SessionHistoryPanelProps) {
   const { t } = useLocale();
   const [, startTransition] = useTransition();
@@ -120,21 +124,27 @@ function SessionHistoryPanel({
     return index;
   }, [runtimeSessions]);
 
-  // A native session already bound to a local chat is one conversation.
-  const unboundRuntimeSessions = useMemo(() => {
-    const bound = new Set(sessions.filter(s => s.runtimeSessionBinding?.runtime === selectedAgentRuntime?.kind
-      && s.runtimeSessionBinding?.runtimeId === selectedAgentRuntime?.id).map(s => s.runtimeSessionBinding?.externalSessionId));
-    return runtimeSessions.filter(entry => !bound.has(entry.id));
-  }, [sessions, runtimeSessions, selectedAgentRuntime?.id, selectedAgentRuntime?.kind]);
+  const showRuntimeSessions = Boolean(selectedAgentRuntime && runtimeSessionsSupported);
+  // Apply the same scope to native and saved rows. Deduplicate only after filtering:
+  // a locally renamed copy must not hide a native search hit that still matches.
+  const filtered = useMemo(() => sessions.filter(session => {
+    if (showRuntimeSessions) {
+      if (externalScope === 'project' && getEffectiveSessionWorkDir(session).path?.trim() !== externalCwd?.trim()) return false;
+      if (selectedAgentRuntime?.kind === 'codex') {
+        const archived = getDisplayRuntimeSessionBinding(session)?.status === 'archived';
+        if (archived !== externalArchived) return false;
+      }
+    }
+    const entry = sessionEntryById.get(session.id);
+    return !searchQuery || (entry ? sessionListEntryMatchesSearch(entry, searchQuery) : false);
+  }), [sessions, showRuntimeSessions, externalScope, externalCwd, selectedAgentRuntime?.kind, externalArchived, searchQuery, sessionEntryById]);
 
-  // Filter sessions by search query
-  const filtered = useMemo(() => {
-    if (!searchQuery) return sessions;
-    return sessions.filter((session) => {
-      const entry = sessionEntryById.get(session.id);
-      return entry ? sessionListEntryMatchesSearch(entry, searchQuery) : false;
-    });
-  }, [sessions, searchQuery, sessionEntryById]);
+  const unboundRuntimeSessions = useMemo(() => {
+    const bound = new Set(filtered.map(getDisplayRuntimeSessionBinding)
+      .filter(binding => binding?.runtime === selectedAgentRuntime?.kind && binding?.runtimeId === selectedAgentRuntime?.id)
+      .map(binding => binding?.externalSessionId));
+    return runtimeSessions.filter(entry => !bound.has(entry.id));
+  }, [filtered, runtimeSessions, selectedAgentRuntime?.id, selectedAgentRuntime?.kind]);
 
   const filteredRuntimeSessions = useMemo(() => {
     if (!runtimeSessionsSupported) return [];
@@ -145,15 +155,7 @@ function SessionHistoryPanel({
     });
   }, [runtimeSessionEntryById, unboundRuntimeSessions, runtimeSessionsSupported, searchQuery]);
 
-  const pinnedCount = useMemo(() => sessions.filter(s => s.pinned).length, [sessions]);
-  const totalCount = useMemo(() => {
-    let count = 0;
-    for (const session of sessions) {
-      if (sessionEntryById.get(session.id)?.hasListContent) count += 1;
-    }
-    return count;
-  }, [sessions, sessionEntryById]);
-  const showRuntimeSessions = Boolean(selectedAgentRuntime && runtimeSessionsSupported);
+  const pinnedCount = filtered.filter(session => session.pinned).length;
   const historyRows = useMemo<HistoryRow[]>(() => {
     const rows: HistoryRow[] = filtered.map((session) => {
       const listEntry = sessionEntryById.get(session.id) ?? buildChatSessionListEntry(session);
@@ -184,7 +186,7 @@ function SessionHistoryPanel({
     rows.sort(compareHistoryRows);
     return rows;
   }, [filtered, filteredRuntimeSessions, runtimeSessionEntryById, sessionEntryById, showRuntimeSessions]);
-  const totalHistoryCount = totalCount + (showRuntimeSessions ? unboundRuntimeSessions.length : 0);
+
 
   const handleLoad = useCallback((id: string) => {
     startTransition(() => {
@@ -224,12 +226,15 @@ function SessionHistoryPanel({
   }, [onClose, editingId]);
 
   const hasAnyResults = historyRows.length > 0 || (showRuntimeSessions && (runtimeSessionsLoading || Boolean(runtimeSessionsError)));
+  const count = historyRows.length;
   const statsLabel = showRuntimeSessions
-    ? pluralizeSessionListCount(totalHistoryCount, 'session', 'sessions')
-    : (ask?.historyStats?.(totalCount) ?? `${totalCount} conversations`);
+    ? searchQuery
+      ? (ask.externalSessions?.matchingCount?.(count, externalHasMore) ?? `${count} matching session${count === 1 ? '' : 's'}${externalHasMore ? ' loaded' : ''}`)
+      : (ask.externalSessions?.loadedCount?.(count, externalHasMore) ?? `${count} session${count === 1 ? '' : 's'}${externalHasMore ? ' loaded' : ''}`)
+    : (ask?.historyStats?.(count) ?? `${count} conversations`);
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 animate-in fade-in-0 duration-150">
+    <div aria-busy={runtimeSessionsLoading} className="flex flex-col flex-1 min-h-0 animate-in fade-in-0 duration-150">
       {showRuntimeSessions && onExternalScopeChange && (
         <div className="px-4 pt-3 pb-1 space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -260,10 +265,11 @@ function SessionHistoryPanel({
           <input
             ref={searchRef}
             type="text"
+            aria-label={ask?.historySearch ?? 'Search conversations'}
             value={query}
             onChange={e => setQuery(e.target.value)}
             placeholder={ask?.historySearch ?? 'Search conversations...'}
-            className="h-8 w-full rounded-md border border-border bg-background pl-8 pr-8 text-xs text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus-visible:border-[var(--amber)]/40 focus-visible:ring-2 focus-visible:ring-ring/20"
+            className="h-8 w-full rounded-md border border-border bg-background pl-8 pr-8 text-xs text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-[var(--amber)]/40 focus-visible:ring-2 focus-visible:ring-ring/20"
           />
           {query && (
             <button
@@ -280,8 +286,8 @@ function SessionHistoryPanel({
 
       {/* Stats bar */}
       <div className="flex items-center justify-between px-4 pb-1.5 shrink-0">
-        <span className="flex min-w-0 items-center gap-1.5 text-2xs text-muted-foreground/60">
-          <span className="min-w-0 truncate">
+        <span className="flex min-w-0 items-center gap-1.5 text-2xs text-muted-foreground">
+          <span className="min-w-0 truncate" role="status" aria-live="polite" aria-atomic="true">
             {statsLabel}
             {pinnedCount > 0 && <> &middot; {pinnedCount} {ask?.historyPinned ?? 'pinned'}</>}
           </span>
@@ -308,17 +314,26 @@ function SessionHistoryPanel({
         </button>
       </div>
 
+      {showRuntimeSessions && runtimeSessionsError && (
+        <div className="shrink-0 px-3 pb-2">
+          <RuntimeHistoryNotice
+            tone="error"
+            icon={<AlertCircle size={12} className="mt-0.5 shrink-0 text-error" />}
+            text={runtimeSessionsError}
+            action={onRetryRuntimeSessions ? (
+              <button type="button" onClick={onRetryRuntimeSessions} disabled={runtimeSessionsLoading}
+                className="shrink-0 rounded-md border border-current px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50">
+                {ask.externalSessions?.retry ?? 'Retry'}
+              </button>
+            ) : undefined}
+          />
+        </div>
+      )}
+
       {/* Scrollable list */}
       <div className="flex-1 overflow-y-auto min-h-0 px-3 pb-3">
         {hasAnyResults ? (
           <div className="flex flex-col gap-0.5">
-            {showRuntimeSessions && runtimeSessionsError && (
-              <RuntimeHistoryNotice
-                tone="error"
-                icon={<AlertCircle size={12} className="mt-0.5 shrink-0 text-error" />}
-                text={runtimeSessionsError}
-              />
-            )}
             {showRuntimeSessions && runtimeSessionsLoading && filteredRuntimeSessions.length === 0 && (
               <RuntimeHistoryNotice
                 icon={<Loader2 size={12} className="animate-spin text-muted-foreground/50" />}
@@ -368,11 +383,11 @@ function SessionHistoryPanel({
         ) : (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <MessageSquare size={32} className="text-muted-foreground/20 mb-3" />
-            <p className="text-sm text-muted-foreground/60">
+            <p className="text-sm text-muted-foreground">
               {query ? (ask.externalSessions?.noMatches ?? 'No matching conversations') : (ask?.historyEmpty ?? 'No conversations yet')}
             </p>
             {!query && (
-              <p className="text-2xs text-muted-foreground/40 mt-1">
+              <p className="text-2xs text-muted-foreground mt-1">
                 {ask?.historyEmptyHint ?? 'Start a new chat to begin'}
               </p>
             )}
@@ -400,10 +415,12 @@ function RuntimeHistoryNotice({
   icon,
   text,
   tone = 'muted',
+  action,
 }: {
   icon: ReactNode;
   text: string;
   tone?: 'muted' | 'error';
+  action?: ReactNode;
 }) {
   return (
     <div role={tone === 'error' ? 'alert' : 'status'}
@@ -414,7 +431,8 @@ function RuntimeHistoryNotice({
       }`}
     >
       {icon}
-      <span className="min-w-0">{text}</span>
+      <span className="min-w-0 flex-1">{text}</span>
+      {action}
     </div>
   );
 }
@@ -530,11 +548,13 @@ function RuntimeSessionRow({
         )}
         <span className="shrink-0 text-muted-foreground/25">·</span>
         <span className="min-w-0 max-w-[8.5rem] truncate font-mono">{listEntry.compactSessionId}</span>
-        <span className="shrink-0 text-muted-foreground/25">·</span>
-        <span className="inline-flex shrink-0 items-center gap-1">
-          <MessageSquare size={9} />
-          {typeof listEntry.messageCount === 'number' ? pluralizeSessionListCount(listEntry.messageCount, 'msg', 'msgs') : '? msgs'}
-        </span>
+        {typeof listEntry.messageCount === 'number' && <>
+          <span className="shrink-0 text-muted-foreground/25">·</span>
+          <span className="inline-flex shrink-0 items-center gap-1">
+            <MessageSquare size={9} />
+            {pluralizeSessionListCount(listEntry.messageCount, 'msg', 'msgs')}
+          </span>
+        </>}
       </div>
     </div>
   );

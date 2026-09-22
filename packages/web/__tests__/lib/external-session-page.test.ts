@@ -41,3 +41,8 @@ it('keeps local transcript discovery for ACP agents that do not expose session/l
   const page = await listRuntimeSessionPage(runtime('acp', 'kimi'), { scope: 'all' });
   expect(page.entries.map(e => e.id)).toEqual(['kimi-local']);
 });
+
+it.each([{}, { sessions: {} }, { sessions: [], nextCursor: 30 }, { sessions: [{ nope: 'id' }] }])('reports malformed native lists instead of pretending the history is empty: %j', async body => {
+  vi.stubGlobal('fetch', vi.fn(async () => response(body)));
+  await expect(listRuntimeSessionPage(runtime('claude'))).rejects.toThrow(/invalid|unexpected/i);
+});
