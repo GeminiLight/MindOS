@@ -13,7 +13,7 @@ type PiProvidersModule = typeof import('@earendil-works/pi-ai/providers/all');
 type CreateRuntime = (options: MindosPiCodingAgentRuntimeOptions) => Promise<MindosPiAgentRuntime>;
 
 const PACKAGE_ROOT = fileURLToPath(new URL('../..', import.meta.url).href);
-const PROVIDER_ALIASES: Record<string, string> = { deepseek: 'openai', 'zai-cn': 'zai' };
+const PROVIDER_ALIASES: Record<string, string> = { deepseek: 'openai', requesty: 'openai', 'zai-cn': 'zai' };
 const PROVIDER_ENV_KEYS: Record<string, string[]> = {
   anthropic: ['ANTHROPIC_API_KEY'],
   openai: ['OPENAI_API_KEY'],
@@ -21,6 +21,7 @@ const PROVIDER_ENV_KEYS: Record<string, string[]> = {
   groq: ['GROQ_API_KEY'],
   xai: ['XAI_API_KEY'],
   openrouter: ['OPENROUTER_API_KEY'],
+  requesty: ['REQUESTY_API_KEY'],
   mistral: ['MISTRAL_API_KEY'],
   deepseek: ['DEEPSEEK_API_KEY'],
   zai: ['ZAI_API_KEY', 'ZHIPUAI_API_KEY'],
@@ -136,6 +137,7 @@ function defaultBaseUrl(protocol: string): string {
   if (protocol === 'anthropic') return 'https://api.anthropic.com';
   if (protocol === 'google') return 'https://generativelanguage.googleapis.com';
   if (protocol === 'deepseek') return 'https://api.deepseek.com/v1';
+  if (protocol === 'requesty') return 'https://router.requesty.ai/v1';
   if (protocol === 'ollama') return 'http://127.0.0.1:11434/v1';
   return 'https://api.openai.com/v1';
 }

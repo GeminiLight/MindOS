@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildCompatEndpointCandidates, getProviderApiType } from '@/lib/agent/providers';
+import { buildCompatEndpointCandidates, getApiKeyEnvVar, getDefaultBaseUrl, getProviderApiType } from '@/lib/agent/providers';
 
 
 describe('buildCompatEndpointCandidates', () => {
@@ -66,5 +66,16 @@ describe('getProviderApiType', () => {
 
   it('reports Kimi Coding as anthropic-messages', () => {
     expect(getProviderApiType('kimi-coding')).toBe('anthropic-messages');
+  });
+
+  it('reports Requesty as openai-completions', () => {
+    expect(getProviderApiType('requesty')).toBe('openai-completions');
+  });
+});
+
+describe('Requesty preset', () => {
+  it('uses the Requesty router endpoint and its own API key env var', () => {
+    expect(getDefaultBaseUrl('requesty')).toBe('https://router.requesty.ai/v1');
+    expect(getApiKeyEnvVar('requesty')).toBe('REQUESTY_API_KEY');
   });
 });
