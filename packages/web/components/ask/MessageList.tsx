@@ -479,6 +479,7 @@ interface MessageListProps {
   sessionId?: string;
   messages: Message[];
   isLoading: boolean;
+  focusMode?: boolean;
   loadingPhase: 'connecting' | 'thinking' | 'streaming' | 'reconnecting';
   reconnectAttempt?: number;
   reconnectMax?: number;
@@ -513,6 +514,7 @@ const MessageRow = memo(function MessageRow({
   index,
   messageCount,
   isLoading,
+  focusMode,
   lastUserMessageIndex,
   onEditMessage,
   onResendMessage,
@@ -523,6 +525,7 @@ const MessageRow = memo(function MessageRow({
   index: number;
   messageCount: number;
   isLoading: boolean;
+  focusMode?: boolean;
   lastUserMessageIndex: number;
   onEditMessage?: (index: number) => void;
   onResendMessage?: (index: number) => void;
@@ -574,7 +577,7 @@ const MessageRow = memo(function MessageRow({
   if (suppressEmptyCompletedPlaceholder || suppressStreamingPlaceholder) return null;
 
   return (
-    <div style={hasFloatingDock ? undefined : MESSAGE_ROW_STYLE} className={`group/message relative flex w-full min-w-0 gap-3 animate-[fadeSlideUp_0.22s_ease_both] hover:z-30 focus-within:z-30 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+    <div style={hasFloatingDock ? undefined : MESSAGE_ROW_STYLE} className={`group/message relative flex w-full min-w-0 gap-3 animate-[fadeSlideUp_0.22s_ease_both] hover:z-30 focus-within:z-30 ${focusMode ? 'mx-auto max-w-[52rem]' : ''} ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
       {message.role === 'assistant' && shouldShowAssistantSideMark(message.agentKind) && (
         <div className="mt-0.5 shrink-0">
           <RuntimeMark runtime={message.agentKind ?? 'mindos'} label={message.agentName} />
@@ -628,6 +631,7 @@ export default memo(function MessageList({
   messages,
   sessionId,
   isLoading,
+  focusMode,
   emptyPrompt,
   emptyHint,
   suggestions,
@@ -688,7 +692,7 @@ export default memo(function MessageList({
     }, 0) as unknown as number;
   }, [performScrollToBottom]);
 
-  useEffect(() => () => {
+  const cancelPendingScroll = useCallback(() => {
     if (scrollFrameRef.current === null) return;
     if (scrollFrameKindRef.current === 'raf') {
       window.cancelAnimationFrame(scrollFrameRef.current);
@@ -699,6 +703,8 @@ export default memo(function MessageList({
     scrollFrameKindRef.current = null;
   }, []);
 
+  useEffect(() => () => cancelPendingScroll(), [cancelPendingScroll]);
+
   // Auto-scroll: only when user hasn't scrolled away.
   // Reset userScrolledAway when a brand new message arrives (new user prompt),
   // so the view follows the new response naturally.
@@ -706,6 +712,14 @@ export default memo(function MessageList({
     const newCount = messages.length;
     const isNewMessage = newCount > prevMessageCountRef.current;
     prevMessageCountRef.current = newCount;
+
+    // A short focus viewport may scroll the empty suggestions. Keep its first
+    // action visible instead of applying the conversation's bottom anchoring.
+    if (newCount === 0 && focusMode) {
+      cancelPendingScroll();
+      if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0;
+      return;
+    }
 
     if (isNewMessage) {
       // New message added (user sent or assistant started) — re-engage auto-scroll
@@ -718,7 +732,7 @@ export default memo(function MessageList({
     if (!userScrolledAwayRef.current) {
       scrollToBottom('instant');
     }
-  }, [messages, scrollToBottom]);
+  }, [messages, scrollToBottom, focusMode, cancelPendingScroll]);
 
   useEffect(() => {
     const container = scrollContainerRef.current;
@@ -785,20 +799,20 @@ export default memo(function MessageList({
   }, []);
 
   return (
-    <div ref={scrollContainerRef} role="log" aria-live="polite" className="relative flex-1 overflow-y-auto overflow-x-hidden px-4 pt-5 pb-10 space-y-5 min-h-0">
+    <div ref={scrollContainerRef} role="log" aria-live="polite" className={`relative flex-1 overflow-y-auto overflow-x-hidden px-4 pt-5 pb-10 space-y-5 min-h-0 ${focusMode && messages.length === 0 ? 'ask-focus-empty-log flex flex-col' : ''}`}>
       {messages.length === 0 && (
-        <div className="flex flex-col items-center justify-center flex-1 min-h-[260px] px-6 pt-10 pb-4">
+        <div className={`flex flex-col items-center justify-center flex-1 px-6 ${focusMode ? 'min-h-max py-6' : 'min-h-[260px] pt-10 pb-4'}`}>
           {/* Brand anchor — refined presence */}
-          <div className="relative w-12 h-12 rounded-2xl bg-[var(--amber)]/10 flex items-center justify-center mb-6">
+          <div className={`relative w-12 h-12 shrink-0 rounded-2xl bg-[var(--amber)]/10 flex items-center justify-center ${focusMode ? 'mb-4' : 'mb-6'}`}>
             <div className="absolute inset-0 rounded-2xl bg-[var(--amber)]/5 scale-[1.4]" />
             <Sparkles size={22} className="text-[var(--amber)] relative z-10" />
           </div>
           <p className="text-center text-[15px] font-semibold text-foreground tracking-tight mb-2">{emptyPrompt}</p>
           {emptyHint && (
-            <p className="text-center text-xs text-muted-foreground/80 mb-10 tracking-wide">{emptyHint}</p>
+            <p className={`text-center text-xs text-muted-foreground/80 tracking-wide ${focusMode ? 'mb-6' : 'mb-10'}`}>{emptyHint}</p>
           )}
           {/* Suggestion chips — refined single column */}
-          <div className="flex flex-col gap-2.5 max-w-[280px] w-full">
+          <div className={`flex flex-col max-w-[280px] w-full ${focusMode ? 'gap-2' : 'gap-2.5'}`}>
             {suggestions.map((s, i) => {
               const icons = [FolderInput, Search, PenLine, Lightbulb];
               const SugIcon = icons[i % icons.length];
@@ -828,6 +842,7 @@ export default memo(function MessageList({
           index={i}
           messageCount={messages.length}
           isLoading={isLoading}
+          focusMode={focusMode}
           lastUserMessageIndex={lastUserMessageIndex}
           onEditMessage={onEditMessage}
           onResendMessage={onResendMessage}

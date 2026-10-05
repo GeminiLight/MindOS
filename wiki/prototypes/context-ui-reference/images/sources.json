@@ -1,0 +1,97 @@
+{
+  "capturedAt": "2026-10-03",
+  "method": "Browser screenshots of official interface examples rendered in the research page. Copyright belongs to original products.",
+  "images": [
+    {
+      "product": "Obsidian",
+      "file": "images/obsidian-1.png",
+      "original": "https://raw.githubusercontent.com/obsidianmd/obsidian-help/master/en/Attachments/bases-noshadow.png",
+      "page": "https://obsidian.md/help/bases",
+      "note": "官方帮助示例；截图版本未标注。"
+    },
+    {
+      "product": "Pieces",
+      "file": "images/pieces-1.png",
+      "original": "https://ik.imagekit.io/pieces/images/home/pieces-desktop-timeline.png?tr=w-1880%2Ch-1436&v=1782488482084849",
+      "page": "https://pieces.app/",
+      "note": "当前官网展示图；截图版本未标注。"
+    },
+    {
+      "product": "Pieces",
+      "file": "images/pieces-2.png",
+      "original": "https://ik.imagekit.io/pieces/images/home/pieces-desktop-timeline-feature.png?tr=w-1360&v=1784581911806178",
+      "page": "https://pieces.app/",
+      "note": "当前官网功能展示图；截图版本未标注。"
+    },
+    {
+      "product": "Readwise Reader",
+      "file": "images/reader-1.png",
+      "original": "https://d34adp677peecb.cloudfront.net/static/images/reader/Hero-Screen%401x.72ad6bf1deaa.webp",
+      "page": "https://readwise.io/read",
+      "note": "当前官网展示图；截图版本未标注。"
+    },
+    {
+      "product": "Readwise Reader",
+      "file": "images/reader-2.png",
+      "original": "https://d34adp677peecb.cloudfront.net/static/images/reader/Highlight-Alpha-No-Note%401x.28c2c4cc2706.webp",
+      "page": "https://readwise.io/read",
+      "note": "当前官网高亮功能展示图；截图版本未标注。"
+    },
+    {
+      "product": "Notion",
+      "file": "images/notion-1.png",
+      "original": "https://images.ctfassets.net/spoqsaf9291f/6rIlyH477Pd7UHscCYMz2s/5fa0c3b7809ab984e085b4cf01965a7b/feature-filter-kanban.png",
+      "page": "https://www.notion.com/product/projects",
+      "note": "当前项目产品页展示图；截图版本未标注。"
+    },
+    {
+      "product": "Notion",
+      "file": "images/notion-2.png",
+      "original": "https://images.ctfassets.net/spoqsaf9291f/2KRCKUbMb1AYfqJUWafwSr/03dfbdd1149dfbc3525543d373925722/Group_158.png",
+      "page": "https://www.notion.com/help/views-filters-and-sorts",
+      "note": "官方帮助截图；截图版本未标注。"
+    },
+    {
+      "product": "Attio",
+      "file": "images/attio-1.png",
+      "original": "https://a.storyblok.com/f/234930/1829x1067/6aed6cc3ee/full-record-page-overview.png",
+      "page": "https://attio.com/help/reference/managing-your-data/records/create-and-view-records",
+      "note": "官方帮助截图，以公司记录展示结构；截图版本未标注。"
+    },
+    {
+      "product": "Attio",
+      "file": "images/attio-2.png",
+      "original": "https://a.storyblok.com/f/234930/866x676/721cabee8f/activity-tab.png",
+      "page": "https://attio.com/help/reference/managing-your-data/records/create-and-view-records",
+      "note": "官方帮助截图；截图版本未标注。"
+    },
+    {
+      "product": "Claude",
+      "file": "images/claude-1.png",
+      "original": "https://www-cdn.anthropic.com/images/4zrzovbb/website/c5823949d9350145ce2fda51acbc7076f2139cd0-1920x1080.png",
+      "page": "https://www.anthropic.com/news/projects",
+      "note": "历史材料：2024-06-25 发布图，仅用于理解并排布局。当前能力以帮助文档为准。"
+    },
+    {
+      "product": "Claude",
+      "file": "images/claude-2.png",
+      "original": "https://www-cdn.anthropic.com/images/4zrzovbb/website/cc048db08b3503fa6d713b2b9e3352e8345c8b79-1920x1080.png",
+      "page": "https://www.anthropic.com/news/projects",
+      "note": "历史材料：2024-06-25 发布图，仅用于理解布局。"
+    },
+    {
+      "product": "Linear",
+      "file": "images/linear-1.png",
+      "original": "https://webassets.linear.app/images/ornj730p/production/5205025fbe6e96bf749f76d5e1cad30b484f8b50-1052x634.png?auto=format&dpr=2&q=95&w=1440",
+      "page": "https://linear.app/docs/peek",
+      "note": "官方帮助截图；截图版本未标注。"
+    },
+    {
+      "product": "Linear",
+      "file": "images/linear-2.png",
+      "original": "https://webassets.linear.app/images/ornj730p/production/6588c3dbdde8688ffd192a47210980e8e1a3c4fc-2494x1021.png?w=1440&q=95&auto=format&dpr=2",
+      "page": "https://linear.app/docs/custom-views",
+      "note": "官方帮助截图；截图版本未标注。"
+    }
+  ]
+}

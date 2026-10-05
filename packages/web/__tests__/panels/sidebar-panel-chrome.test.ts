@@ -17,7 +17,6 @@ describe('primary sidebar panel chrome', () => {
     const files = [
       'components/panels/StudioPanel.tsx',
       'components/panels/EchoPanel.tsx',
-      'components/panels/DiscoverPanel.tsx',
     ];
 
     for (const file of files) {
@@ -30,6 +29,13 @@ describe('primary sidebar panel chrome', () => {
       expect(scrollAreaIndex, file).toBeGreaterThan(primaryNavIndex);
       expect(source, file).not.toContain('PANEL_NAV_SECTION_CLASS');
     }
+  });
+
+  it('keeps Discover navigation fixed without an empty scroll area or duplicate task launchers', () => {
+    const source = read('components/panels/DiscoverPanel.tsx');
+    expect(source.indexOf('<PanelPrimaryNav')).toBeGreaterThan(source.indexOf('<PanelHeader'));
+    expect(source).not.toContain('sidebar-scroll-area');
+    expect(source).not.toContain('UseCaseRow');
   });
 
   it('uses the fixed primary nav inside Agents hub navigation', () => {

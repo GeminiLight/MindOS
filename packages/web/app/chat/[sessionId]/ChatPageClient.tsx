@@ -171,8 +171,8 @@ export default function ChatPageClient({ sessionId: rawSessionId }: { sessionId:
   /* Mirrors HomeContent's maximized composition so the full-page chat
    * looks/behaves like the home-page chat in fullscreen. */
   return (
-    <div className="flex flex-col h-[calc(100dvh-var(--app-titlebar-h))]">
-      <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+    <div className="fixed inset-x-0 bottom-0 top-[calc(var(--app-titlebar-h)+var(--mobile-header-height))] z-20 flex flex-col bg-background p-3 md:left-[var(--content-left-offset)] md:top-[var(--app-titlebar-h)] md:p-4">
+      <div data-home-focus-shell className="flex-1 min-h-0 flex flex-col overflow-hidden rounded-xl border border-border/50 bg-background shadow-sm">
         <ChatContent
           visible
           variant="home"

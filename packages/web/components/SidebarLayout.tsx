@@ -1078,6 +1078,7 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
       <main
         id="main-content"
         tabIndex={-1}
+        data-active-left-panel={activeLeftPanel ?? undefined}
         className="app-main-scrollport fixed inset-x-0 bottom-0 top-[var(--app-titlebar-h)] overflow-y-auto overflow-x-hidden transition-[padding-left,padding-right] duration-200 md:pt-0"
         onDragEnter={(e) => {
           if (!e.dataTransfer.types.includes('Files')) return;

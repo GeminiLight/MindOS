@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>MindOS · 界面参考研究</title>
+  <link rel="stylesheet" href="styles.css">
+  <script defer src="research-data.js"></script>
+  <script defer src="hunt-data.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">跳到研究内容</a>
+  <header class="topbar">
+    <a class="brand" href="#atlas/obsidian"><span class="brand-mark" aria-hidden="true">m</span><span>MindOS <span class="brand-sub">设计研究</span></span></a>
+    <span class="research-date">2026 年 10 月 3 日</span>
+    <a class="quiet-link" href="directions/#a/reading">查看三种设计方案 →</a>
+    <a class="quiet-link" href="report.md" download="MindOS-界面参考研究.md">下载研究材料</a>
+  </header>
+  <main id="main" class="shell">
+    <section class="intro" aria-labelledby="page-title">
+      <div>
+        <p class="section-label">四个特性 · 七个基础参考 + 六个 Product Hunt 精选</p>
+        <h1 id="page-title">MindOS 界面参考研究</h1>
+        <p class="lead">保留熟悉的树，让资料、经验和工作视图更容易接续。</p>
+      </div>
+      <p class="intro-note">先看真实界面，再判断如何借鉴。<br>优先打磨一段顺手的工作流程，<br>每一步都能在现有产品中找到位置。</p>
+    </section>
+    <nav class="section-tabs" role="tablist" aria-label="研究章节">
+      <button id="tab-atlas" role="tab" aria-controls="atlas" aria-selected="true" tabindex="0" data-section="atlas">界面图鉴 <span class="tab-count">13</span></button>
+      <button id="tab-hunt" role="tab" aria-controls="hunt" aria-selected="false" tabindex="-1" data-section="hunt">Product Hunt 精选 <span class="tab-count">6</span></button>
+      <button id="tab-comparison" role="tab" aria-controls="comparison" aria-selected="false" tabindex="-1" data-section="comparison">四个特性</button>
+      <button id="tab-recommendations" role="tab" aria-controls="recommendations" aria-selected="false" tabindex="-1" data-section="recommendations">给 MindOS 的建议</button>
+      <button id="tab-sources" role="tab" aria-controls="sources" aria-selected="false" tabindex="-1" data-section="sources">来源与方法</button>
+    </nav>
+    <section id="atlas" role="tabpanel" aria-labelledby="tab-atlas">
+      <div class="atlas-layout">
+        <aside class="product-sidebar">
+          <p class="sidebar-label">选择一个产品</p>
+          <div class="collection-switch" role="group" aria-label="选择产品集合"><button data-collection="hunt" aria-pressed="false">本轮精选 <span>6</span></button><button data-collection="base" aria-pressed="true">基础参考 <span>7</span></button></div>
+          <nav id="product-nav" aria-label="选择参考产品"></nav>
+          <p class="sidebar-note">图片来自官方产品页与帮助材料。观察是设计解读；落地建议属于提案。</p>
+        </aside>
+        <article id="product-study" aria-live="polite" aria-atomic="false"></article>
+      </div>
+    </section>
+    <section id="hunt" role="tabpanel" aria-labelledby="tab-hunt" hidden>
+      <div class="hunt-heading"><div class="chapter-heading"><p class="section-label">Product Hunt 发现 · 官方资料核对</p><h2>六个产品，六种值得借鉴的细节。</h2><p>建议先看 Capacities、mymind 和 Heptabase。分别打磨人物资料、内容辨识、出处与理解；另外三个补充结构化视图、项目工作面和回看机制。</p></div><a class="outline-button" href="product-hunt-report.md" download="MindOS-Product-Hunt-界面研究.md">下载本轮材料</a></div>
+      <p class="hunt-method">按与 MindOS 的关联、界面细节和公开材料的可核对性筛选；顺序是设计判断。Product Hunt 用于发现，当前能力以官方资料为准。本轮未登录试用；“建议先看”表示与当前设计问题的关联。</p>
+      <div id="hunt-grid" class="hunt-grid"></div>
+      <div class="hunt-conclusion"><p class="section-label">这轮最值得带回来的体验</p><h3>记录先有归属，理解始终有出处，视图能继续维护。</h3><p>保留树和项目。在具体内容上增加人物详情、来源预览和可保存的模板视图，让新能力接在用户已经熟悉的位置。</p><a href="#recommendations">回到三个小步建议 →</a></div>
+      <section class="watch-section" aria-labelledby="watch-heading"><div class="chapter-heading"><p class="section-label">另外三个 · 更接近定位的观察项</p><h2 id="watch-heading">共享记忆已有重叠，体验需要更具体。</h2><p>它们用于检验我们的产品边界。本轮尚无足够可核对的当前工作界面，不列入上面的 UI 图鉴。</p></div><div id="watch-list" class="watch-list"></div><div class="judgment-note"><span class="note-label">待验证的价值</span><p>让用户看到一条经验的出处，修正或停用它，检查本次带入哪些内容，并确认下一次接续是否生效。<strong>这段可维护的体验，比“接入了多少 Agent”更值得先验证。</strong>已有竞品也可能覆盖这些能力，仍需实际试用与用户研究。</p></div></section>
+    </section>
+    <section id="comparison" role="tabpanel" aria-labelledby="tab-comparison" hidden>
+      <div class="chapter-heading"><p class="section-label">把参考放回我们的定位</p><h2>四个特性，各有一个清楚的问题。</h2><p>功能可以相互支撑，用户的每一次操作仍应有明确目的。</p></div>
+      <div class="comparison-scroll" tabindex="0" aria-label="四个特性的对照表，可横向滚动">
+        <table><caption class="visually-hidden">MindOS 四个特性与产品设计参考</caption><thead><tr><th scope="col">特性与用户问题</th><th scope="col">值得借鉴的方式</th><th scope="col">MindOS 的具体选择</th><th scope="col">怎样验证</th></tr></thead><tbody id="comparison-rows"></tbody></table>
+      </div>
+      <div class="judgment-note"><span class="note-label">定位判断</span><p>“本地”“记忆”“连接 Agent”“生成界面”都已有重叠产品。我们可以重点验证：<strong>从真实协作中保留自己的判断，再带到下一次工作，并持续修订。</strong>这是一条体验主线，也是一项仍需验证的产品假设。</p></div>
+    </section>
+    <section id="recommendations" role="tabpanel" aria-labelledby="tab-recommendations" hidden>
+      <div class="chapter-heading"><p class="section-label">保持小步变化</p><h2>先把三个动作打磨顺。</h2><p>保留现有导航、树、文件夹和项目。下面是后续建议，尚未修改生产功能。</p></div>
+      <ol class="recommendation-list">
+        <li><span class="recommendation-number">01</span><div><div class="recommendation-meta">印迹 / 资料 / 会话列表 <span>小幅呈现调整</span></div><h3>在原位置，看到出处。</h3><p>来源行放在判断旁边，显示会话、时间与项目。先就地展开关键原话，需要时再进入完整记录；关闭后回到原来的位置。</p><p class="related">参考 <button data-product-link="reader">Readwise Reader</button> <button data-product-link="heptabase">Heptabase</button> <button data-product-link="linear">Linear</button></p><div class="acceptance"><strong>验收场景</strong><span>连续查看三条来源，关闭预览后选中项、滚动位置和未保存内容仍在；来源读取失败要明确提示。</span></div></div></li>
+        <li><span class="recommendation-number">02</span><div><div class="recommendation-meta">项目 / 上下文选择 <span>需要状态闭环</span></div><h3>明确这次带哪些材料。</h3><p>用清楚的选择列表表达“本次上下文”：原资料、相关会话、已核对判断。提供可检查的预览和移除操作，准备完成后准确说明当前状态。</p><p class="related">参考 <button data-product-link="pieces">Pieces</button> <button data-product-link="claude">Claude Projects</button></p><div class="acceptance"><strong>验收场景</strong><span>用户能说出给哪个 Agent 准备了哪些内容；准备、复制、接收分别有证据，私人反思不会自动进入材料。</span></div></div></li>
+        <li><span class="recommendation-number">03</span><div><div class="recommendation-meta">工作台 / 我的视图 <span>需要新增保存能力</span></div><h3>把一个人脉模板，做成真正好用的界面。</h3><p>默认采用联系人列表与人物详情，显示背景、互动、跟进和原文。复用已有 CSV 展示基础，完成更新写回和再次打开，再增加自然语言调整布局。</p><p class="related">参考 <button data-product-link="attio">Attio</button> <button data-product-link="capacities">Capacities</button> <button data-product-link="tana">Tana Outliner</button> <button data-product-link="obsidian">Obsidian Bases</button></p><div class="acceptance"><strong>验收场景</strong><span>记录一次互动后，原文、列表和 Agent 读取一致。移除视图保留资料；重新生成前能预览变化并恢复旧版。</span></div></div></li>
+      </ol>
+      <div class="flow-section"><div><p class="section-label">建议的完整体验</p><h3>让四个特性，在同一段经历中相遇。</h3><p>例如一次关于人物或项目的协作，既留下资料，也留下自己的判断，之后还能继续使用。</p></div><ol class="workflow"><li>找回原记录</li><li>核对并保留判断</li><li>选入本次上下文</li><li>在工作视图中维护</li><li>根据结果修订</li></ol></div>
+      <div class="judgment-note"><span class="note-label">投入边界</span><p>近期先完成真实的查看、保存、维护与接续。模板以人脉为首例；项目资料和研究整理可作为后续候选。模板数量、一级入口数量和自动总结数量不作为进度指标。</p></div>
+    </section>
+    <section id="sources" role="tabpanel" aria-labelledby="tab-sources" hidden>
+      <div class="chapter-heading"><p class="section-label">可核对的材料</p><h2>来源、时间与观察边界。</h2><p>研究日期为 2026-10-03。所有产品能力表述均附官方链接。</p></div>
+      <div class="method-layout"><div><h3>这份研究怎样使用</h3><p>第一轮七个产品提供文件、视图、来源、人物与连续操作的基础参考。第二轮从 Product Hunt 发现六个相邻产品，依据官方材料研究具体 UI；另外三个共享记忆产品用于核对定位。发现入口、当前能力、界面解读与提案分别标明。</p><p>“值得借鉴”是针对 MindOS 的设计判断，不是对所有产品的排名，也不是市场空白的证明。</p></div><div><h3>图像与验证范围</h3><p>图像是官方公开的界面示例，版权属于原产品。未登录测试这些产品，未据此承诺性能、当前账户权限或全部操作流程。</p><p>未标版本的图像不等于最新界面的逐像素记录。Claude 的两张 2024 年结构参考图已标注历史日期；当前功能以帮助文档为准。</p><p>第一轮 13 张官方示例于 2026-10-03 截图保存，见 <a href="images/sources.json">基础图鉴来源记录</a>。本轮 9 张官方公开媒体原样归档，见 <a href="images/hunt-sources.json">Product Hunt 图像来源记录</a>；局部展示、放大编排与设备展示图已单独标注。研究页不读取用户资料，核对外部材料需联网。</p></div></div>
+      <div id="source-list" class="source-list"></div>
+    </section>
+    <footer><span>MindOS · 个人上下文 / 跨 Agent 接续 / 经验成长 / 生成式工作视图</span><a href="#sources">核对研究来源</a></footer>
+  </main>
+  <dialog id="image-dialog" aria-labelledby="dialog-title"><div class="dialog-header"><div><h2 id="dialog-title"></h2><p id="dialog-note"></p></div><button id="close-dialog" class="outline-button" autofocus>关闭 <span aria-hidden="true">Esc</span></button></div><div id="dialog-image-container"></div><a id="dialog-source" target="_blank" rel="noopener noreferrer">查看官方原始材料</a></dialog>
+  <noscript><div class="noscript-message">这份图鉴需要 JavaScript 展示产品切换。你也可以<a href="report.md">阅读完整文字材料</a>。</div></noscript>
+</body>
+</html>

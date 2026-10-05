@@ -2,6 +2,7 @@ import type { GuideState } from '@/lib/settings';
 
 const REQUEST_TIMEOUT_MS = 15_000;
 type SetupGuideResponse = { activeProvider?: string; providerConfigs?: Array<{ id?: string }>; guideState?: GuideState };
+export type GuideBootstrap = { guideState: GuideState | null; aiConfigured: boolean };
 type GuideSnapshot = {
   guideState: GuideState | null;
   aiConfigured: boolean;
@@ -34,6 +35,14 @@ export function createGuideStore(request: typeof fetch = (...args) => fetch(...a
     listeners.forEach(listener => listener());
   }
 
+  function prime(initial: GuideBootstrap) {
+    // A local choice wins over an older RSC payload. Otherwise each fresh
+    // server render may supersede a tab snapshot from a previous page visit.
+    if (revision > 0 || pendingPatch) return;
+    readId += 1;
+    publish({ ...snapshot, ...initial, error: null });
+  }
+
   async function load() {
     if (pendingPatch) return;
     const expectedRevision = revision;
@@ -50,7 +59,7 @@ export function createGuideStore(request: typeof fetch = (...args) => fetch(...a
         error: null,
       });
     } catch {
-      if (revision === expectedRevision && id === readId) publish({ ...snapshot, error: 'load' });
+      if (revision === expectedRevision && id === readId && !snapshot.guideState) publish({ ...snapshot, error: 'load' });
     }
   }
 
@@ -99,7 +108,7 @@ export function createGuideStore(request: typeof fetch = (...args) => fetch(...a
   return {
     getSnapshot: () => snapshot,
     subscribe: (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; },
-    load, patchGuide,
+    prime, load, patchGuide,
     retry: () => pendingPatch ? flush() : load(),
   };
 }

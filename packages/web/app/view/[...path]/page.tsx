@@ -100,7 +100,7 @@ export default async function ViewPage({ params }: PageProps) {
   }
 
   if (!exists) {
-    // Special draft entry used by homepage "New Notes"
+    // Special draft entry used by the homepage "New note" action.
     if (filePath === 'Untitled.md') {
       const draftDirectories = collectDirectories(getFileTree());
       return (

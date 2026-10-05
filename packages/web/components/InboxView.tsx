@@ -795,12 +795,13 @@ function ScopedInboxView({ identity }: { identity: ReturnType<typeof useCaptureS
                     onDrop={handleDrop}
                   >
                     <div
-                      className={`flex flex-col rounded-xl border shadow-sm transition-colors ${
+                      className={`inbox-capture-card flex flex-col rounded-2xl border shadow-sm transition-[background-color,border-color] duration-150 ${
                         dragOver
                           ? 'border-[var(--amber)] bg-[var(--amber-subtle)]'
                           : 'border-border/60 bg-card/75'
                       }`}
                       data-inbox-composer-card
+                      data-drag-over={dragOver ? 'true' : undefined}
                     >
                       <div className="px-4 pt-4 pb-2">
                         <div className="flex min-w-0 items-start justify-between gap-3">
@@ -838,7 +839,7 @@ function ScopedInboxView({ identity }: { identity: ReturnType<typeof useCaptureS
                             aria-label={t.inbox.composerInputLabel}
                             placeholder={t.inbox.composerPlaceholder}
                             rows={4}
-                            className="min-h-28 max-h-72 resize-y rounded-lg bg-background/60 px-3 py-3 text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                            className="inbox-capture-input min-h-28 max-h-72 resize-y rounded-lg bg-background/60 px-3 py-3 text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground"
                           />
                           <div
                             className="flex flex-wrap items-center justify-between gap-2 pt-2"
@@ -849,18 +850,22 @@ function ScopedInboxView({ identity }: { identity: ReturnType<typeof useCaptureS
                                 ? t.inbox.currentDraftHint(textWordCount)
                                 : t.inbox.captureDropHint}
                             </span>
-                            <button
-                              type="button"
-                              onClick={stageCurrentNote}
-                              disabled={!hasCurrentDraft || savingText}
-                              className="inline-flex min-h-11 items-center gap-1.5 rounded-md border border-border/60 bg-background/70 px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-[var(--amber)]/35 hover:bg-[var(--amber-subtle)] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45 focus-visible:ring-2 focus-visible:ring-ring"
-                              data-stage-note-action
-                            >
-                              <span className="inline-flex h-4 w-4 items-center justify-center rounded bg-[var(--amber-subtle)] text-[var(--amber)]">
-                                <FileText size={10} />
-                              </span>
-                              {t.inbox.stageNoteAction}
-                            </button>
+                            {hasCurrentDraft && (
+                              <button
+                                type="button"
+                                onClick={stageCurrentNote}
+                                disabled={savingText}
+                                title={t.inbox.stageNoteActionHint}
+                                aria-description={t.inbox.stageNoteActionHint}
+                                className="inline-flex min-h-11 items-center gap-1.5 rounded-md border border-border/60 bg-background/70 px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-[var(--amber)]/35 hover:bg-[var(--amber-subtle)] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45 focus-visible:ring-2 focus-visible:ring-ring"
+                                data-stage-note-action
+                              >
+                                <span className="inline-flex h-4 w-4 items-center justify-center rounded bg-[var(--amber-subtle)] text-[var(--amber)]">
+                                  <FileText size={10} />
+                                </span>
+                                {t.inbox.stageNoteAction}
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>

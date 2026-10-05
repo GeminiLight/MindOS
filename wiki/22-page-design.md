@@ -98,7 +98,7 @@ Drawer (triggered by ☰):
 | 路由 | 页面 | 组件入口 | 说明 |
 |------|------|---------|------|
 | `/` | 首页 | `HomeContent` | 最近文件、插件网格、AI 入口；GuideCard |
-| `/explore` | 探索 | `app/explore/page.tsx` | 使用案例与分类；Discover 侧栏可入 |
+| `/explore` | 探索 | `app/explore/page.tsx` | 按使用阶段分组的任务入口；场景筛选显露、能力筛选折叠，点击后打开可编辑 Ask 草稿；Discover 侧栏可入 |
 | `/view/[...path]` | 查看/编辑 | `ViewPageClient` | Markdown/CSV/JSON 查看+编辑 |
 | `/setup` | 初始化向导 | `Setup` | 8 步 Wizard |
 | `/login` | 登录 / 重新认证 | `LoginPage` | Web 密码认证；会话过期后保留返回路径 |

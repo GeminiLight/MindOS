@@ -45,6 +45,7 @@ type SessionAgentFilter = SessionListAgentFilter;
 const HOME_AGENT_FILTER_BUTTON_PX = 32;
 const HOME_AGENT_FILTER_GAP_PX = 4;
 const HOME_AGENT_FILTER_MORE_PX = 40;
+const EMPTY_SESSION_ACTION = 'hit-target-box inline-flex min-h-11 items-center gap-1.5 px-3 text-xs font-medium text-foreground [--hit-target-border-width:1px] [--hit-target-border:var(--border)] [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]';
 
 export interface HomeAgentFilterLayout {
   visibleIds: SessionAgentFilter[];
@@ -305,11 +306,12 @@ function HomeSessionSearchField({
   const { t } = useLocale();
   return (
     <div className="px-2 pb-1.5" data-home-session-search>
-      <div className="flex h-8 items-center gap-1.5 rounded-lg border border-border/70 bg-background/75 px-2 focus-within:border-[var(--amber)]/40 focus-within:ring-2 focus-within:ring-[var(--amber)]/15">
+      <div className="flex h-10 items-center gap-1.5 rounded-lg border border-border/70 bg-background/75 px-2 focus-within:border-ring/45 focus-within:ring-1 focus-within:ring-ring/30 md:h-9">
         <Search size={13} aria-hidden="true" className="shrink-0 text-muted-foreground/60" />
         <input
           ref={inputRef}
-          type="search"
+          type="text"
+          role="searchbox"
           value={value}
           onInput={(event) => onChange(event.currentTarget.value)}
           onKeyDown={(event) => {
@@ -321,7 +323,7 @@ function HomeSessionSearchField({
           placeholder={t.sidebar.homeSearchSessionsPlaceholder}
           aria-label={t.sidebar.homeSearchSessions}
           data-home-session-search-input
-          className="min-w-0 flex-1 bg-transparent text-[12px] leading-4 text-foreground outline-none placeholder:text-muted-foreground/45"
+          className="home-session-search-input min-w-0 flex-1 bg-transparent text-base leading-5 text-foreground outline-none placeholder:text-muted-foreground md:text-sm"
         />
         {value.trim() ? (
           <button
@@ -329,7 +331,7 @@ function HomeSessionSearchField({
             onClick={onClear}
             aria-label={t.sidebar.homeClearSessionSearch}
             title={t.sidebar.homeClearSessionSearch}
-            className="hit-target-box inline-flex h-6 w-6 shrink-0 items-center justify-center text-muted-foreground/45 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
+            className="hit-target-box inline-flex h-8 w-8 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
           >
             <X size={12} aria-hidden="true" />
           </button>
@@ -920,6 +922,10 @@ export default function HomePanel({
   ), [projectEntryIds, unpinnedEntries]);
   const normalizedSessionSearchQuery = sessionSearchQuery.trim();
   const sessionSearchActive = sessionSearchOpen || Boolean(normalizedSessionSearchQuery);
+  const selectedAgentLabel = agentFilter === 'mindos' ? t.sidebar.homeFilterMindOS
+    : agentFilter === 'codex' ? t.sidebar.homeFilterCodex
+    : agentFilter === 'claude' ? t.sidebar.homeFilterClaude
+    : acpFilters.find((filter) => filter.id === agentFilter)?.runtime.name ?? t.sidebar.homeFilterAcp;
 
   const setSessionViewMode = useCallback((value: HomeSessionViewMode) => {
     setSessionViewModeState(value);
@@ -1077,7 +1083,7 @@ export default function HomePanel({
                 <button
                   type="button"
                   onClick={() => setMode('files')}
-                  className="hit-target-box inline-flex min-h-8 items-center gap-1.5 px-3 text-xs font-medium text-foreground [--hit-target-border-width:1px] [--hit-target-border:var(--border)] [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-md)]"
+                  className={EMPTY_SESSION_ACTION}
                 >
                   <Brain size={13} aria-hidden="true" />
                   {t.sidebar.homeMindFiles}
@@ -1086,12 +1092,24 @@ export default function HomePanel({
                   type="button"
                   onClick={handleNewSession}
                   aria-label={t.sidebar.homeNewSession}
-                  className="hit-target-box inline-flex min-h-8 items-center gap-1.5 px-3 text-xs font-medium text-[var(--amber-foreground)] [--hit-target-bg:var(--amber)] [--hit-target-hover-bg:var(--amber)] [--hit-target-radius:var(--radius-md)]"
+                  className={EMPTY_SESSION_ACTION}
                 >
                   <Plus size={13} aria-hidden="true" />
                   {t.sidebar.homeNewSession}
                 </button>
               </div>
+            </div>
+          ) : filteredEntries.length === 0 && !normalizedSessionSearchQuery && agentFilter !== 'all' ? (
+            <div className="flex h-full flex-col items-center justify-center px-5 text-center" data-home-agent-empty>
+              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-muted/40 text-muted-foreground">
+                <Network size={17} aria-hidden="true" />
+              </div>
+              <p className="text-sm text-foreground">{t.sidebar.homeNoAgentSessions(selectedAgentLabel)}</p>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{t.sidebar.homeNoAgentSessionsHint}</p>
+              <button type="button" data-home-agent-show-all className={`${EMPTY_SESSION_ACTION} mt-4`} onClick={(event) => {
+                event.currentTarget.closest('[data-home-sidebar-panel]')?.querySelector<HTMLButtonElement>('[data-home-agent-filter="all"]')?.focus();
+                setAgentFilter('all');
+              }}>{t.sidebar.homeShowAllAgents}</button>
             </div>
           ) : filteredEntries.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center px-5 text-center" data-home-session-search-empty>

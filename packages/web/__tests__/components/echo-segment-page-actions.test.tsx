@@ -228,6 +228,26 @@ describe('Echo segment page actions', () => {
     vi.unstubAllGlobals();
   });
 
+  it('keeps overview navigation and optional reflection available when local storage is blocked', async () => {
+    const blocked = () => { throw new DOMException('Storage unavailable', 'SecurityError'); };
+    const getItem = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(blocked);
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(blocked);
+    try {
+      await act(async () => root.render(<EchoSegmentPageClient segment="overview" />));
+      expect(host.querySelector('section a[href="/echo/imprint"]')?.textContent).toBe('查看印迹');
+      expect(host.textContent).not.toContain('还没有写下记录');
+      expect(openAskModal).not.toHaveBeenCalled();
+      const reflect = Array.from(host.querySelectorAll('button'))
+        .find(button => button.textContent === messages.zh.echoPages.overviewReflectAction);
+      expect(reflect).toBeDefined();
+      await act(async () => reflect?.click());
+      expect(openAskModal).toHaveBeenCalledWith(messages.zh.echoPages.dailyAskPrefill(''), 'user');
+    } finally {
+      getItem.mockRestore();
+      setItem.mockRestore();
+    }
+  });
+
   it('keeps assistant actions out of the breadcrumb area and returns Insight to Overview', async () => {
     await act(async () => {
       root.render(<EchoSegmentPageClient segment="growth" />);
@@ -237,7 +257,8 @@ describe('Echo segment page actions', () => {
     const insightBackLink = host.querySelector('a[href="/echo/growth"]');
     expect(backLink).not.toBeNull();
     expect(backLink?.textContent).toContain(messages.zh.echoPages.backToOverviewLabel);
-    expect(backLink?.getAttribute('aria-label')).toBe(messages.zh.echoPages.backToOverviewAriaLabel);
+    expect(host.querySelectorAll('a[href="/echo/overview"]')).toHaveLength(1);
+    expect(backLink?.closest('nav')).not.toBeNull();
     expect(insightBackLink?.getAttribute('aria-current')).toBe('page');
 
     const actionButton = host.querySelector<HTMLButtonElement>('[data-testid="echo-insight-generate-button"]');
@@ -274,7 +295,7 @@ describe('Echo segment page actions', () => {
     expect(backLink?.getAttribute('aria-label')).toBe(messages.zh.echoPages.backToInsightsAriaLabel);
   });
 
-  it('returns Imprint and Promotion to the Echo overview', async () => {
+  it('offers one Overview destination in the shared Imprint and Promotion navigation', async () => {
     await act(async () => {
       root.render(<EchoSegmentPageClient segment="imprint" />);
     });
@@ -282,7 +303,8 @@ describe('Echo segment page actions', () => {
     let overviewBackLink = host.querySelector('a[href="/echo/overview"]');
     expect(overviewBackLink).not.toBeNull();
     expect(overviewBackLink?.textContent).toContain(messages.zh.echoPages.backToOverviewLabel);
-    expect(overviewBackLink?.getAttribute('aria-label')).toBe(messages.zh.echoPages.backToOverviewAriaLabel);
+    expect(host.querySelectorAll('a[href="/echo/overview"]')).toHaveLength(1);
+    expect(overviewBackLink?.closest('nav')).not.toBeNull();
     expect(host.querySelector('nav a[href="/echo/growth"]')).not.toBeNull();
 
     await act(async () => {
@@ -292,7 +314,8 @@ describe('Echo segment page actions', () => {
     overviewBackLink = host.querySelector('a[href="/echo/overview"]');
     expect(overviewBackLink).not.toBeNull();
     expect(overviewBackLink?.textContent).toContain(messages.zh.echoPages.backToOverviewLabel);
-    expect(overviewBackLink?.getAttribute('aria-label')).toBe(messages.zh.echoPages.backToOverviewAriaLabel);
+    expect(host.querySelectorAll('a[href="/echo/overview"]')).toHaveLength(1);
+    expect(overviewBackLink?.closest('nav')).not.toBeNull();
     expect(host.querySelector('nav a[href="/echo/growth"]')).not.toBeNull();
   });
 
@@ -536,7 +559,8 @@ describe('Echo segment page actions', () => {
     const backLink = host.querySelector('a[href="/echo/overview"]');
     expect(backLink).not.toBeNull();
     expect(backLink?.textContent).toContain(messages.zh.echoPages.backToOverviewLabel);
-    expect(backLink?.getAttribute('aria-label')).toBe(messages.zh.echoPages.backToOverviewAriaLabel);
+    expect(host.querySelectorAll('a[href="/echo/overview"]')).toHaveLength(1);
+    expect(backLink?.closest('nav')).not.toBeNull();
 
     const pageShell = host.querySelector('[data-content-page-shell="echo"]');
     expect(pageShell?.className).toContain('echo-content-page');

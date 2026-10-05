@@ -1,11 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { Archive, ArrowUpRight, Bot, FolderOpen, MessageSquareText, NotebookText } from 'lucide-react';
+import { Archive, Bot, ChevronDown, FolderOpen, MessageSquareText, NotebookText } from 'lucide-react';
 import { ECHO_SEGMENT_HREF } from '@/lib/echo-segments';
 import type { EchoSavedItem, EchoStoredSegment } from '@/lib/echo-store';
 import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { EchoAssistantGenerateButton } from './EchoSegmentPageHeader';
 import type { EchoCopy } from './echo-structured-cards';
 
@@ -170,10 +170,11 @@ export function OverviewPanel({
   dailyLine: string;
   onContinue: () => void;
 }) {
-  const loop = [
-    { title: p.overviewTodayTitle, body: p.overviewTodayBody, href: ECHO_SEGMENT_HREF.imprint },
-    { title: p.overviewGrowthTitle, body: p.overviewGrowthBody, href: ECHO_SEGMENT_HREF.growth },
-    { title: p.overviewPracticeTitle, body: p.overviewPracticeBody, href: ECHO_SEGMENT_HREF.practice },
+  const reflection = dailyLine.trim();
+  const guide = [
+    { title: p.overviewTodayTitle, body: p.overviewTodayBody },
+    { title: p.overviewGrowthTitle, body: p.overviewGrowthBody },
+    { title: p.overviewPracticeTitle, body: p.overviewPracticeBody },
   ];
 
   return (
@@ -183,29 +184,38 @@ export function OverviewPanel({
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <NotebookText size={19} className="text-muted-foreground" aria-hidden />
-              <h2 id="echo-reflection-title" className="font-sans text-base font-medium text-foreground">{p.overviewReflectionTitle}</h2>
+              <h2 id="echo-reflection-title" className="font-sans text-base font-medium text-foreground">
+                {reflection ? p.overviewReflectionTitle : p.overviewStartTitle}
+              </h2>
             </div>
             <p className="mt-4 max-w-prose whitespace-pre-wrap break-words font-sans text-sm leading-7 text-foreground">
-              {dailyLine.trim() || p.overviewNarrativeBody}
+              {reflection || p.overviewNarrativeBody}
             </p>
           </div>
-          <Button type="button" variant="amber" size="xl" className="min-h-11 w-full sm:w-auto" onClick={onContinue}>
-            {p.overviewReflectAction}
-          </Button>
+          <div className="flex w-full flex-wrap items-center gap-2">
+            <Link href={ECHO_SEGMENT_HREF.imprint} className={buttonVariants({ variant: 'amber', size: 'xl', className: 'min-h-11' })}>
+              {p.overviewOpenImprint}
+            </Link>
+            <Button type="button" variant="ghost" size="xl" className="min-h-11 text-muted-foreground" onClick={onContinue}>
+              {p.overviewReflectAction}
+            </Button>
+          </div>
         </div>
       </section>
-      <nav aria-label={p.overviewHeroSubtitle} className="divide-y divide-border/60">
-        {loop.map(item => (
-          <Link key={item.href} href={item.href}
-            className="group flex min-h-16 items-center justify-between gap-4 rounded-md px-2 py-4 transition-colors duration-150 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-            <div className="min-w-0">
-              <h2 className="text-sm font-medium text-foreground">{item.title}</h2>
-              <p className="mt-1 text-sm leading-6 text-muted-foreground">{item.body}</p>
+      <details className="group min-w-0">
+        <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-2 text-sm text-muted-foreground transition-colors duration-150 hover:bg-muted/40 hover:text-foreground [&::-webkit-details-marker]:hidden">
+          <ChevronDown size={16} className="shrink-0 -rotate-90 transition-transform duration-150 group-open:rotate-0" aria-hidden />
+          {p.overviewGuideLabel}
+        </summary>
+        <dl className="space-y-4 px-2 pb-2 pt-3">
+          {guide.map(item => (
+            <div key={item.title} className="min-w-0 sm:grid sm:grid-cols-[6rem_minmax(0,1fr)] sm:gap-4">
+              <dt className="text-sm font-medium leading-6 text-foreground">{item.title}</dt>
+              <dd className="mt-1 text-sm leading-6 text-muted-foreground sm:mt-0">{item.body}</dd>
             </div>
-            <ArrowUpRight size={16} className="shrink-0 text-muted-foreground group-hover:text-foreground" aria-hidden />
-          </Link>
-        ))}
-      </nav>
+          ))}
+        </dl>
+      </details>
     </>
   );
 }

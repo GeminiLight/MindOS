@@ -26,7 +26,6 @@ describe('sidebar scroll gutter stability', () => {
       'components/panels/HomePanel.tsx',
       'components/panels/AgentsPanel.tsx',
       'components/panels/StudioPanel.tsx',
-      'components/panels/DiscoverPanel.tsx',
       'components/panels/EchoPanel.tsx',
       'components/panels/PluginsPanel.tsx',
       'components/panels/WorkflowsPanel.tsx',

@@ -8,6 +8,7 @@ import Link from 'next/link';
 import GuideCard from './GuideCard';
 import ChatContent from '@/components/chat/ChatContent';
 import type { SpaceInfo } from '@/lib/space-records';
+import type { GuideBootstrap } from './guide-state-store';
 import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 import { encodePath } from '@/lib/utils';
 
@@ -16,14 +17,25 @@ interface RecentFile {
   mtime: number;
 }
 
+function recentFileDate(mtime: number, locale: string): { iso: string; label: string } | null {
+  const date = new Date(mtime);
+  if (!Number.isFinite(mtime) || mtime <= 0 || Number.isNaN(date.valueOf())) return null;
+  return {
+    iso: date.toISOString(),
+    label: new Intl.DateTimeFormat(locale === 'zh' ? 'zh-CN' : 'en', {
+      year: 'numeric', month: 'short', day: 'numeric',
+    }).format(date),
+  };
+}
+
 function injectAskInput(text: string) {
   window.dispatchEvent(new CustomEvent('mindos:home-suggestion', { detail: { text } }));
 }
 
 const TAB_ICONS = [FolderSync, PenLine, BarChart3, Sparkles];
 
-export default function HomeContent({ recent, existingFiles, spaces }: { recent: RecentFile[]; existingFiles?: string[]; spaces?: SpaceInfo[] }) {
-  const { t } = useLocale();
+export default function HomeContent({ recent, recentNotes, existingFiles, spaces, initialAiConfigured, initialGuide }: { recent: RecentFile[]; recentNotes?: RecentFile[]; existingFiles?: string[]; spaces?: SpaceInfo[]; initialAiConfigured?: boolean; initialGuide?: GuideBootstrap }) {
+  const { t, locale } = useLocale();
   const smoothPush = useSmoothRouterPush();
   const [activeTab, setActiveTab] = useState(0);
   const [showSuggestions, setShowSuggestions] = useState(recent.length === 0);
@@ -31,13 +43,9 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
   const tabsId = useId();
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const hasKnowledge = recent.length > 0 || (existingFiles?.length ?? 0) > 0 || (spaces?.length ?? 0) > 0;
+  const displayedRecentNotes = recentNotes ?? recent.slice(0, 3);
 
   const toggleMaximize = useCallback(() => setMaximized(v => !v), []);
-
-  // Auto-fullscreen when user sends the first message in a session
-  const handleFirstMessage = useCallback(() => {
-    setMaximized(true);
-  }, []);
 
   // Navigate to editor with right-side Ask panel open
   const handleDockToPanel = useCallback(() => {
@@ -62,19 +70,14 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
    * Normal vs fullscreen is purely a CSS layout change, so chat state is preserved.
    */
   return (
-    <div className="flex flex-col h-[calc(100dvh-var(--app-titlebar-h))]">
+    <div className={maximized
+      ? 'fixed inset-x-0 bottom-0 top-[calc(var(--app-titlebar-h)+var(--mobile-header-height))] z-20 flex flex-col bg-background p-3 md:left-[var(--content-left-offset)] md:top-[var(--app-titlebar-h)] md:p-4'
+      : 'flex flex-col h-[calc(100dvh-var(--app-titlebar-h))]'}>
 
       {/* ── Landing chrome: hidden when maximized ── */}
       {!maximized && (
         <>
-          {/* Guide Card */}
-          <div className="flex-shrink-0 px-4 md:px-6 has-[:not(:empty)]:pt-4">
-            <div className="max-w-4xl mx-auto">
-              <GuideCard hasExistingFiles={hasKnowledge} />
-            </div>
-          </div>
-
-          <div className="flex-shrink-0 px-4 md:px-6 pt-6 pb-4">
+          <div className="flex-shrink-0 px-4 pt-2 pb-1.5 md:px-6 md:pt-6 md:pb-4">
             <div className="max-w-4xl mx-auto flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
               <h1 className="text-xl font-display text-foreground">{t.ask.homeHeading}</h1>
               <nav className="flex items-center gap-2" aria-label={t.ask.homeWorkLinks}>
@@ -97,17 +100,20 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
         onDragEnter={(e) => { if (e.dataTransfer.types.includes('Files')) { e.stopPropagation(); } }}
         onDrop={(e) => { e.stopPropagation(); }}
       >
-        <div className={maximized ? 'flex-1 min-h-0 flex flex-col overflow-hidden' : 'w-full max-w-4xl'}>
+        <div
+          data-home-focus-shell={maximized ? '' : undefined}
+          className={maximized ? 'flex-1 min-h-0 flex flex-col overflow-hidden rounded-xl border border-border/50 bg-background shadow-sm' : 'w-full max-w-4xl'}
+        >
           <div
             data-walkthrough="ask-button"
-            className={maximized ? 'flex-1 min-h-0 flex flex-col overflow-hidden' : 'overflow-hidden flex flex-col max-h-[50vh]'}
+            className={maximized ? 'flex-1 min-h-0 flex flex-col overflow-hidden' : 'home-chat-preview flex min-h-0 max-h-[min(69dvh,27rem)] flex-col overflow-hidden'}
           >
             <ChatContent
               visible={true}
               variant="home"
+              initialAiConfigured={initialAiConfigured}
               maximized={maximized}
               onMaximize={toggleMaximize}
-              onFirstMessage={handleFirstMessage}
               onDockToPanel={handleDockToPanel}
             />
           </div>
@@ -117,18 +123,34 @@ export default function HomeContent({ recent, existingFiles, spaces }: { recent:
       {/* ── Bottom chrome: hidden when maximized ── */}
       {!maximized && (
         <>
-          {recent.length > 0 && (
-            <section className="mx-auto w-full max-w-4xl px-4 pt-6 md:px-0" aria-label={t.home.continueEditing}>
-              <h2 className="mb-2 text-xs font-medium text-muted-foreground">{t.home.continueEditing}</h2>
-              <div className="divide-y divide-border/50">
-                {recent.slice(0, 3).map(file => (
-                  <Link key={file.path} href={`/view/${encodePath(file.path)}`} className="flex min-h-11 items-center gap-3 rounded-md px-2 py-2 text-sm text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                    <FileText size={15} className="shrink-0 text-muted-foreground" aria-hidden />
-                    <span className="min-w-0 flex-1 truncate">{file.path.split('/').pop()}</span>
-                    <span className="max-w-[40%] truncate text-xs text-muted-foreground">{file.path.includes('/') ? file.path.slice(0, file.path.lastIndexOf('/')) : ''}</span>
-                    <ArrowUpRight size={14} className="shrink-0 text-muted-foreground" aria-hidden />
-                  </Link>
-                ))}
+          {/* Keep the continuing conversation before optional setup guidance. */}
+          <div className="flex-shrink-0 px-4 pt-3 md:px-6 md:pt-5">
+            <div className="max-w-4xl mx-auto">
+              <GuideCard hasExistingFiles={hasKnowledge} initialGuide={initialGuide} />
+            </div>
+          </div>
+          {displayedRecentNotes.length > 0 && (
+            <section className="mx-auto w-full max-w-4xl px-4 pt-6 md:px-0" aria-label={t.home.recentNotes}>
+              <h2 className="mb-2 font-display text-base text-foreground">{t.home.recentNotes}</h2>
+              <div className="divide-y divide-border/60">
+                {displayedRecentNotes.map(file => {
+                  const folder = file.path.includes('/') ? file.path.slice(0, file.path.lastIndexOf('/')) : '';
+                  const modified = recentFileDate(file.mtime, locale);
+                  return (
+                    <Link key={file.path} href={`/view/${encodePath(file.path)}`} title={file.path} className="group flex min-h-14 items-center gap-3 rounded-md px-2 py-2.5 text-foreground hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                      <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted/50 text-muted-foreground"><FileText size={16} aria-hidden /></span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block break-words text-sm font-medium leading-5 sm:truncate">{file.path.split('/').pop()}</span>
+                        {folder || modified ? <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                          {folder ? <span className="min-w-0 truncate">{folder}</span> : null}
+                          {folder && modified ? <span aria-hidden>·</span> : null}
+                          {modified ? <time dateTime={modified.iso} className="shrink-0">{modified.label}</time> : null}
+                        </span> : null}
+                      </span>
+                      <ArrowUpRight size={15} className="shrink-0 text-muted-foreground group-hover:text-foreground" aria-hidden />
+                    </Link>
+                  );
+                })}
               </div>
             </section>
           )}

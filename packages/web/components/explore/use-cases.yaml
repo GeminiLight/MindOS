@@ -47,14 +47,14 @@ meta:
       zh: 高级
   ui:
     title:
-      en: Explore Use Cases
-      zh: 探索使用场景
+      en: Start with a task
+      zh: 从一件事开始
     subtitle:
-      en: "Discover what you can do with MindOS \u2014 pick a scenario and try it now."
-      zh: "发现 MindOS 能帮你做什么 \u2014 选一个场景，立即体验。"
+      en: "Choose a task. MindOS opens a draft prompt for you to review before sending."
+      zh: "选一件想做的事。MindOS 会打开提问草稿，确认后再发送。"
     tryIt:
-      en: Try it
-      zh: 试一试
+      en: Edit prompt
+      zh: 编辑提问草稿
     all:
       en: All
       zh: 全部
@@ -64,6 +64,15 @@ meta:
     byScenario:
       en: By Scenario
       zh: 按场景
+    taskListTitle:
+      en: Starting points
+      zh: 从这里开始
+    noMatches:
+      en: No tasks match these filters.
+      zh: 当前筛选下没有任务。
+    clearFilters:
+      en: Clear filters
+      zh: 清除筛选
 
 # ── Use Cases ──
 cases:
@@ -72,114 +81,114 @@ cases:
     category: memory-sync
     scenario: first-day
     en:
-      title: Inject Your Identity
-      desc: "Tell all AI agents who you are \u2014 preferences, tech stack, communication style \u2014 in one shot."
-      prompt: "Here's my resume, read it and organize my info into MindOS."
+      title: Set up your profile
+      desc: Draft a profile of your goals, preferences and tools; review what agents may use.
+      prompt: Help me write a profile for my agents. Ask about my goals, working style and tools, and what I want to keep private before saving anything.
     zh:
-      title: 注入身份
-      desc: "让所有 AI Agent 一次认识你 \u2014 偏好、技术栈、沟通风格。"
-      prompt: 这是我的简历，读一下，把我的信息整理到 MindOS 里。
+      title: 整理个人资料
+      desc: 梳理目标、偏好和常用工具，再决定哪些内容适合给 Agent 使用。
+      prompt: 帮我整理给 Agent 使用的个人资料。先问我目标、工作方式和常用工具，以及哪些内容需要保密，保存前让我确认。
 
   - id: c2
     icon: "\U0001F4E5"
     category: knowledge-management
     scenario: daily
     en:
-      title: Save Information
-      desc: Archive articles, meeting notes, or web pages into your knowledge base with one prompt.
-      prompt: Help me save the key points from this article into MindOS.
+      title: Save a source
+      desc: Capture a useful link or note, then review its summary and location.
+      prompt: Help me capture a source in MindOS. Ask for the link or notes, then draft a short summary and suggested location for my review.
     zh:
-      title: 注入信息
-      desc: 一句话归档文章、会议纪要或网页到知识库，全局可搜。
-      prompt: 帮我把这篇文章的要点整理到 MindOS 里。
+      title: 收好一份资料
+      desc: 收藏链接或笔记，检查摘要和存放位置后再入库。
+      prompt: 帮我把一份资料收进 MindOS。先问我要保存的链接或笔记，再拟一段摘要和存放位置，供我检查。
 
   - id: c3
     icon: "\U0001F504"
     category: memory-sync
     scenario: project
     en:
-      title: Cross-Agent Handoff
-      desc: "Start a plan in MindOS, continue coding in Claude Code, refine in Cursor \u2014 zero context loss."
-      prompt: Help me start coding based on the plan in MindOS.
+      title: Hand off a task
+      desc: Prepare a concise brief with decisions, relevant files and open questions for another agent.
+      prompt: Help me prepare a handoff for another agent. Summarize the goal, decisions, open questions and relevant files, then ask me to confirm the brief.
     zh:
-      title: 跨 Agent 切换
-      desc: "在 MindOS 写方案，在 Claude Code 写代码，在 Cursor 优化 \u2014 零重复。"
-      prompt: 帮我按 MindOS 里的 XXX 方案开始写代码。
+      title: 交接一项任务
+      desc: 把目标、已做决定、相关文件和未解问题整理成可核对的交接摘要。
+      prompt: 帮我准备给另一个 Agent 的任务交接。整理目标、已做决定、未解问题和相关文件，并让我确认摘要。
 
   - id: c4
     icon: "\U0001F501"
     category: experience-evolution
     scenario: daily
     en:
-      title: "Experience \u2192 SOP"
-      desc: Turn hard-won debugging sessions into reusable workflows that prevent future mistakes.
-      prompt: Help me distill this conversation into a reusable workflow in MindOS.
+      title: Keep a working method
+      desc: Turn a useful debugging experience into a method you can revisit and revise.
+      prompt: Help me turn a recent debugging session into a reusable method. Ask what happened, which steps worked and what remains uncertain.
     zh:
-      title: "经验\u2192SOP"
-      desc: 把踩坑经验沉淀为可复用的工作流，下次 3 分钟搞定。
-      prompt: 帮我把这次对话的经验沉淀到 MindOS，形成可复用的工作流。
+      title: 留下一套做法
+      desc: 把有效的排错经验写成以后能回看、能修订的方法。
+      prompt: 帮我把最近一次排错经历整理成可复用的方法。先问我发生了什么、哪些步骤有效、哪些地方还不确定。
 
   - id: c5
     icon: "\U0001F4A1"
     category: auto-execute
     scenario: daily
     en:
-      title: Capture Ideas on the Go
-      desc: "Jot down an inspiration on your phone \u2014 MindOS archives, decomposes, and assigns to agents."
-      prompt: Help me organize this idea into MindOS and break it into actionable sub-tasks.
+      title: Capture an idea
+      desc: Keep a thought now, then decide whether it belongs in a note or a task.
+      prompt: Help me capture an idea. Ask what sparked it and what I might do next, then let me choose whether to save a note or a task.
     zh:
-      title: 手机记灵感
-      desc: 随手记下灵感，MindOS 自动归档、拆任务、多 Agent 接力执行。
-      prompt: 帮我把这个想法整理到 MindOS，拆解成可执行的子任务。
+      title: 记下一个想法
+      desc: 先留住想法，再决定是存成笔记还是变成待办。
+      prompt: 帮我记下一个想法。先问我灵感从哪里来、下一步可能做什么，再让我决定保存为笔记还是待办。
 
   - id: c6
     icon: "\U0001F680"
     category: auto-execute
     scenario: project
     en:
-      title: Project Cold Start
-      desc: "Spin up a new project in 4 minutes \u2014 your profile and SOPs guide the scaffolding automatically."
-      prompt: Help me start a new project following the Startup SOP in MindOS.
+      title: Start a project
+      desc: Frame the outcome and constraints, then choose a sensible first step.
+      prompt: Help me plan a new project. Ask for the outcome, constraints and relevant MindOS notes before proposing first steps.
     zh:
-      title: 项目冷启动
-      desc: "4 分钟搭建新项目 \u2014 Profile 和 SOP 自动引导脚手架。"
-      prompt: 帮我按 MindOS 里的 Startup SOP 启动一个新项目。
+      title: 启动一个项目
+      desc: 先明确目标和约束，再决定第一步怎么做。
+      prompt: 帮我规划一个新项目。先问我目标、约束和相关的 MindOS 笔记，再建议起步步骤。
 
   - id: c7
     icon: "\U0001F50D"
     category: knowledge-management
     scenario: project
     en:
-      title: Research & Archive
-      desc: Let agents research competitors or topics for you, then file structured results in your KB.
-      prompt: "Help me research X, Y, Z products and save results to the MindOS product library."
+      title: Research a question
+      desc: Define a question and sources, then collect findings in a reviewable note.
+      prompt: Help me research a question. Ask for its scope and available sources, then propose a plan and a place to record findings.
     zh:
-      title: 调研入库
-      desc: 让 Agent 替你跑腿调研竞品或话题，结果结构化入库。
-      prompt: 帮我调研 X、Y、Z 这几个产品，结果写入 MindOS 产品库。
+      title: 调研一个问题
+      desc: 明确问题与资料来源，把发现整理成可检查的笔记。
+      prompt: 帮我调研一个问题。先问我范围和现有资料，再提出调研计划与记录发现的位置。
 
   - id: c8
     icon: "\U0001F91D"
     category: human-insights
     scenario: daily
     en:
-      title: Network Management
-      desc: "Log conversations with contacts, auto-generate follow-up TODOs, and keep full context."
-      prompt: "I met with someone today \u2014 update MindOS Connections and create follow-up TODOs."
+      title: Track a follow-up
+      desc: Remember a conversation and the next action without keeping more personal detail than needed.
+      prompt: Help me make a private follow-up note. Ask which details are appropriate to keep and what action I want to remember.
     zh:
-      title: 人脉管理
-      desc: 记录对话、自动生成跟进待办，每个联系人都有完整上下文。
-      prompt: 我今天和 XXX 聊了这些内容，帮我更新到 MindOS 并生成跟进待办。
+      title: 记住一次跟进
+      desc: 记下对话与下一步行动，只保留必要的个人信息。
+      prompt: 帮我写一份私密的跟进笔记。先问我哪些信息适合保留，以及我想记住什么下一步行动。
 
   - id: c9
     icon: "\U0001F6E1\uFE0F"
     category: audit-control
     scenario: advanced
     en:
-      title: Audit & Correct
-      desc: "Review what agents know about you, fix mistakes in one place, and all agents update instantly."
-      prompt: Check my MindOS Profile for accuracy and correct any errors.
+      title: Review agent context
+      desc: Inspect stored context and correct entries that no longer reflect you.
+      prompt: Help me review my MindOS profile. Show supporting context where available, then ask which entries to keep, change or remove.
     zh:
-      title: 审计纠偏
-      desc: 审查 Agent 记了什么，一处修正，全局生效。
-      prompt: 帮我检查 MindOS Profile 里的技术栈偏好是否正确，有错误帮我修正。
+      title: 检查 Agent 的上下文
+      desc: 核对已保存的资料，修正不准确或过时的内容。
+      prompt: 帮我检查 MindOS 里的个人资料。能找到依据时请展示依据，再问我哪些内容要保留、修改或删除。

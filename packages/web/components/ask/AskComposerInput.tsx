@@ -24,7 +24,6 @@ import {
   type RefObject,
 } from 'react';
 import { CornerDownRight, Send, X } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 /** Textarea auto-grows with content up to this many visible lines, then scrolls */
 const TEXTAREA_MAX_VISIBLE_LINES = 8;
@@ -59,7 +58,6 @@ function syncTextareaToContent(el: HTMLTextAreaElement, maxVisibleLines: number)
 
 export interface AskComposerInputProps {
   visible: boolean;
-  isHome: boolean;
   isLoading: boolean;
   /** loadingPhase === 'reconnecting' — stop button shows X / cancel title */
   reconnecting: boolean;
@@ -86,7 +84,6 @@ export interface AskComposerInputProps {
 
 const AskComposerInput = memo(function AskComposerInput({
   visible,
-  isHome,
   isLoading,
   reconnecting,
   placeholder,
@@ -134,10 +131,22 @@ const AskComposerInput = memo(function AskComposerInput({
   useEffect(() => {
     const el = inputRef.current;
     if (!el) return;
-    const handler = () => _metricsCache.delete(el);
+    let frame: number | null = null;
+    const handler = () => {
+      _metricsCache.delete(el);
+      if (!visible) return;
+      if (frame !== null) cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        frame = null;
+        syncTextareaToContent(el, TEXTAREA_MAX_VISIBLE_LINES);
+      });
+    };
     window.addEventListener('resize', handler);
-    return () => window.removeEventListener('resize', handler);
-  }, [inputRef]);
+    return () => {
+      window.removeEventListener('resize', handler);
+      if (frame !== null) cancelAnimationFrame(frame);
+    };
+  }, [inputRef, visible]);
 
   return (
     <>
@@ -154,30 +163,38 @@ const AskComposerInput = memo(function AskComposerInput({
         }}
         onKeyDown={onKeyDown}
         onPaste={onPaste}
+        onPointerDown={(event) => {
+          // Textareas match :focus-visible even after a mouse click. Keep that
+          // everyday placement quiet; Tab/programmatic focus gets the card cue.
+          event.currentTarget.dataset.focusOrigin = 'pointer';
+        }}
+        onBlur={(event) => {
+          delete event.currentTarget.dataset.focusOrigin;
+        }}
         placeholder={placeholder}
         rows={1}
         suppressHydrationWarning
-        className={cn('min-w-0 flex-1 resize-none overflow-y-hidden bg-transparent py-2 leading-relaxed text-foreground placeholder:text-muted-foreground/50 outline-none focus-visible:ring-0', isHome ? 'text-xs' : 'text-sm')}
+        className="ask-composer-input min-w-0 flex-1 resize-none overflow-y-hidden rounded-lg bg-transparent px-2 py-2 text-base leading-relaxed text-foreground placeholder:text-muted-foreground outline-none md:text-sm"
       />
 
       {isLoading ? (
         <>
           {(value.trim() || allowEmptySend) && (
-            <button type="submit" title={sendTitle} aria-label={sendTitle} disabled={sendDisabledExternal || (!value.trim() && !allowEmptySend)} className="hit-target-box inline-flex h-8 w-8 shrink-0 items-center justify-center disabled:cursor-not-allowed disabled:opacity-20 disabled:scale-95 transition-all duration-150 text-[var(--amber)] active:scale-95 [--hit-target-bg:color-mix(in_srgb,var(--amber)_10%,transparent)] [--hit-target-hover-bg:color-mix(in_srgb,var(--amber)_16%,transparent)] [--hit-target-radius:var(--radius-lg)]">
+            <button type="submit" title={sendTitle} aria-label={sendTitle} disabled={sendDisabledExternal || (!value.trim() && !allowEmptySend)} className="hit-target-box inline-flex h-11 w-11 shrink-0 items-center justify-center disabled:cursor-not-allowed disabled:opacity-20 transition-all duration-150 text-[var(--amber)] active:scale-95 md:h-8 md:w-8 [--hit-target-inset:6px] md:[--hit-target-inset:0px] [--hit-target-bg:color-mix(in_srgb,var(--amber)_10%,transparent)] [--hit-target-hover-bg:color-mix(in_srgb,var(--amber)_16%,transparent)] [--hit-target-radius:var(--radius-lg)]">
               <CornerDownRight size={14} />
             </button>
           )}
-          <button type="button" onClick={onStop} className="hit-target-box relative inline-flex h-8 w-8 shrink-0 items-center justify-center text-[var(--amber)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [--hit-target-bg:transparent] [--hit-target-hover-bg:color-mix(in_srgb,var(--amber)_8%,transparent)] [--hit-target-radius:var(--radius-lg)]" title={stopTitle} aria-label={stopTitle}>
-            <span aria-hidden="true" className="absolute inset-[3px] rounded-full border border-[var(--amber)]/20 bg-[var(--amber)]/8" />
-            <span data-stop-ring-track aria-hidden="true" className="absolute inset-[3px] rounded-full border border-[var(--amber)]/15" />
-            <span data-stop-ring aria-hidden="true" className="absolute inset-[3px] rounded-full border border-transparent border-r-[var(--amber)]/55 border-t-[var(--amber)] motion-safe:animate-spin" />
+          <button type="button" onClick={onStop} className="hit-target-box relative inline-flex h-11 w-11 shrink-0 items-center justify-center text-[var(--amber)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:h-8 md:w-8 [--hit-target-inset:6px] md:[--hit-target-inset:0px] [--hit-target-bg:transparent] [--hit-target-hover-bg:color-mix(in_srgb,var(--amber)_8%,transparent)] [--hit-target-radius:var(--radius-lg)]" title={stopTitle} aria-label={stopTitle}>
+            <span aria-hidden="true" className="absolute inset-[9px] rounded-full border border-[var(--amber)]/20 bg-[var(--amber)]/8 md:inset-[3px]" />
+            <span data-stop-ring-track aria-hidden="true" className="absolute inset-[9px] rounded-full border border-[var(--amber)]/15 md:inset-[3px]" />
+            <span data-stop-ring aria-hidden="true" className="absolute inset-[9px] rounded-full border border-transparent border-r-[var(--amber)]/55 border-t-[var(--amber)] motion-safe:animate-spin md:inset-[3px]" />
             <span className="relative z-10 inline-flex h-3.5 w-3.5 items-center justify-center">
               {reconnecting ? <X size={13} strokeWidth={2.25} /> : <span aria-hidden="true" className="h-2 w-2 rounded-[2px] bg-[var(--amber)] shadow-[0_0_0_1px_color-mix(in_srgb,var(--amber)_16%,transparent)]" />}
             </span>
           </button>
         </>
       ) : (
-        <button type="submit" title={sendTitle} aria-label={sendTitle} disabled={sendDisabledExternal || (!value.trim() && !allowEmptySend)} className="hit-target-box inline-flex h-8 w-8 shrink-0 items-center justify-center disabled:cursor-not-allowed disabled:opacity-20 disabled:scale-95 transition-all duration-150 text-[var(--amber-foreground)] active:scale-95 [--hit-target-bg:var(--amber)] [--hit-target-hover-bg:var(--amber)] [--hit-target-radius:var(--radius-lg)] [--hit-target-shadow:0_1px_2px_0_color-mix(in_srgb,var(--amber)_15%,transparent)] [--hit-target-hover-shadow:0_4px_6px_-1px_color-mix(in_srgb,var(--amber)_20%,transparent)]">
+        <button type="submit" title={sendTitle} aria-label={sendTitle} disabled={sendDisabledExternal || (!value.trim() && !allowEmptySend)} className="hit-target-box inline-flex h-11 w-11 shrink-0 items-center justify-center disabled:cursor-not-allowed disabled:opacity-20 transition-all duration-150 text-[var(--amber-foreground)] active:scale-95 md:h-8 md:w-8 [--hit-target-inset:6px] md:[--hit-target-inset:0px] [--hit-target-bg:var(--amber)] [--hit-target-hover-bg:var(--amber)] [--hit-target-radius:var(--radius-lg)] [--hit-target-shadow:0_1px_2px_0_color-mix(in_srgb,var(--amber)_15%,transparent)] [--hit-target-hover-shadow:0_4px_6px_-1px_color-mix(in_srgb,var(--amber)_20%,transparent)]">
           <Send size={14} />
         </button>
       )}

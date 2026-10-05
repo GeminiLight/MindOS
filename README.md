@@ -384,6 +384,24 @@ This project has been published on the [LINUX DO community](https://linux.do), a
 
 ---
 
+## 📚 Citation
+
+If you use MindOS in your research, please cite the project:
+
+```bibtex
+@misc{mindos2026,
+  author       = {Wang, Tianfu and Yuan, Nicholas Jing and Xiong, Hui},
+  title        = {{MindOS}: A Shared Mind for Humans and {AI} Agents},
+  year         = {2026},
+  howpublished = {\url{https://github.com/GeminiLight/MindOS}},
+  note         = {Open-source software}
+}
+```
+
+For reproducibility, also report the version or commit used.
+
+---
+
 ## 📄 License
 
 MIT © GeminiLight

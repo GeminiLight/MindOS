@@ -25,6 +25,7 @@ import { SessionHistoryRow } from './SessionHistoryRow';
 export type HistoryScrollState = { key: string; top: number };
 
 interface SessionHistoryPanelProps {
+  focusMode?: boolean;
   scrollStateRef?: RefObject<HistoryScrollState>;
   externalScope?: 'all' | 'project';
   externalCwd?: string;
@@ -72,7 +73,7 @@ function compareHistoryRows(a: HistoryRow, b: HistoryRow): number {
 // ── Main Component ──
 
 function SessionHistoryPanel({
-  sessions, activeSessionId, scrollStateRef,
+  sessions, activeSessionId, scrollStateRef, focusMode,
   externalScope = 'all', externalCwd, onExternalScopeChange, externalProjectAvailable = false,
   externalQuery, onExternalQueryChange, externalHasMore = false, onLoadMoreExternal,
   externalArchived = false, onExternalArchivedChange,
@@ -250,7 +251,7 @@ function SessionHistoryPanel({
     : (ask?.historyStats?.(count) ?? `${count} conversations`);
 
   return (
-    <div aria-busy={runtimeSessionsLoading} className="flex flex-col flex-1 min-h-0 animate-in fade-in-0 duration-150">
+    <div aria-busy={runtimeSessionsLoading} className={`flex flex-col flex-1 min-h-0 animate-in fade-in-0 duration-150 ${focusMode ? 'mx-auto w-full max-w-[52rem]' : ''}`}>
       {showRuntimeSessions && onExternalScopeChange && (
         <div className="px-4 pt-3 pb-1 space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -281,6 +282,7 @@ function SessionHistoryPanel({
           <input
             ref={searchRef}
             type="text"
+            role="searchbox"
             aria-label={ask?.historySearch ?? 'Search conversations'}
             value={query}
             onCompositionStart={event => { composingRef.current = true; setComposition(event.currentTarget.value); }}
@@ -296,7 +298,7 @@ function SessionHistoryPanel({
               }
             }}
             placeholder={ask?.historySearch ?? 'Search conversations...'}
-            className="h-8 w-full rounded-md border border-border bg-background pl-8 pr-8 text-xs text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-[var(--amber)]/40 focus-visible:ring-2 focus-visible:ring-ring/20"
+            className="ask-history-search-input h-9 w-full rounded-lg border border-border bg-background pl-8 pr-8 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring/40 focus-visible:ring-1 focus-visible:ring-ring/25"
           />
           {query && (
             <button

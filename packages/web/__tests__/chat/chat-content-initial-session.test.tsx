@@ -15,6 +15,7 @@ import {
   requestAskPanelNewSessionActivation,
   requestAskPanelSessionActivation,
 } from '@/lib/ask-panel-session-activation';
+import { requestRuntimeCommandInsert } from '@/lib/runtime-command-events';
 import type { ChatSession } from '@/lib/types';
 
 const {
@@ -25,6 +26,7 @@ const {
   mockStoreGetActiveSessionId,
   mockStoreRenameSession,
   mockStoreResetSession,
+  mockBindRuntime,
   mockActiveSessionRef,
 } = vi.hoisted(() => ({
   mockInitSessions: vi.fn(),
@@ -34,6 +36,7 @@ const {
   mockStoreGetActiveSessionId: vi.fn(() => 'fresh-project-session'),
   mockStoreRenameSession: vi.fn(),
   mockStoreResetSession: vi.fn(),
+  mockBindRuntime: vi.fn(),
   mockActiveSessionRef: {
     current: {
       id: 's1',
@@ -99,6 +102,11 @@ vi.mock('@/lib/stores/locale-store', () => ({
         editMessage: 'Edit',
         regenerateMessage: 'Regenerate',
         sessionRunningRetry: 'That session is still running. Try again after it finishes.',
+        incomingPromptWithDraft: 'You have an unfinished draft',
+        incomingPromptKeepsContext: 'Your current files and context stay attached.',
+        incomingPromptRuntimeMayChangeContext: 'Changing agents may change context.',
+        keepCurrentDraft: 'Keep my draft',
+        useIncomingPrompt: 'Use new prompt',
       },
       hints: { attachFile: 'Attach local file' },
       fileImport: { unsupported: 'Unsupported file type' },
@@ -119,7 +127,7 @@ vi.mock('@/hooks/useAskSession', () => ({
     clearPersistTimer: vi.fn(),
     setMessages: vi.fn(),
     setSessionDefaultAcpAgent: vi.fn(),
-    setSessionAgentRuntimeBinding: vi.fn(),
+    setSessionAgentRuntimeBinding: mockBindRuntime,
     attachRuntimeSession: vi.fn(() => true),
     resetSession: mockResetSession,
     loadSession: mockLoadSession,
@@ -352,6 +360,96 @@ describe('ChatContent initialSessionId', () => {
 
     const textarea = host.querySelector('textarea');
     expect(textarea?.value).toBe('hello from route');
+  });
+
+  it('offers a choice before a new prompt replaces unfinished Ask text', async () => {
+    const { host, root } = await renderChatContent({ variant: 'panel', initialMessage: 'First prompt', openRequestId: 1 });
+    const textarea = host.querySelector('textarea')!;
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!;
+    flushSync(() => {
+      setter.call(textarea, 'My unfinished thought');
+      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    flushSync(() => {
+      root.render(<ChatContent visible variant="panel" initialMessage="Second prompt" openRequestId={2} />);
+    });
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(textarea.value).toBe('My unfinished thought');
+    expect(host.textContent).toContain('You have an unfinished draft');
+    const usePrompt = Array.from(host.querySelectorAll('button')).find(button => button.textContent === 'Use new prompt');
+    expect(usePrompt).toBeTruthy();
+    flushSync(() => usePrompt!.click());
+    expect(textarea.value).toBe('Second prompt');
+    expect(mockSubmit).not.toHaveBeenCalled();
+  });
+
+  it('keeps the current Agent while an external prompt with another Agent awaits consent', async () => {
+    const { host, root } = await renderChatContent({ variant: 'panel', openRequestId: 1 });
+    const textarea = host.querySelector('textarea')!;
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!;
+    flushSync(() => {
+      setter.call(textarea, 'My unfinished thought');
+      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    mockInitSessions.mockClear();
+    mockBindRuntime.mockClear();
+
+    const target = { id: 'claude', kind: 'claude' as const, name: 'Claude Code' };
+    flushSync(() => {
+      root.render(<ChatContent visible variant="panel" initialMessage="My unfinished thought" initialAgentRuntime={target} openRequestId={2} />);
+    });
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(textarea.value).toBe('My unfinished thought');
+    expect(mockInitSessions).not.toHaveBeenCalledWith(target);
+    expect(mockBindRuntime).not.toHaveBeenCalledWith(expect.objectContaining({ id: 'claude' }));
+    expect(host.textContent).toContain('Changing agents may change context.');
+
+    const keepPrompt = Array.from(host.querySelectorAll('button')).find(button => button.textContent === 'Keep my draft');
+    flushSync(() => keepPrompt!.click());
+    expect(textarea.value).toBe('My unfinished thought');
+    expect(mockBindRuntime).not.toHaveBeenCalledWith(expect.objectContaining({ id: 'claude' }));
+  });
+
+  it('defers a runtime command and Agent switch until the draft owner accepts them', async () => {
+    const { host } = await renderChatContent({ variant: 'panel' });
+    const textarea = host.querySelector('textarea')!;
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!;
+    flushSync(() => {
+      setter.call(textarea, 'Keep my context');
+      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    mockBindRuntime.mockClear();
+    flushSync(() => {
+      requestRuntimeCommandInsert({
+        text: '/review ', commandName: 'review',
+        runtime: { id: 'claude', kind: 'claude', name: 'Claude Code' },
+      });
+    });
+    expect(textarea.value).toBe('Keep my context');
+    expect(mockBindRuntime).not.toHaveBeenCalled();
+    expect(host.textContent).toContain('Changing agents may change context.');
+
+    const keepPrompt = Array.from(host.querySelectorAll('button')).find(button => button.textContent === 'Keep my draft');
+    expect(keepPrompt).toBeTruthy();
+    flushSync(() => keepPrompt!.click());
+    expect(textarea.value).toBe('Keep my context');
+    expect(mockBindRuntime).not.toHaveBeenCalled();
+
+    flushSync(() => {
+      requestRuntimeCommandInsert({
+        text: '/review ', commandName: 'review',
+        runtime: { id: 'claude', kind: 'claude', name: 'Claude Code' },
+      });
+    });
+
+    const usePrompt = Array.from(host.querySelectorAll('button')).find(button => button.textContent === 'Use new prompt');
+    expect(usePrompt).toBeTruthy();
+    flushSync(() => usePrompt!.click());
+    expect(textarea.value).toBe('/review ');
+    expect(mockBindRuntime).toHaveBeenCalledWith(expect.objectContaining({ id: 'claude' }));
+    expect(mockSubmit).not.toHaveBeenCalled();
   });
 
   it('keeps the compact home chat height stable when opening history after messages expand it', async () => {

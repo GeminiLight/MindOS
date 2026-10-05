@@ -163,6 +163,8 @@ const VISUAL_KEYS = [
   'growthChatLabel',
   'practiceChatLabel',
   'overviewLead',
+  'overviewStartTitle',
+  'overviewGuideLabel',
   'threadsLead',
   'practiceLead',
   'overviewOpenImprint',

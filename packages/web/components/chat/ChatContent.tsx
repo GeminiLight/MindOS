@@ -26,6 +26,7 @@ import SessionHistoryPanel from '@/components/ask/SessionHistoryPanel';
 import AskHeader from '@/components/ask/AskHeader';
 import FileChip from '@/components/ask/FileChip';
 import AskComposerInput from '@/components/ask/AskComposerInput';
+import IncomingPromptNotice from '@/components/ask/IncomingPromptNotice';
 import ContextStatusButton from '@/components/ask/ContextStatusButton';
 import SessionContextDock from '@/components/ask/SessionContextDock';
 import ProviderModelCapsule, { getPersistedProviderModel } from '@/components/ask/ProviderModelCapsule';
@@ -112,6 +113,7 @@ interface QueuedFollowUp {
 
 type QueuedFollowUpDropPlacement = 'before' | 'after';
 type ComposerDirectiveAgentMode = Exclude<AgentMode, 'default'>;
+type PendingPrompt = { text: string; runtime?: AgentRuntimeIdentity; clearSkill?: boolean };
 
 const COMPOSER_AGENT_MODE_DIRECTIVE_RE = /^\/(plan|goal)(?:\s+|$)/i;
 
@@ -167,6 +169,8 @@ interface ChatContentProps {
   onFirstMessage?: () => void;
   /** 'modal' renders close button + ESC handler; 'panel' renders compact header; 'home' renders embedded on homepage */
   variant: 'modal' | 'panel' | 'home';
+  /** Server-derived boolean only: keeps Home's first paint stable without serializing credentials. */
+  initialAiConfigured?: boolean;
   /** Required for modal variant — called on close button / ESC / backdrop click */
   onClose?: () => void;
   maximized?: boolean;
@@ -175,9 +179,10 @@ interface ChatContentProps {
   onDockToPanel?: () => void;
 }
 
-export default function ChatContent({ visible, currentFile, initialMessage, initialAcpAgent, initialAgentRuntime, initialNewSession, openRequestId, initialSessionId, projectId, contextRequest, onFirstMessage, variant, onClose, maximized, onMaximize, onDockToPanel }: ChatContentProps) {
+export default function ChatContent({ visible, currentFile, initialMessage, initialAcpAgent, initialAgentRuntime, initialNewSession, openRequestId, initialSessionId, projectId, contextRequest, onFirstMessage, variant, initialAiConfigured, onClose, maximized, onMaximize, onDockToPanel }: ChatContentProps) {
   const isPanel = variant === 'panel';
   const isHome = variant === 'home';
+  const isFocusMode = (isPanel || isHome) && maximized;
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -197,6 +202,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
   const [attachedFiles, setAttachedFiles] = useState<string[]>([]);
   const attachedFilesRef = useRef(attachedFiles);
   const [showHistory, setShowHistory] = useState(false);
+  const [pendingPrompt, setPendingPrompt] = useState<PendingPrompt | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const attachButtonRef = useRef<HTMLButtonElement>(null);
@@ -441,7 +447,9 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
       reason: descriptor.availability?.reason,
     };
   }, [acpRuntimes, nativeDetection.errorByKind, nativeDetection.loadingByKind, nativeDetection.runtimes, selectedAgentRuntime]);
-  const [aiConfigStatus, setAiConfigStatus] = useState<'unknown' | 'configured' | 'not-configured'>('unknown');
+  const [aiConfigStatus, setAiConfigStatus] = useState<'unknown' | 'configured' | 'not-configured'>(
+    initialAiConfigured === undefined ? 'unknown' : initialAiConfigured ? 'configured' : 'not-configured',
+  );
 
   useEffect(() => {
     if (!visible || !isMindosRuntime) {
@@ -450,16 +458,19 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     }
 
     let cancelled = false;
+    let latestCheck = 0;
     const checkAiConfig = async () => {
+      const check = ++latestCheck;
       try {
         const res = await fetch('/api/settings', { cache: 'no-store' });
         if (!res.ok) throw new Error(`Settings load failed (${res.status})`);
         const data = await res.json() as SettingsJsonForAi;
-        if (!cancelled) {
+        if (!cancelled && check === latestCheck) {
           setAiConfigStatus(isAiConfiguredForAgentTurn(data, providerOverride) ? 'configured' : 'not-configured');
         }
       } catch {
-        if (!cancelled) setAiConfigStatus('unknown');
+        // A transient refresh failure must not erase a known unavailable state
+        // and make the send button look usable again.
       }
     };
 
@@ -536,6 +547,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
 
   const resetInputState = useCallback(() => {
     setComposerValueWithAgentModeSync('');
+    setPendingPrompt(null);
     setSelectedSkill(null);
     setAttachedFiles(currentFile ? [currentFile] : []);
     setDropError('');
@@ -607,6 +619,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
 
   const clearTransientComposerState = useCallback(() => {
     setComposerValueWithAgentModeSync('');
+    setPendingPrompt(null);
     setAttachedFiles(currentFile ? [currentFile] : []);
     uploadRef.current.clearAttachments();
     imageUploadRef.current.clearImages();
@@ -663,6 +676,22 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     sessionRef.current.resetSession(agent);
     clearTransientComposerState();
   }, [bindActiveSessionToRuntime, chat.isLoadingRef, clearTransientComposerState, projectId, updateSelectedAgentRuntime]);
+
+  const offerComposerPrompt = useCallback((text: string, options: Omit<PendingPrompt, 'text'> = {}): boolean => {
+    const incoming = text.trim();
+    if (!incoming) return false;
+    const current = inputValueRef.current.trim();
+    if (current && (current !== incoming || options.runtime)) {
+      setPendingPrompt({ text, ...options });
+      return false;
+    }
+    setPendingPrompt(null);
+    if (options.runtime) handleSelectAgentRuntime(options.runtime);
+    if (options.clearSkill) setSelectedSkill(null);
+    if (options.runtime || !current) setComposerValueWithAgentModeSync(text);
+    setTimeout(() => focusIfAvailable(inputRef.current), 0);
+    return true;
+  }, [handleSelectAgentRuntime, setComposerValueWithAgentModeSync]);
 
   const hasLoadingAttachments = localAttachments.some((f) => f.status === 'loading');
   const runtimeCheckingMessage = selectedAgentRuntime && selectedRuntimeChecking
@@ -862,18 +891,13 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
       if (chat.isLoadingRef.current) return;
       const detail = normalizeRuntimeCommandInsertDetail((event as CustomEvent).detail);
       if (!detail) return;
-      if (detail.runtime) {
-        handleSelectAgentRuntime(detail.runtime);
-      }
       slashRef.current.resetSlash();
-      setSelectedSkill(null);
       setShowHistory(false);
-      setComposerValueWithAgentModeSync(detail.text);
-      setTimeout(() => focusIfAvailable(inputRef.current), 50);
+      offerComposerPrompt(detail.text, { runtime: detail.runtime, clearSkill: true });
     };
     window.addEventListener(RUNTIME_COMMAND_INSERT_EVENT, handler);
     return () => window.removeEventListener(RUNTIME_COMMAND_INSERT_EVENT, handler);
-  }, [chat.isLoadingRef, handleSelectAgentRuntime, setComposerValueWithAgentModeSync]);
+  }, [chat.isLoadingRef, offerComposerPrompt]);
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -919,13 +943,12 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     const handler = (e: Event) => {
       const text = (e as CustomEvent).detail?.text;
       if (typeof text === 'string') {
-        setComposerValueWithAgentModeSync(text);
-        setTimeout(() => focusIfAvailable(inputRef.current), 50);
+        offerComposerPrompt(text);
       }
     };
     window.addEventListener('mindos:home-suggestion', handler);
     return () => window.removeEventListener('mindos:home-suggestion', handler);
-  }, [isHome, setComposerValueWithAgentModeSync]);
+  }, [isHome, offerComposerPrompt]);
 
   // Focus and init session when becoming visible (edge-triggered for panel, level-triggered for modal)
   const prevVisibleRef = useRef(false);
@@ -941,29 +964,46 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     const fileChanged = visible && prevVisibleRef.current && currentFile !== prevFileRef.current;
 
     if (justOpened || requestChanged) {
+      // Opening a task prompt must not silently replace text the user has
+      // already written. Keep its attachments and runtime until they choose.
+      const preserveDraft = !initialNewSession && !currentFile && !contextRequest && Boolean(inputValueRef.current.trim());
+      const incomingPrompt = initialMessage?.trim() ?? '';
       const openerRuntime = initialAgentRuntime ?? toAgentRuntime(initialAcpAgent);
-      const preferredRuntime = openerRuntime ?? loadLastSelectedAgentRuntime();
-      pendingOpenAgentRef.current = preferredRuntime;
-      if (openerRuntime) persistLastSelectedAgentRuntime(openerRuntime);
-      setTimeout(() => focusIfAvailable(inputRef.current, variant === 'home'), 50);
+      const currentRuntime = selectedAgentRuntimeRef.current;
+      const changesRuntime = Boolean(openerRuntime && (
+        openerRuntime.kind !== currentRuntime?.kind || openerRuntime.id !== currentRuntime?.id
+      ));
+      setPendingPrompt(preserveDraft && incomingPrompt && (incomingPrompt !== inputValueRef.current.trim() || changesRuntime)
+        ? { text: initialMessage!, runtime: changesRuntime ? openerRuntime! : undefined }
+        : null);
+      const preferredRuntime = preserveDraft
+        ? selectedAgentRuntimeRef.current ?? loadLastSelectedAgentRuntime()
+        : openerRuntime ?? loadLastSelectedAgentRuntime();
+      // A candidate Agent belongs to the offered prompt. Do not persist or
+      // bind it while the existing draft is still the active work.
+      pendingOpenAgentRef.current = preserveDraft ? null : preferredRuntime;
+      if (openerRuntime && !preserveDraft) persistLastSelectedAgentRuntime(openerRuntime);
+      if (variant !== 'home' && !preserveDraft) setTimeout(() => focusIfAvailable(inputRef.current), 50);
       if (initialNewSession) {
         session.resetSession(preferredRuntime ?? undefined);
       } else if (initialSessionId) {
         // Route owns selection — initSessions' selection phase would move the
         // active session away from the route's loadSession. Metadata only.
         void refreshSessions();
-      } else {
+      } else if (!preserveDraft || !session.activeSessionId) {
         void session.initSessions(preferredRuntime ?? undefined);
       }
-      setComposerValueWithAgentModeSync(initialMessage || '');
-      chat.firstMessageFired.current = false;
-      setAttachedFiles(currentFile ? [currentFile] : []);
-      clearAttachments();
-      clearImages();
-      mention.resetMention();
-      slash.resetSlash();
-      setSelectedSkill(null);
-      updateSelectedAgentRuntime(preferredRuntime);
+      if (!preserveDraft) {
+        setComposerValueWithAgentModeSync(initialMessage || '');
+        chat.firstMessageFired.current = false;
+        setAttachedFiles(currentFile ? [currentFile] : []);
+        clearAttachments();
+        clearImages();
+        mention.resetMention();
+        slash.resetSlash();
+        setSelectedSkill(null);
+        updateSelectedAgentRuntime(preferredRuntime);
+      }
       setShowHistory(false);
     } else if (fileChanged) {
       // Update attached file context to match new file (don't reset session/messages)
@@ -972,9 +1012,14 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
       // Modal: abort streaming on close
       chat.abortRef.current?.abort();
     }
-    // Home variant: auto-focus on mount
+    // Desktop keeps keyboard-first entry. On touch/narrow screens, unsolicited
+    // focus can open the soft keyboard and hide the surrounding Home context.
     if (variant === 'home' && visible && !prevVisibleRef.current) {
-      setTimeout(() => focusIfAvailable(inputRef.current, true), 150);
+      setTimeout(() => {
+        if (window.matchMedia?.('(min-width: 768px) and (pointer: fine)').matches) {
+          focusIfAvailable(inputRef.current, true);
+        }
+      }, 150);
     }
     prevVisibleRef.current = visible;
     prevFileRef.current = currentFile;
@@ -1052,6 +1097,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
 
   const handleInputChange = useCallback((val: string, cursorPos?: number) => {
     // Local input state already updated inside AskComposerInput.
+    setPendingPrompt(null);
     syncAgentModeFromComposerValue(val);
     const pos = cursorPos ?? val.length;
     if (mentionTimerRef.current) clearTimeout(mentionTimerRef.current);
@@ -1583,6 +1629,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
       ref={chatContentRootRef}
       data-chat-content-root
       data-chat-content-variant={variant}
+      data-chat-focus-mode={isFocusMode ? 'true' : undefined}
       style={homeHistoryMinHeightStyle}
       className="flex min-h-0 w-full flex-col h-full"
     >
@@ -1593,6 +1640,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
         onToggleHistory={toggleHistory}
         onReset={handleResetSession}
         isLoading={isLoading}
+        focusMode={isFocusMode}
         maximized={maximized}
         onMaximize={isHome ? onMaximize : onMaximize}
         onClose={isHome ? undefined : onClose}
@@ -1623,6 +1671,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
 
       {showHistory && (
         <SessionHistoryPanel
+          focusMode={isFocusMode}
           scrollStateRef={historyScrollStateRef}
           sessions={runtimeScopedSessions}
           activeSessionId={runtimeScopedActiveSessionId}
@@ -1669,13 +1718,14 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
             sessionId={session.activeSessionId ?? undefined}
             messages={session.messages}
             isLoading={isLoading}
+            focusMode={isFocusMode}
             loadingPhase={loadingPhase}
             reconnectAttempt={reconnectAttempt}
             reconnectMax={reconnectMax}
             emptyPrompt={t.ask.emptyPrompt}
             emptyHint={t.ask.emptyHint}
             suggestions={t.ask.suggestions}
-            onSuggestionClick={setComposerValue}
+            onSuggestionClick={offerComposerPrompt}
             onEditMessage={handleEditMessage}
             onResendMessage={handleResendMessage}
             labels={messageLabels}
@@ -1686,13 +1736,14 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
             sessionId={session.activeSessionId ?? undefined}
             messages={session.messages}
             isLoading={isLoading}
+            focusMode={isFocusMode}
             loadingPhase={loadingPhase}
             reconnectAttempt={reconnectAttempt}
             reconnectMax={reconnectMax}
             emptyPrompt={t.ask.emptyPrompt}
             emptyHint={t.ask.emptyHint}
             suggestions={maximized && session.messages.length === 0 ? t.ask.suggestions : EMPTY_SUGGESTIONS}
-            onSuggestionClick={setComposerValue}
+            onSuggestionClick={offerComposerPrompt}
             onEditMessage={handleEditMessage}
             onResendMessage={handleResendMessage}
             labels={messageLabels}
@@ -1724,10 +1775,11 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
       )}
 
       {/* Composer card — unified input area */}
-      <div className={cn('relative z-10 shrink-0', isHome ? 'px-2 pb-2 pt-0.5' : 'px-3 pb-2.5 pt-1')}>
+      <div className={cn('relative z-10 shrink-0', isHome ? 'px-2 pb-2 pt-0.5' : 'px-3 pb-2.5 pt-1', isFocusMode && 'mx-auto w-full max-w-[52rem]')}>
         <div
+          data-drag-over={isDragOver ? 'true' : undefined}
           className={cn(
-            'relative rounded-xl bg-muted/40 border border-transparent transition-all focus-within:bg-muted/60',
+            'ask-composer-card relative rounded-2xl bg-muted/40 border border-transparent transition-[background-color,border-color] duration-150 focus-within:bg-muted/45',
             isDragOver && 'ring-2 ring-[var(--amber)] border-[var(--amber)]/40 bg-[var(--amber)]/5 shadow-[0_0_12px_rgba(200,135,58,0.15)]',
           )}
           onDragOver={handleDragOver}
@@ -1742,6 +1794,29 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
             onSetWorkDir={session.setSessionWorkDir}
             onSetContextSelection={session.setSessionContextSelection}
           />
+
+          {pendingPrompt && (
+            <IncomingPromptNotice
+              prompt={pendingPrompt.text}
+              labels={{
+                title: t.ask.incomingPromptWithDraft,
+                context: pendingPrompt.runtime ? t.ask.incomingPromptRuntimeMayChangeContext : t.ask.incomingPromptKeepsContext,
+                keep: t.ask.keepCurrentDraft,
+                use: t.ask.useIncomingPrompt,
+              }}
+              onKeep={() => {
+                setPendingPrompt(null);
+                focusIfAvailable(inputRef.current);
+              }}
+              onUse={() => {
+                if (pendingPrompt.runtime) handleSelectAgentRuntime(pendingPrompt.runtime);
+                if (pendingPrompt.clearSkill) setSelectedSkill(null);
+                setComposerValueWithAgentModeSync(pendingPrompt.text);
+                setPendingPrompt(null);
+                focusIfAvailable(inputRef.current);
+              }}
+            />
+          )}
 
           {activeQueuedFollowUps.length > 0 && (
             <div className="border-b border-border/25 bg-background/30 px-3 py-1.5" data-follow-up-queue>
@@ -1899,7 +1974,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
                 ref={attachButtonRef}
                 type="button"
                 onClick={() => setShowAttachMenu(v => !v)}
-                className="hit-target-box p-2 text-muted-foreground hover:text-foreground transition-colors [--hit-target-hover-bg:color-mix(in_srgb,var(--muted)_60%,transparent)] [--hit-target-radius:var(--radius-lg)]"
+                className="hit-target-box inline-flex min-h-11 min-w-11 items-center justify-center p-2 text-muted-foreground transition-colors hover:text-foreground md:min-h-0 md:min-w-0 [--hit-target-inset:6px] md:[--hit-target-inset:0px] [--hit-target-hover-bg:color-mix(in_srgb,var(--muted)_60%,transparent)] [--hit-target-radius:var(--radius-lg)]"
                 title={t.hints.attachFile}
               >
                 <Plus size={inputIconSize} />
@@ -1965,7 +2040,6 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
 
             <AskComposerInput
               visible={visible}
-              isHome={isHome}
               isLoading={isLoading}
               reconnecting={loadingPhase === 'reconnecting'}
               placeholder={isLoading ? followUpPlaceholder : t.ask.placeholder}

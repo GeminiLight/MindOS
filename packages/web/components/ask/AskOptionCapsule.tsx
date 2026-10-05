@@ -212,7 +212,7 @@ export default function AskOptionCapsule<T extends string>({
         aria-expanded={open && !disabled}
         aria-haspopup={options ? 'listbox' : 'dialog'}
         className={cn(
-          'hit-target-box relative z-10 inline-flex min-h-6 items-center gap-1 px-2.5 py-0.5',
+          'hit-target-box relative z-10 inline-flex min-h-11 items-center gap-1 px-2.5 py-0.5 md:min-h-6 [--hit-target-inset-block:10px] md:[--hit-target-inset-block:0px]',
           'max-w-[260px] select-none border border-transparent text-2xs font-medium transition-colors',
           'pointer-events-auto touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
           'disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-40',

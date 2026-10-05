@@ -29,6 +29,8 @@ interface AskHeaderProps {
   onToggleHistory: () => void;
   onReset: () => void;
   isLoading: boolean;
+  /** Keep the controls beside the reading column when the side panel is focused. */
+  focusMode?: boolean;
   maximized?: boolean;
   onMaximize?: () => void;
   onClose?: () => void;
@@ -106,7 +108,7 @@ function SessionSwitcherAgentMark({
 }
 
 export default memo(function AskHeader({
-  isPanel, showHistory, onToggleHistory, onReset, isLoading,
+  isPanel, showHistory, onToggleHistory, onReset, isLoading, focusMode,
   maximized, onMaximize, onClose, onDockToPanel, hideTitle,
   sessions, activeSessionId, onLoadSession, onDeleteSession, onForkSession, onRenameSession, onTogglePinSession,
   messages, selectedAgentRuntime, onSelectAgentRuntime, runtimeSessionBinding,
@@ -377,7 +379,7 @@ export default memo(function AskHeader({
   ) : null;
 
   return (
-    <div data-ask-header className={`relative z-20 isolate flex items-center justify-between border-b border-border/20 bg-background/95 px-4 shrink-0 backdrop-blur supports-[backdrop-filter]:bg-background/80 ${isPanel ? 'py-1.5' : 'py-2.5'}`}>
+    <div data-ask-header className={`relative z-20 isolate flex items-center justify-between border-b border-border/20 bg-background/95 px-4 shrink-0 backdrop-blur supports-[backdrop-filter]:bg-background/80 ${isPanel ? 'py-1.5' : 'py-2.5'} ${focusMode ? 'mx-auto w-full max-w-[52rem]' : ''}`}>
       {!isPanel && (
         <div className="absolute top-2 left-1/2 -translate-x-1/2 w-8 h-1 rounded-full bg-muted-foreground/20 md:hidden" />
       )}
@@ -438,12 +440,12 @@ export default memo(function AskHeader({
               <ChevronDown size={12} className={`shrink-0 text-muted-foreground transition-transform duration-150 ${switcherOpen ? 'rotate-180' : ''}`} />
             </button>
           ) : activeTitle ? (
-            <span className="text-sm font-medium text-muted-foreground/60 truncate max-w-[180px]">
+            <span className={`text-sm font-medium truncate max-w-[180px] ${activeTitle === '(empty session)' ? 'text-muted-foreground' : 'text-foreground'}`}>
               {activeTitle === '(empty session)' ? (t.hints?.newChat ?? 'New chat') : activeTitle}
             </span>
           ) : (
             /* Placeholder while sessions load — avoids flash of "MindOS" text */
-            <span className="text-sm font-medium text-muted-foreground/40">
+            <span className="text-sm font-medium text-muted-foreground">
               {t.hints?.newChat ?? 'New chat'}
             </span>
           )}

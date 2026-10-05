@@ -80,6 +80,21 @@ body {
   }
 }
 
+/* The compact Home preview keeps the message scroller inside its allocated
+   space; the full chat and focus mode retain the larger reading gutter. */
+.home-chat-preview [role='log'] {
+  padding-bottom: 1.25rem;
+}
+
+/* A software keyboard can leave less room than the composer itself needs.
+   Let the page scroll in that state rather than clipping the send control. */
+@media (max-height: 450px) {
+  .home-chat-preview {
+    max-height: none;
+    overflow: visible;
+  }
+}
+
 .stable-scroll-area,
 .sidebar-scroll-area {
   scrollbar-gutter: stable;
@@ -118,7 +133,7 @@ body {
   --radius: 0.5rem;
   --amber: #c8873a;
   --amber-action: #95551b;
-  --amber-text: #9a6a2b;
+  --amber-text: #874810;
   --amber-dim: rgba(200, 135, 58, 0.18);
   --amber-subtle: rgba(200, 135, 30, 0.08);
   --amber-foreground: #ffffff;
@@ -706,7 +721,8 @@ body {
   .hit-target-box::before {
     content: "";
     position: absolute;
-    inset: 0;
+    inset: var(--hit-target-inset, 0);
+    inset-block: var(--hit-target-inset-block, var(--hit-target-inset, 0));
     z-index: -1;
     pointer-events: none;
     box-sizing: border-box;
@@ -786,6 +802,47 @@ body {
   outline: var(--focus-ring-width, 2px) solid var(--ring);
   outline-offset: var(--focus-ring-offset, 2px);
   scroll-margin: 8px;
+}
+
+/* Composer cards and sidebar search containers supply their own softer,
+   rounded focus cues. Scope the override because the global selector is
+   stronger than a utility class. */
+:is(textarea.ask-composer-input, textarea.inbox-capture-input, input.home-session-search-input, input.ask-history-search-input):focus-visible:not(:disabled) {
+  outline: none;
+}
+
+/* Textareas are :focus-visible even after a pointer click. Keep pointer
+   placement unframed, while Tab/programmatic focus marks the rounded card. */
+.ask-composer-card:not([data-drag-over="true"]):has(textarea.ask-composer-input:focus-visible:not([data-focus-origin="pointer"])) {
+  border-color: var(--ring);
+}
+
+/* Capture uses the same single, rounded focus surface as Ask. The textarea's
+   own ring and global outline otherwise stack into a heavy inner rectangle. */
+.inbox-capture-card:not([data-drag-over="true"]):has(textarea.inbox-capture-input:focus-visible) {
+  border-color: color-mix(in srgb, var(--ring) 28%, transparent);
+}
+
+/* Center the empty state when space permits; short focus viewports must start
+   at the top so the brand anchor is never clipped above the scroll range. */
+.ask-focus-empty-log {
+  justify-content: safe center;
+}
+
+/* A review reminder stays pending while the user is reading in Home focus;
+   it returns on exit instead of floating over the conversation. */
+#main-content:has([data-home-focus-shell]) [data-changes-banner] {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* The Agents rail panel already owns section navigation on desktop. Keep the
+   in-page route links until that panel's own nav has actually mounted, and
+   restore them for mobile or a collapsed/switched left panel. */
+@media (min-width: 768px) {
+  body:has(aside[aria-label="agents panel"] [data-agents-panel-nav]) .app-main-scrollport[data-active-left-panel="agents"] .agents-content-page :is([data-agents-page-nav], [data-agents-back-link]) {
+    display: none;
+  }
 }
 
 /* ─── Milkdown typography overrides are in styles/milkdown-overrides.css ─── */

@@ -80,6 +80,37 @@ function holdSave() {
 }
 
 describe('capture draft recovery', () => {
+  it('keeps one-click saving primary and reveals Write another only while a note is being composed', async () => {
+    await render();
+    expect(host.querySelector('[data-stage-note-action]')).toBeNull();
+    const initialSave = Array.from(host.querySelectorAll('button')).find(button => button.textContent === 'Save to Inbox')!;
+    expect(initialSave.disabled).toBe(true);
+
+    await type('First research note');
+    expect(initialSave.disabled).toBe(false);
+    expect(host.querySelector('[data-stage-note-action]')?.textContent).toContain('Write another');
+    await click('Write another');
+    expect(host.querySelector('textarea')?.value).toBe('');
+    expect(host.querySelector('[data-stage-note-action]')).toBeNull();
+    expect(host.textContent).toContain('First research note');
+    expect(host.textContent).toContain('1 staged');
+
+    await type('Second research note');
+    expect(Array.from(host.querySelectorAll('button')).some(button => button.textContent === 'Save 2 to Inbox' && !button.disabled)).toBe(true);
+    expect(getCaptureDraftController(document.documentElement.dataset.mindRootId!).getSnapshot().value.stagedNotes).toHaveLength(1);
+  });
+
+  it('does not offer Write another for whitespace or an attachment without a note', async () => {
+    await render();
+    await type('   \n  ');
+    expect(host.querySelector('[data-stage-note-action]')).toBeNull();
+    expect(Array.from(host.querySelectorAll('button')).find(button => button.textContent === 'Save to Inbox')?.disabled).toBe(true);
+
+    await attach(new File(['research material'], 'source 🌱.txt'));
+    expect(host.querySelector('[data-stage-note-action]')).toBeNull();
+    expect(Array.from(host.querySelectorAll('button')).find(button => button.textContent === 'Save to Inbox')?.disabled).toBe(false);
+  });
+
   it('keeps the input node, focus and selection through a same-library window focus check', async () => {
     await render(); await type('Keep the caret here');
     const input = host.querySelector('textarea')!; input.focus(); input.setSelectionRange(5, 10);
@@ -95,7 +126,7 @@ describe('capture draft recovery', () => {
     await type('same text');
     document.documentElement.dataset.mindRootId = a;
     await act(async () => { window.dispatchEvent(new Event('mindos:settings-changed')); await tick(); });
-    await click('Add to batch');
+    await click('Write another');
     expect(getCaptureDraftController(a).getSnapshot().value.stagedNotes).toHaveLength(1);
     expect(getCaptureDraftController(`${a}-b`).getSnapshot().value.draftText).toBe('same text');
     expect(getCaptureDraftController(`${a}-b`).getSnapshot().value.stagedNotes).toHaveLength(0);
@@ -140,7 +171,7 @@ describe('capture draft recovery', () => {
   });
 
   it('places save before the growing batch list so attachments do not push it away', async () => {
-    await render(); await type('First'); await click('Add to batch');
+    await render(); await type('First'); await click('Write another');
     await attach(new File(['content'], 'attachment.txt'));
     const save = host.querySelector('[data-inbox-primary-actions]')!;
     const staged = host.querySelector('button[aria-label="Edit First"]')!;
@@ -149,7 +180,7 @@ describe('capture draft recovery', () => {
   });
 
   it('can undo clearing notes and attachments without overwriting new input', async () => {
-    await render(); await type('First staged note'); await click('Add to batch');
+    await render(); await type('First staged note'); await click('Write another');
     const attachment = new File(['Retain these bytes'], '记录 🌱.txt');
     await attach(attachment); await type('Original draft'); await click('Clear');
     expect(host.querySelector('textarea')?.value).toBe('');
@@ -222,14 +253,16 @@ describe('capture draft recovery', () => {
     await click('Pending');
     expect(host.querySelector('nav button[aria-current="page"]')?.textContent).toContain('Pending');
   });
-  it('distinguishes adding to the batch from saving, with an accessible primary action', async () => {
+  it('distinguishes adding to the batch from saving, with an accessible primary action and calm input focus', async () => {
     await render(); await type('Readable capture');
-    expect(host.querySelector('[data-stage-note-action]')?.textContent).toBe('Add to batch');
+    expect(host.querySelector('[data-stage-note-action]')?.textContent).toBe('Write another');
     const save = Array.from(host.querySelectorAll('button')).find(b => b.textContent === 'Save to Inbox')!;
     expect(save.getAttribute('data-slot')).toBe('button');
     expect(save.className).toContain('[--amber:var(--amber-action)]');
     expect(save.className).toContain('min-h-11');
-    expect(host.querySelector('textarea')?.className).toContain('focus-visible:ring-2');
+    expect(host.querySelector('textarea')?.className).toContain('inbox-capture-input');
+    expect(host.querySelector('textarea')?.className).not.toContain('focus-visible:ring-2');
+    expect(host.querySelector('[data-inbox-composer-card]')?.className).toContain('rounded-2xl');
     expect(host.querySelector('[data-stage-note-action]')?.className).toContain('min-h-11');
     expect(host.querySelector('[data-inbox-attach-action]')?.className).toContain('min-h-11');
   });

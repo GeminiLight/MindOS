@@ -99,11 +99,11 @@ export default function RightAskPanel({
   }, [rawMouseDown, width]);
 
   const effectiveWidth = maximized
-    ? `calc(100vw - ${sidebarOffset}px)`
+    ? `calc(100vw - ${sidebarOffset}px - 24px)`
     : `${Math.min(width, maxAvailable)}px`;
 
   const depthClass = layoutMode === 'focus'
-    ? 'border-border shadow-2xl'
+    ? 'border-border/50 shadow-sm'
     : layoutMode === 'protected'
       ? 'border-border/70 shadow-xl'
       : 'border-border/40 shadow-sm';
@@ -113,12 +113,14 @@ export default function RightAskPanel({
       inert={!open}
       aria-hidden={!open}
       className={`
-        hidden md:flex fixed top-[var(--app-titlebar-h)] right-0 h-[calc(100vh-var(--app-titlebar-h))] z-40
-        flex-col bg-background border-l ${depthClass}
+        hidden md:flex fixed z-40 flex-col bg-background ${depthClass}
+        ${maximized
+          ? 'top-[calc(var(--app-titlebar-h)+12px)] right-3 h-[calc(100vh-var(--app-titlebar-h)-24px)] rounded-xl border overflow-hidden'
+          : 'top-[var(--app-titlebar-h)] right-0 h-[calc(100vh-var(--app-titlebar-h))] border-l'}
         ${isDragging ? '' : 'transition-[width,transform] duration-200 ease-out'}
         ${open ? 'translate-x-0' : 'translate-x-full pointer-events-none'}
       `}
-      style={{ width: effectiveWidth, minWidth: `${MIN_WIDTH}px` }}
+      style={{ width: effectiveWidth, minWidth: maximized ? 0 : `${MIN_WIDTH}px` }}
       role="complementary"
       aria-label="MindOS panel"
     >
@@ -155,7 +157,7 @@ export default function RightAskPanel({
 
       {/* Drag resize handle — LEFT edge, always visible for bidirectional snap */}
       <div
-        className="absolute top-0 -left-[3px] w-[6px] h-full cursor-col-resize z-40 group hidden md:block"
+        className={`absolute top-0 -left-[3px] w-[6px] h-full cursor-col-resize z-40 group hidden ${maximized ? '' : 'md:block'}`}
         onMouseDown={handleMouseDown}
       >
         <div className="absolute left-[2px] top-0 w-[1px] h-full opacity-0 group-hover:opacity-100 bg-[var(--amber)]/50 transition-opacity duration-150" />

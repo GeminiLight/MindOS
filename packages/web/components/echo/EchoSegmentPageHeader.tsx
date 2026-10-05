@@ -43,11 +43,10 @@ function BackToEchoLink({ href, label, ariaLabel }: { href: string; label: strin
 }
 
 function headerBackLink(segment: EchoSegment, p: EchoCopy): ReactNode {
-  if (segment === 'overview') return undefined;
   if (segment === 'threads') {
     return <BackToEchoLink href={ECHO_SEGMENT_HREF.growth} label={p.backToInsightsLabel} ariaLabel={p.backToInsightsAriaLabel} />;
   }
-  return <BackToEchoLink href={ECHO_SEGMENT_HREF.overview} label={p.backToOverviewLabel} ariaLabel={p.backToOverviewAriaLabel} />;
+  return undefined;
 }
 
 export function EchoPageHeader({
@@ -84,7 +83,7 @@ export function EchoPageHeader({
       <nav aria-label={e.title} className="mt-5 flex gap-1 overflow-x-auto pb-1">
         {ECHO_PRIMARY_SEGMENT_ORDER.map(item => (
           <Link key={item} href={ECHO_SEGMENT_HREF[item]} aria-current={segment === item || (item === 'growth' && segment === 'threads') ? 'page' : undefined}
-            className={`inline-flex min-h-10 shrink-0 items-center rounded-lg px-3 text-sm transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${segment === item || (item === 'growth' && segment === 'threads') ? 'bg-[var(--amber-subtle)] font-medium text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}>
+            className={`inline-flex min-h-11 shrink-0 items-center rounded-lg px-3 text-sm transition-colors duration-150 ${segment === item || (item === 'growth' && segment === 'threads') ? 'bg-[var(--amber-subtle)] font-medium text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}>
             {labels[item]}
           </Link>
         ))}

@@ -129,7 +129,7 @@ describe('idle polling budget (35s 空闲请求数 ≤10 的支撑契约)', () =
 
     expect(host.textContent).toContain('Agent updated 1 file');
     expect(host.textContent).toContain('1 edit needs your review');
-    expect(host.textContent).toContain('Review changes');
+    expect(host.querySelector<HTMLAnchorElement>('a[aria-label="Review changes"]')?.textContent).toBe('Review');
     expect(host.textContent).not.toContain('Mark all read');
     const link = host.querySelector<HTMLAnchorElement>('a[href^="/changelog?source=agent"]');
     expect(link?.getAttribute('href')).toBe('/changelog?source=agent');
@@ -160,7 +160,7 @@ describe('idle polling budget (35s 空闲请求数 ≤10 的支撑契约)', () =
     await act(() => vi.advanceTimersByTimeAsync(10_500));
 
     expect(host.textContent).toContain('Agent updated 1 file');
-    expect(host.textContent).toContain('Review changes');
+    expect(host.querySelector<HTMLAnchorElement>('a[aria-label="Review changes"]')?.textContent).toBe('Review');
   });
 
   it('ChangesBanner treats ordinary unread changes as a light activity notice', async () => {

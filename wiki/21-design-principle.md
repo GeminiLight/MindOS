@@ -74,7 +74,7 @@
 |-------|-----|---------|
 | `--amber` | `#c8873a` | 品牌主色，交互高亮，链接；焦点另用 `--ring` |
 | `--ring` | `#95551b` | 浅色键盘焦点专用琥珀色；深色为 `#e0a85e`，六种标准背景 ≥3:1 |
-| `--amber-text` | `#9a6a2b` | 浅 amber 底上的文字，不用于 amber 实底 |
+| `--amber-text` | `#874810` | 浅 amber 底上的可读文字；常用浅色表面叠加 amber-dim 时仍达到 4.5:1，不用于 amber 实底 |
 | `--amber-dim` | `rgba(200,135,58,0.18)` | 较强 amber 背景色（active、selected） |
 | `--amber-subtle` | `rgba(200,135,30,0.08)` | 轻 amber 背景色（icon shell、hint、quiet selected） |
 | `--amber-foreground` | `#ffffff` | amber 背景上的文字色（白色，确保可读性） |
@@ -303,7 +303,9 @@ outline: 2px solid var(--ring);
 outline-offset: 2px;
 ```
 
-`--ring` 是专用琥珀色焦点令牌（浅色 `#95551b` / 深色 `#e0a85e`），不跟随按钮局部覆盖的 `--amber`；`ring-ring` 与 `--sidebar-ring` 统一引用它。全局规则覆盖按钮、链接、input / textarea / select、summary 与可顺序聚焦的 tabindex，不在聚焦时修改圆角。共享 Button 只保留全局 outline，不叠加半透明 halo；checkbox / radio 保留原有形状并使用同样的外描边。基础 outline 色不加 50% 透明度，避免快速 Tab 时先出现低对比焦点。**不要用 `focus:` 前缀**；保留 `:focus-visible` 的浏览器输入方式判断（文本输入可能在鼠标聚焦时也需要可见焦点）。
+`--ring` 是专用琥珀色焦点令牌（浅色 `#95551b` / 深色 `#e0a85e`），不跟随按钮局部覆盖的 `--amber`；`ring-ring` 与 `--sidebar-ring` 统一引用它。全局规则覆盖按钮、链接、input / textarea / select、summary 与可顺序聚焦的 tabindex，不在聚焦时修改圆角。共享 Button 只保留全局 outline，不叠加半透明 halo；checkbox / radio 保留原有形状并使用同样的外描边。基础 outline 色不加 50% 透明度，避免快速 Tab 时先出现低对比焦点。**不要用 `focus:` 前缀**；保留 `:focus-visible` 的浏览器输入方式判断。Ask composer 是例外：textarea 自身不画直角 outline；指针点击仅微调卡片底色，Tab 或程序聚焦由圆角卡片使用完整 `--ring` 画 1px 边框。拖入文件时以 drop target 提示优先。
+
+Ask 的专注模式由用户明确进入；首页首次发送不自动铺满工作区。展开视图保留阅读列宽和原草稿，外壳与工作区边缘留有小幅间距、圆角和轻边框，退出可恢复原布局。
 
 外描边占用控件边界外 4px，紧贴视口或 overflow 容器边缘的控件必须另验裁切，不可仅靠色值测试宣布全局达标。自定义主题、强制颜色和富文本编辑器焦点需单独验收。
 

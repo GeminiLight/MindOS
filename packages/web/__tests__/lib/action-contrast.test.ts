@@ -113,6 +113,22 @@ describe('primary action and reading contrast', () => {
     expect(contrast(action.map((value, i) => value * 0.9 + surface[i] * 0.1), foreground)).toBeGreaterThanOrEqual(4.5);
   });
 
+  it.each([':root', '.dark'])('keeps amber text readable on quiet highlighted surfaces in %s', selector => {
+    const block = css.slice(css.indexOf(`${selector} {`)).split('}')[0];
+    const ink = token(block, 'amber-text');
+    for (const surfaceName of ['background', 'card', 'muted']) {
+      const surface = token(block, surfaceName);
+      for (const tintName of ['amber-subtle', 'amber-dim']) {
+        const tint = block.match(new RegExp(`--${tintName}:\\s*rgba\\((\\d+),\\s*(\\d+),\\s*(\\d+),\\s*([\\d.]+)\\)`));
+        expect(tint, `${selector} ${tintName} must be defined`).toBeTruthy();
+        const color = tint!.slice(1, 4).map(Number);
+        const opacity = Number(tint![4]);
+        const background = surface.map((value, index) => value * (1 - opacity) + color[index] * opacity);
+        expect(contrast(ink, background), `${selector} amber text on ${surfaceName} + ${tintName}`).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+
   it('uses the action token within the shared amber button without darkening decorative amber', () => {
     expect(buttonVariants({ variant: 'amber' })).toContain('[--amber:var(--amber-action)]');
     expect(css).toContain('--color-amber-action: var(--amber-action)');

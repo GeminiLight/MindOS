@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>MindOS · 三种界面方案</title>
+  <link rel="stylesheet" href="globals.css">
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body class="font-sans">
+  <a class="skip-link" href="#workspace">跳到示例工作区</a>
+  <header class="prototype-header">
+    <a href="../#hunt" class="prototype-brand">MindOS <span>设计方案</span></a>
+    <p>独立交互原型 · 虚构示例资料</p>
+    <div class="prototype-tools"><a href="../#hunt">返回参考研究</a><button id="theme-toggle" class="icon-button" aria-label="切换深色主题"></button></div>
+  </header>
+  <main>
+    <section class="design-control" aria-labelledby="design-title">
+      <div class="design-title"><h1 id="design-title">同一份资料，三种接续方式。</h1><p>切换方案，试着核对出处、记一次互动，再看看本次带走哪些材料。</p></div>
+      <div class="direction-tabs" role="tablist" aria-label="选择界面方案">
+        <button role="tab" id="direction-a" aria-controls="app-frame" aria-selected="true" tabindex="0" data-direction="a"><span class="direction-letter">A</span><span><strong>原位精修</strong><small>变化最小 · 近期推荐</small></span></button>
+        <button role="tab" id="direction-b" aria-controls="app-frame" aria-selected="false" tabindex="-1" data-direction="b"><span class="direction-letter">B</span><span><strong>内容与出处</strong><small>需要时并排核对</small></span></button>
+        <button role="tab" id="direction-c" aria-controls="app-frame" aria-selected="false" tabindex="-1" data-direction="c"><span class="direction-letter">C</span><span><strong>人物工作视图</strong><small>模板与持续维护</small></span></button>
+      </div>
+      <div class="direction-caption"><p id="direction-caption"></p><button id="explain-toggle" class="text-button" aria-expanded="false" aria-controls="design-explanation">看取舍</button></div>
+      <div id="design-explanation" class="design-explanation" hidden></div>
+    </section>
+    <p id="storage-note" class="storage-note" role="status" hidden></p>
+    <section id="app-frame" class="app-frame" data-direction="a" role="tabpanel" aria-labelledby="direction-a">
+      <div class="initial-state" role="status">正在打开示例工作区…</div>
+    </section>
+    <div class="prototype-footnote"><p>本页修改仅保留在当前浏览器标签的示例中；未写入知识库，未连接真实 Agent。</p><button id="reset-example" class="text-button">重置示例</button></div>
+    <section class="choice-note"><h2>建议的推进方式</h2><p><strong>先落地 A。</strong> 把来源、保存与返回打磨顺；频繁核对时吸收 B 的辅助区；C 作为工作台里的一个真实人脉模板，单独验证写回与再次打开。</p><a href="README.md">查看方案与验证说明</a></section>
+  </main>
+  <dialog id="file-dialog" aria-labelledby="file-dialog-title"><div class="dialog-heading"><h2 id="file-dialog-title">示例原文件</h2><button class="icon-button" id="close-file" aria-label="关闭原文件" autofocus></button></div><p class="dialog-note">这份内容由本页同一组示例资料生成，便于核对视图与原文。</p><textarea id="raw-file" aria-label="原文件内容" readonly class="font-mono"></textarea></dialog>
+  <dialog id="directory-dialog" aria-labelledby="directory-dialog-title"><div class="dialog-heading"><h2 id="directory-dialog-title">示例目录</h2><button class="icon-button" id="close-directory" aria-label="关闭目录" autofocus></button></div><div id="mobile-directory"></div></dialog>
+  <noscript><p class="initial-state">这份交互原型需要 JavaScript。可先<a href="README.md">阅读三个方案的说明</a>。</p></noscript>
+</body>
+</html>

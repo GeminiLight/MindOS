@@ -1,12 +1,10 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { Lightbulb, Blocks, Zap, LayoutTemplate, User, Download, RefreshCw, Repeat, Rocket, Search, Handshake, ShieldCheck, Compass, Server } from 'lucide-react';
+import { Lightbulb, Blocks, Zap, LayoutTemplate, Compass, Server } from 'lucide-react';
 import PanelHeader from './PanelHeader';
 import { PanelPrimaryNav, PanelNavRow, ComingSoonBadge } from './PanelNavRow';
 import { useLocale } from '@/lib/stores/locale-store';
-import { useCases } from '@/components/explore/use-cases.generated';
-import { openAskModal } from '@/hooks/useAskModal';
 
 interface DiscoverPanelProps {
   active: boolean;
@@ -14,63 +12,15 @@ interface DiscoverPanelProps {
   onMaximize?: () => void;
 }
 
-/** Compact use case row */
-function UseCaseRow({
-  icon,
-  title,
-  prompt,
-  tryLabel,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  prompt: string;
-  tryLabel: string;
-}) {
-  return (
-    <div className="group flex items-center gap-2.5 px-4 py-1.5 hover:bg-muted/50 transition-colors rounded-sm mx-1">
-      <span className="text-muted-foreground shrink-0">{icon}</span>
-      <span className="text-xs text-foreground truncate flex-1" title={title}>{title}</span>
-      <button
-        onClick={() => openAskModal(prompt, 'user')}
-        className="opacity-0 group-hover:opacity-100 text-2xs px-2 py-0.5 rounded text-[var(--amber-text)] bg-[var(--amber-dim)] hover:opacity-80 transition-all duration-150 shrink-0"
-      >
-        {tryLabel}
-      </button>
-    </div>
-  );
-}
-
-/** Map use case id → lucide icon */
-const useCaseIcons: Record<string, React.ReactNode> = {
-  c1: <User size={12} />,          // Inject Identity
-  c2: <Download size={12} />,      // Save Information
-  c3: <RefreshCw size={12} />,     // Cross-Agent Handoff
-  c4: <Repeat size={12} />,        // Experience → SOP
-  c5: <Lightbulb size={12} />,     // Capture Ideas
-  c6: <Rocket size={12} />,        // Project Cold Start
-  c7: <Search size={12} />,        // Research & Archive
-  c8: <Handshake size={12} />,     // Network Management
-  c9: <ShieldCheck size={12} />,   // Audit & Correct
-};
-
 export default function DiscoverPanel({ active }: DiscoverPanelProps) {
   const { t } = useLocale();
   const d = t.panels.discover;
-  const e = t.explore;
   const pathname = usePathname() ?? '';
   const capabilityMarketActive = pathname === '/explore/capabilities';
   const pluginMarketActive = pathname === '/explore/plugins';
   const skillMarketActive = pathname === '/explore/skills';
   const mcpMarketActive = pathname === '/explore/mcp';
   const useCasesActive = pathname === '/explore';
-
-  const getUseCaseText = (id: string): { title: string; prompt: string } | undefined => {
-    const map: Record<string, { title: string; desc: string; prompt: string }> = {
-      c1: e.c1, c2: e.c2, c3: e.c3, c4: e.c4, c5: e.c5,
-      c6: e.c6, c7: e.c7, c8: e.c8, c9: e.c9,
-    };
-    return map[id];
-  };
 
   return (
     <div className={`flex flex-col h-full ${active ? '' : 'hidden'}`}>
@@ -113,34 +63,11 @@ export default function DiscoverPanel({ active }: DiscoverPanelProps) {
         <PanelNavRow
           icon={<Lightbulb size={14} className={useCasesActive ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
           title={d.useCases}
-          badge={<span className="text-2xs tabular-nums text-muted-foreground">{useCases.length}</span>}
           href="/explore"
           active={useCasesActive}
           activeVariant="rail"
         />
       </PanelPrimaryNav>
-
-      <div className="sidebar-scroll-area flex-1 overflow-y-auto min-h-0">
-        {/* Quick try — use case list */}
-        <div className="py-2">
-          <div className="px-4 py-1.5">
-            <span className="text-2xs font-medium text-muted-foreground uppercase tracking-wider">{d.useCases}</span>
-          </div>
-          {useCases.map(uc => {
-            const data = getUseCaseText(uc.id);
-            if (!data) return null;
-            return (
-              <UseCaseRow
-                key={uc.id}
-                icon={useCaseIcons[uc.id] || <Lightbulb size={12} />}
-                title={data.title}
-                prompt={data.prompt}
-                tryLabel={d.tryIt}
-              />
-            );
-          })}
-        </div>
-      </div>
     </div>
   );
 }

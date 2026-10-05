@@ -46,7 +46,7 @@ export function AgentsPanelHubNav({
   const channelsHubActive = (routeActive && inAgentsIndexRoute && tab === 'channels') || channelsActive;
 
   return (
-    <PanelPrimaryNav aria-label={ariaLabel}>
+    <PanelPrimaryNav aria-label={ariaLabel} data-agents-panel-nav>
       <PanelNavRow
         icon={<LayoutDashboard size={14} className={overviewActive ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
         title={copy.navOverview}

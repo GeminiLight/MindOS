@@ -384,6 +384,24 @@ MindOS/
 
 ---
 
+## 📚 引用
+
+如果你在研究中使用 MindOS，请引用本项目：
+
+```bibtex
+@misc{mindos2026,
+  author       = {Wang, Tianfu and Yuan, Nicholas Jing and Xiong, Hui},
+  title        = {{MindOS}: A Shared Mind for Humans and {AI} Agents},
+  year         = {2026},
+  howpublished = {\url{https://github.com/GeminiLight/MindOS}},
+  note         = {Open-source software}
+}
+```
+
+为便于复现，请另外注明实际使用的版本或 commit。
+
+---
+
 ## 📄 License
 
 MIT © GeminiLight

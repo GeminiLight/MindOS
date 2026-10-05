@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { X, Sparkles, Upload, MessageCircle, ExternalLink, Check, Copy, ChevronDown } from 'lucide-react';
 import { copyToClipboard } from '@/lib/clipboard';
 import { toast } from '@/lib/toast';
@@ -11,19 +11,38 @@ import { walkthroughSteps } from './walkthrough/steps';
 import { subscribeFilesChanged } from '@/lib/files-changed';
 import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 import { useGuideState } from './useGuideState';
+import { guideStore, type GuideBootstrap } from './guide-state-store';
+import type { GuideState } from '@/lib/settings';
 
 interface GuideCardProps {
   hasExistingFiles?: boolean;
+  initialGuide?: GuideBootstrap;
 }
 
-export default function GuideCard({ hasExistingFiles = false }: GuideCardProps) {
+function visibleGuideState(state: GuideState | null, hasExistingFiles: boolean): GuideState | null {
+  // Existing knowledge already satisfies import; show that stage on the first frame
+  // while the effect below persists the transition.
+  return state && hasExistingFiles && !state.step1Done ? { ...state, step1Done: true } : state;
+}
+
+function currentStep(state: GuideState | null): 'import' | 'ai' | 'agent' | null {
+  if (!state || state.dismissed) return null;
+  if (!state.step1Done) return 'import';
+  if (!state.askedAI) return 'ai';
+  if (!state.agentPromptDone) return 'agent';
+  return null;
+}
+
+export default function GuideCard({ hasExistingFiles = false, initialGuide }: GuideCardProps) {
   const { t } = useLocale();
   const smoothPush = useSmoothRouterPush();
   const g = t.guide;
 
-  const { guideState, aiConfigured, error, saving, patchGuide, retry } = useGuideState();
-  const [expanded, setExpanded] = useState<'import' | 'ai' | 'agent' | null>(null);
-  const hasAutoExpanded = useRef(false);
+  const { guideState: storedGuideState, aiConfigured, error, saving, patchGuide, retry } = useGuideState(guideStore, initialGuide);
+  const guideState = useMemo(() => visibleGuideState(storedGuideState, hasExistingFiles), [storedGuideState, hasExistingFiles]);
+  const firstVisibleState = visibleGuideState(initialGuide?.guideState ?? null, hasExistingFiles);
+  const [expanded, setExpanded] = useState<'import' | 'ai' | 'agent' | null>(() => currentStep(firstVisibleState));
+  const hasAutoExpanded = useRef(Boolean(firstVisibleState));
 
   const handleDismiss = useCallback(() => {
     patchGuide({ dismissed: true });
@@ -47,9 +66,9 @@ export default function GuideCard({ hasExistingFiles = false }: GuideCardProps) 
   }, [guideState, guideState?.step1Done, patchGuide]);
 
   useEffect(() => {
-    if (!guideState || !hasExistingFiles || guideState.step1Done) return;
+    if (!storedGuideState || !hasExistingFiles || storedGuideState.step1Done) return;
     patchGuide({ step1Done: true });
-  }, [guideState, guideState?.step1Done, hasExistingFiles, patchGuide]);
+  }, [storedGuideState, storedGuideState?.step1Done, hasExistingFiles, patchGuide]);
 
   // ── Step 2: AI verify ──
   const handleStartAI = useCallback(() => {
@@ -100,7 +119,7 @@ export default function GuideCard({ hasExistingFiles = false }: GuideCardProps) 
   }, [guideState]);
 
   // On step completion, auto-advance to next step
-  const prevStepRef = useRef({ s1: false, s2: false });
+  const prevStepRef = useRef({ s1: firstVisibleState?.step1Done ?? false, s2: firstVisibleState?.askedAI ?? false });
   useEffect(() => {
     if (!guideState) return;
     const prev = prevStepRef.current;

@@ -395,6 +395,38 @@ describe('HomePanel', () => {
     expect(host.textContent).not.toContain('Review the prompt runtime plan');
   });
 
+  it('explains an empty agent filter separately from search misses and restores all sessions', async () => {
+    installFetchMock([session({ id: 's-mind', messages: [userMsg('Reflect on today')] })]);
+    await initSessions({});
+    await renderHomePanel();
+
+    const codexFilter = host.querySelector('[data-home-agent-filter="codex"]') as HTMLButtonElement;
+    await act(async () => codexFilter.click());
+    expect(host.querySelector('[data-home-agent-empty]')).not.toBeNull();
+    expect(host.textContent).toContain('No Codex sessions yet');
+    expect(host.textContent).not.toContain('Try a session title');
+
+    const searchButton = host.querySelector('button[aria-label="Search sessions"]') as HTMLButtonElement;
+    await act(async () => searchButton.click());
+    const searchInput = host.querySelector('[data-home-session-search-input]') as HTMLInputElement;
+    await act(async () => {
+      searchInput.value = 'missing';
+      searchInput.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'missing' }));
+    });
+    expect(host.querySelector('[data-home-session-search-empty]')).not.toBeNull();
+    expect(host.querySelector('[data-home-agent-empty]')).toBeNull();
+
+    const clearButton = host.querySelector('button[aria-label="Clear session search"]') as HTMLButtonElement;
+    await act(async () => clearButton.click());
+    expect(host.querySelector('[data-home-agent-empty]')).not.toBeNull();
+
+    const showAll = host.querySelector('[data-home-agent-show-all]') as HTMLButtonElement;
+    await act(async () => showAll.click());
+    expect(host.querySelector('[data-home-session-row="s-mind"]')).not.toBeNull();
+    expect(host.querySelector('[data-home-agent-empty]')).toBeNull();
+    expect(document.activeElement).toBe(host.querySelector('[data-home-agent-filter="all"]'));
+  });
+
   it('searches Home sessions locally instead of opening file search', async () => {
     const sessions = [
       session({
@@ -816,6 +848,10 @@ describe('HomePanel', () => {
 
     expect(emptyFilesButton).not.toBeNull();
     expect(emptyNewSessionButton).not.toBeNull();
+    expect(emptyFilesButton?.className).toContain('min-h-11');
+    expect(emptyNewSessionButton?.className).toContain('min-h-11');
+    expect(emptyNewSessionButton?.className).not.toContain('amber-foreground');
+    expect(emptyNewSessionButton?.className).toContain('[--hit-target-border:var(--border)]');
 
     await act(async () => {
       emptyFilesButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));

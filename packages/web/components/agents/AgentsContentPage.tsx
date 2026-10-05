@@ -203,6 +203,7 @@ export default function AgentsContentPage({ tab }: { tab: AgentsDashboardTab }) 
           {tab !== 'overview' ? (
             <Link
               href="/agents"
+              data-agents-back-link
               className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <ArrowLeft size={14} aria-hidden="true" />
@@ -462,7 +463,7 @@ function AgentsPageNav({ tab, copy }: {
   ];
 
   return (
-    <nav aria-label={copy.navAriaLabel} className="mt-5 overflow-x-auto pb-1">
+    <nav aria-label={copy.navAriaLabel} data-agents-page-nav className="mt-5 overflow-x-auto pb-1">
       <div className="flex w-max min-w-full items-center gap-1">
         {navItems.map(item => (
           <Link
@@ -474,7 +475,7 @@ function AgentsPageNav({ tab, copy }: {
               event.preventDefault();
               if (activeGroup !== item.id) smoothPush(item.href);
             }}
-            className={`group flex min-h-10 shrink-0 items-center gap-2 rounded-lg px-3 py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+            className={`group flex min-h-11 shrink-0 items-center gap-2 rounded-lg px-3 py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-10 ${
               activeGroup === item.id
                 ? 'bg-[var(--amber)]/[0.08] text-foreground'
                 : 'text-muted-foreground hover:bg-muted/45 hover:text-foreground'

@@ -142,13 +142,12 @@ describe('InboxView product shape', () => {
     expect(host.querySelector('textarea')?.getAttribute('placeholder')).toContain('Paste a link, write a note');
     expect(host.querySelector('textarea')?.getAttribute('aria-label')).toContain('Add a link, note, file');
     expect(host.textContent).toContain('Attach');
-    expect(host.textContent).toContain('Add to batch');
+    expect(host.textContent).not.toContain('Write another');
     expect(host.textContent).not.toContain('⌘/Ctrl Enter');
     expect(host.textContent).toContain('Save to Inbox');
     expect(host.textContent).toContain('Organize to Mind');
     const stageButton = host.querySelector('[data-stage-note-action]');
-    expect(stageButton?.closest('[data-inbox-composer-footer]')).not.toBeNull();
-    expect(stageButton?.closest('[data-inbox-primary-actions]')).toBeNull();
+    expect(stageButton).toBeNull();
     expect(host.querySelector('[data-inbox-attach-action]')?.textContent).toContain('Attach');
     const primaryActions = host.querySelector('[data-inbox-primary-actions]');
     expect(primaryActions?.className).toContain('min-w-0');
@@ -157,7 +156,7 @@ describe('InboxView product shape', () => {
     expect(primaryActions?.textContent).toContain('Save to Inbox');
     expect(primaryActions?.textContent).not.toContain('Organize to Mind');
     expect(primaryActions?.textContent).not.toContain('Attach');
-    expect(primaryActions?.textContent).not.toContain('Add to batch');
+    expect(primaryActions?.textContent).not.toContain('Write another');
     expect(host.textContent).not.toContain('Next action');
     expect(host.textContent).not.toContain('Save only');
     expect(host.textContent).not.toContain('Suggested: Save only');

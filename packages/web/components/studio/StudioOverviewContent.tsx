@@ -9,8 +9,8 @@ import {
   ScanSearch,
   Sparkles,
 } from 'lucide-react';
-import { type ReactNode, useEffect, useMemo, useState } from 'react';
-import { Button } from '@/components/ui/button';
+import { useEffect, useMemo, useState } from 'react';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { refreshSessions, useSessions } from '@/lib/agent-session-store';
 import { useLocale } from '@/lib/stores/locale-store';
 import {
@@ -32,100 +32,40 @@ const COPY = {
     subtitle: 'Overview for projects, apps, automations, and inspectable context.',
     projectsTitle: 'Projects',
     projectsDesc: 'Keep related notes, conversations, and next steps together.',
+    toolsTitle: 'Studio tools',
     appsTitle: 'Apps',
-    appsDesc: 'Tools for the work you do regularly.',
     automationTitle: 'Automation',
-    automationDesc: 'Scheduled plans and repeatable agent work.',
     contextTitle: 'Context',
-    contextDesc: 'See which sources the AI can use and how they were selected.',
     continueTitle: 'Continue',
     continueHint: 'Best next move',
     openProject: 'Open Project',
-    viewProjects: 'View Projects',
-    openApps: 'Open Apps',
-    openAutomation: 'Open Automation',
-    openContext: 'Inspect Context',
     noProject: 'No projects yet.',
     firstProject: 'Set up your first project',
     sessions: 'sessions',
-    reviewItems: 'review',
     latestSession: 'Latest Session',
     untitledSession: 'Untitled Session',
-    activeProjects: 'active',
-    appCount: '2 apps',
-    automationHint: 'plans',
-    contextHint: 'sources & selection history',
   },
   zh: {
     title: '工作台',
     subtitle: '项目、应用、自动化与可检查上下文的总览。',
     projectsTitle: '项目',
     projectsDesc: '把相关笔记、对话和下一步行动放在一起。',
+    toolsTitle: '工作台工具',
     appsTitle: '应用',
-    appsDesc: '完成日常工作的专用工具。',
     automationTitle: '自动化',
-    automationDesc: '定时计划和可重复的 Agent 工作。',
     contextTitle: '上下文',
-    contextDesc: '查看 AI 可使用的资料，以及这些资料如何被选中。',
     continueTitle: '继续推进',
     continueHint: '最值得做的下一步',
     openProject: '打开项目',
-    viewProjects: '查看项目',
-    openApps: '打开应用',
-    openAutomation: '打开自动化',
-    openContext: '检查上下文',
     noProject: '还没有项目。',
     firstProject: '设置第一个项目',
     sessions: '对话',
-    reviewItems: '待复盘',
     latestSession: '最近对话',
     untitledSession: '未命名对话',
-    activeProjects: '推进中',
-    appCount: '2 个应用',
-    automationHint: '计划',
-    contextHint: '资料与选取记录',
   },
 } as const;
 
 type OverviewCopy = (typeof COPY)[keyof typeof COPY];
-
-function OverviewCard({
-  href,
-  icon,
-  title,
-  description,
-  meta,
-  action,
-}: {
-  href: string;
-  icon: ReactNode;
-  title: string;
-  description: string;
-  meta: string;
-  action: string;
-}) {
-  return (
-    <Link
-      href={href}
-      className="group block rounded-lg border border-border/60 bg-background/35 p-4 transition-colors hover:border-border hover:bg-muted/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-    >
-      <div className="flex items-start justify-between gap-4">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[var(--amber-subtle)] text-[var(--amber)]">
-          {icon}
-        </span>
-        <span className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors group-hover:text-foreground">
-          {action}
-          <ArrowRight size={13} aria-hidden="true" />
-        </span>
-      </div>
-      <h2 className="mt-4 text-base font-semibold text-foreground">{title}</h2>
-      <p className="mt-1 min-h-[2.5rem] text-sm leading-relaxed text-muted-foreground">{description}</p>
-      <div className="mt-4 border-t border-border/55 pt-3 text-xs font-medium text-muted-foreground">
-        {meta}
-      </div>
-    </Link>
-  );
-}
 
 function StudioContinueOverview({
   project,
@@ -248,15 +188,15 @@ export default function StudioOverviewContent() {
     () => getLastOpenedStudioProject(projects, lastOpenedProjectId),
     [lastOpenedProjectId, projects],
   );
-  const activeProjects = projects.filter((project) => project.stage === 'active').length;
-  const reviewItems = projects.reduce((total, project) => total + project.reviewItems.length, 0);
-  const sessionTotal = projects.reduce(
-    (total, project) => total + (projectSessionStats.get(project.id)?.count ?? project.sessions.length),
-    0,
-  );
   const continueSessionCount = continueProject
     ? projectSessionStats.get(continueProject.id)?.count ?? continueProject.sessions.length
     : 0;
+  const toolLinks = [
+    ...(projects.length > 0 ? [{ href: '/studio/projects', icon: FolderOpen, label: copy.projectsTitle }] : []),
+    { href: '/studio/apps', icon: Blocks, label: copy.appsTitle },
+    { href: '/studio/automation', icon: CalendarClock, label: copy.automationTitle },
+    { href: '/studio/context', icon: ScanSearch, label: copy.contextTitle },
+  ];
 
   return (
     <StudioShell>
@@ -276,40 +216,22 @@ export default function StudioOverviewContent() {
           sessionCount={continueSessionCount}
         />
 
-        <section className={`grid gap-4 md:grid-cols-2 ${projects.length > 0 ? 'xl:grid-cols-4' : 'xl:grid-cols-3'}`} aria-label={copy.title}>
-          {projects.length > 0 && <OverviewCard
-            href="/studio/projects"
-            icon={<FolderOpen size={17} aria-hidden="true" />}
-            title={copy.projectsTitle}
-            description={copy.projectsDesc}
-            meta={`${projects.length} ${copy.projectsTitle} · ${activeProjects} ${copy.activeProjects} · ${sessionTotal} ${copy.sessions} · ${reviewItems} ${copy.reviewItems}`}
-            action={copy.viewProjects}
-          />}
-          <OverviewCard
-            href="/studio/apps"
-            icon={<Blocks size={17} aria-hidden="true" />}
-            title={copy.appsTitle}
-            description={copy.appsDesc}
-            meta={copy.appCount}
-            action={copy.openApps}
-          />
-          <OverviewCard
-            href="/studio/automation"
-            icon={<CalendarClock size={17} aria-hidden="true" />}
-            title={copy.automationTitle}
-            description={copy.automationDesc}
-            meta={copy.automationHint}
-            action={copy.openAutomation}
-          />
-          <OverviewCard
-            href="/studio/context"
-            icon={<ScanSearch size={17} aria-hidden="true" />}
-            title={copy.contextTitle}
-            description={copy.contextDesc}
-            meta={copy.contextHint}
-            action={copy.openContext}
-          />
-        </section>
+        <nav aria-label={copy.toolsTitle} className="flex flex-wrap gap-2">
+          {toolLinks.map(({ href, icon: Icon, label }) => (
+            <Link
+              key={href}
+              href={href}
+              className={buttonVariants({
+                variant: 'ghost',
+                size: 'lg',
+                className: 'min-h-11 gap-2 text-muted-foreground',
+              })}
+            >
+              <Icon size={16} aria-hidden="true" />
+              {label}
+            </Link>
+          ))}
+        </nav>
       </div>
     </StudioShell>
   );

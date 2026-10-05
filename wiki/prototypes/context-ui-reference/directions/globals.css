@@ -1,0 +1,74 @@
+/* Standalone prototype tokens: extracted from packages/web/app/globals.css. */
+:root {
+  color-scheme: light;
+  --background: #f8f6f1;
+  --foreground: #1c1a17;
+  --card: #f2efe9;
+  --surface: #ffffff;
+  --muted: #e8e4db;
+  --muted-foreground: #685f52;
+  --border: rgba(28, 26, 23, 0.12);
+  --sidebar: #ede9e1;
+  --amber: #c8873a;
+  --amber-action: #95551b;
+  --amber-text: #874810;
+  --amber-subtle: rgba(200, 135, 30, 0.08);
+  --amber-foreground: #ffffff;
+  --ring: #95551b;
+  --success: #234b2c;
+  --error: #762c2c;
+  --font-ui: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-reading: 'Lora', Georgia, 'Songti SC', 'STSong', serif;
+  --font-code: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --app-shadow: 0 6px 24px rgba(28, 26, 23, 0.04);
+  --overlay: rgba(28, 26, 23, 0.55);
+}
+.dark {
+  color-scheme: dark;
+  --background: #131210;
+  --foreground: #e8e4dc;
+  --card: #1c1a17;
+  --surface: #1c1a17;
+  --muted: #252219;
+  --muted-foreground: #b0a595;
+  --border: rgba(232, 228, 220, 0.16);
+  --sidebar: #1c1a17;
+  --amber: #d4954a;
+  --amber-action: #a46328;
+  --amber-text: #e0a85e;
+  --amber-subtle: rgba(212, 149, 74, 0.10);
+  --amber-foreground: #ffffff;
+  --ring: #e0a85e;
+  --success: #a0c4a4;
+  --error: #eeaaa4;
+  --app-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+  --overlay: rgba(0, 0, 0, 0.65);
+}
+.font-sans { font-family: var(--font-ui); }
+.font-reading { font-family: var(--font-reading); }
+.font-mono, .font-display { font-family: var(--font-code); }
+* { box-sizing: border-box; }
+body { margin: 0; color: var(--foreground); background: var(--background); font-size: 14px; line-height: 1.65; }
+button, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+button, a { -webkit-tap-highlight-color: transparent; }
+a { color: var(--amber-text); text-underline-offset: 4px; }
+button, input, textarea, summary, a, [tabindex] { outline-offset: 3px; }
+button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--ring); }
+button:disabled { cursor: default; opacity: .6; }
+[hidden] { display: none !important; }
+h1, h2, h3, p, figure { margin: 0; }
+h1, h2, h3 { line-height: 1.35; font-weight: 600; }
+button svg, a svg { flex-shrink: 0; }
+input, textarea { background: var(--background); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; min-width: 0; }
+textarea { resize: vertical; width: 100%; min-height: 94px; line-height: 1.8; }
+input::placeholder, textarea::placeholder { color: var(--muted-foreground); opacity: 1; }
+input[type="checkbox"], input[type="radio"] { accent-color: var(--amber-action); width: 17px; height: 17px; min-height: 17px; margin: 0; flex-shrink: 0; }
+input[type="date"] { min-height: 44px; }
+label { display: block; }
+.skip-link { position: fixed; top: 8px; left: 12px; padding: 10px 14px; background: var(--surface); transform: translateY(-150%); z-index: 50; }
+.skip-link:focus-visible { transform: none; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; clip: rect(0,0,0,0); overflow: hidden; white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; scroll-behavior: auto !important; } }

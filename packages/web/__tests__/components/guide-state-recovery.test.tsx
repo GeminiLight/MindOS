@@ -22,6 +22,43 @@ afterEach(async () => {
 });
 async function mount() { await act(async () => root.render(<Harness />)); }
 
+it('shows server guide state before a slow setup refresh and keeps a choice made during that refresh', async () => {
+  let finish!: (response: Response) => void;
+  api.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; })).mockResolvedValue(ok({}));
+  store.prime({ guideState: guide, aiConfigured: true });
+  await mount();
+  expect(state.guideState).toEqual(guide);
+  expect(state.aiConfigured).toBe(true);
+  await act(async () => { state.patchGuide({ dismissed: true }); });
+  await act(async () => finish(ok({ guideState: guide, activeProvider: '', providerConfigs: [] })));
+  expect(state.guideState?.dismissed).toBe(true);
+  expect(state.aiConfigured).toBe(true);
+});
+
+it('does not let an old server render replace a guide choice already loaded in this tab', async () => {
+  api.mockResolvedValue(ok({ guideState: guide }));
+  await mount();
+  await act(async () => { state.patchGuide({ dismissed: true }); });
+  store.prime({ guideState: guide, aiConfigured: false });
+  expect(state.guideState?.dismissed).toBe(true);
+});
+
+it('accepts a fresh server guide after an earlier page had no guide and no local edits', async () => {
+  api.mockResolvedValue(ok({ guideState: null }));
+  await mount();
+  expect(state.guideState).toBe(null);
+  await act(async () => { store.prime({ guideState: guide, aiConfigured: false }); });
+  expect(state.guideState).toEqual(guide);
+});
+
+it('keeps a server-rendered guide usable when a setup refresh fails', async () => {
+  api.mockResolvedValue(new Response('', { status: 503 }));
+  store.prime({ guideState: guide, aiConfigured: false });
+  await mount();
+  expect(state.guideState).toEqual(guide);
+  expect(state.error).toBe(null);
+});
+
 it('loads guide and active model readiness, then saves a choice', async () => {
   api.mockResolvedValueOnce(ok({ guideState: guide, activeProvider: 'p', providerConfigs: [{ id: 'p' }] })).mockResolvedValue(ok({}));
   await mount(); expect(state.aiConfigured).toBe(true);

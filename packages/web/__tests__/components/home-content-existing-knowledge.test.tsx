@@ -102,6 +102,31 @@ describe('HomeContent existing knowledge state', () => {
     host.remove();
   });
 
+  it('keeps the workbench stable after the first reply and expands only on request', async () => {
+    const HomeContent = (await import('@/components/HomeContent')).default;
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    try {
+      await act(async () => root.render(<HomeContent recent={[{ path: 'Notes/A.md', mtime: 1 }]} />));
+      const chat = () => chatProps.mock.lastCall?.[0] as {
+        maximized?: boolean;
+        onFirstMessage?: () => void;
+        onMaximize?: () => void;
+      };
+      expect(chat().maximized).toBe(false);
+      await act(async () => chat().onFirstMessage?.());
+      expect(chat().maximized).toBe(false);
+      expect(host.querySelector('h1')?.textContent).toBe(messages.en.ask.homeHeading);
+      await act(async () => chat().onMaximize?.());
+      expect(chat().maximized).toBe(true);
+      expect(host.querySelector('[data-home-focus-shell]')).not.toBeNull();
+    } finally {
+      await act(async () => root.unmount());
+      host.remove();
+    }
+  });
+
   it('lets the keyboard select suggestions with a single tab stop and labelled panel', async () => {
     const HomeContent = (await import('@/components/HomeContent')).default;
     const host = document.createElement('div');

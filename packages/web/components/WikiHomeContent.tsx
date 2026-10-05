@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { Brain, ChevronDown, FolderOpen, Plus, Sparkles, Search, FilePlus, ArrowRight, Clock, FileText, Table, Star, X, History } from 'lucide-react';
 import { usePinnedFiles } from '@/lib/hooks/usePinnedFiles';
@@ -51,21 +51,6 @@ export default function WikiHomeContent({ spaces, recent, mindSystemSpaces }: Wi
   const { t } = useLocale();
   const [sortBy, setSortBy] = useState<'recent' | 'name' | 'fileCount'>('recent');
   const [showAllSpaces, setShowAllSpaces] = useState(false);
-  const [suggestionIdx, setSuggestionIdx] = useState(0);
-
-  const suggestions = t.ask?.suggestions ?? [
-    'Summarize this document',
-    'List all action items',
-    'What are the key points?',
-    'Find related notes',
-  ];
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setSuggestionIdx(i => (i + 1) % suggestions.length);
-    }, 4000);
-    return () => clearInterval(interval);
-  }, [suggestions.length]);
 
   const sortedSpaces = useMemo(() => {
     const sorted = [...spaces];
@@ -113,12 +98,7 @@ export default function WikiHomeContent({ spaces, recent, mindSystemSpaces }: Wi
           >
             <Sparkles size={16} className="shrink-0 text-[var(--amber)] group-hover:scale-110 transition-transform duration-150" />
             <div className="flex-1 min-h-[1.5rem] flex items-center">
-              <span
-                key={suggestionIdx}
-                className="text-sm text-left text-muted-foreground animate-in fade-in duration-300"
-              >
-                {suggestions[suggestionIdx].label}
-              </span>
+              <span className="text-sm text-left text-muted-foreground">{t.home.askMind}</span>
             </div>
             <kbd className="hidden sm:inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-xs font-mono font-medium bg-[var(--amber-dim)] text-[var(--amber-text)]">
               ⌘/
@@ -127,17 +107,18 @@ export default function WikiHomeContent({ spaces, recent, mindSystemSpaces }: Wi
           <button
             onClick={triggerSearch}
             aria-label={t.sidebar.searchTitle}
-            className="hit-target-box flex items-center gap-2 px-3.5 py-3 border border-transparent text-sm text-muted-foreground transition-all duration-200 shrink-0 hover:-translate-y-0.5 [--hit-target-hover-bg:color-mix(in_srgb,var(--muted)_60%,transparent)] [--hit-target-border-width:1px] [--hit-target-border:color-mix(in_srgb,var(--border)_50%,transparent)] [--hit-target-hover-border:color-mix(in_srgb,var(--border)_65%,transparent)] [--hit-target-radius:var(--radius-xl)] [--hit-target-hover-shadow:0_1px_2px_0_color-mix(in_srgb,var(--foreground)_8%,transparent)]"
+            className="hit-target-box flex min-h-11 items-center gap-2 px-3.5 py-3 border border-transparent text-sm text-muted-foreground transition-all duration-200 shrink-0 hover:-translate-y-0.5 [--hit-target-hover-bg:color-mix(in_srgb,var(--muted)_60%,transparent)] [--hit-target-border-width:1px] [--hit-target-border:color-mix(in_srgb,var(--border)_50%,transparent)] [--hit-target-hover-border:color-mix(in_srgb,var(--border)_65%,transparent)] [--hit-target-radius:var(--radius-xl)] [--hit-target-hover-shadow:0_1px_2px_0_color-mix(in_srgb,var(--foreground)_8%,transparent)]"
           >
-            <Search size={14} />
+            <Search size={16} aria-hidden="true" />
+            <span>{t.sidebar.searchTitle}</span>
           </button>
         </div>
 
         {/* Quick actions */}
-        <div className="flex items-center gap-3 mt-4">
+        <div className="mt-4 flex min-w-0 items-stretch gap-2 sm:items-center sm:gap-3">
           <Link
             href="/view/Untitled.md"
-            className="hit-target-box inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-all duration-200 hover:-translate-y-0.5 text-[var(--amber-foreground)] [--hit-target-bg:var(--amber)] [--hit-target-hover-bg:var(--amber)] [--hit-target-radius:var(--radius-lg)] [--hit-target-hover-shadow:0_4px_6px_-1px_color-mix(in_srgb,var(--foreground)_10%,transparent)]"
+            className="hit-target-box inline-flex min-h-11 shrink-0 items-center gap-2 whitespace-nowrap px-4 py-2.5 text-sm font-medium transition-all duration-200 hover:-translate-y-0.5 text-[var(--amber-foreground)] [--hit-target-bg:var(--amber)] [--hit-target-hover-bg:var(--amber)] [--hit-target-radius:var(--radius-lg)] [--hit-target-hover-shadow:0_4px_6px_-1px_color-mix(in_srgb,var(--foreground)_10%,transparent)]"
           >
             <FilePlus size={14} />
             <span>{t.home.newNote}</span>
@@ -145,12 +126,15 @@ export default function WikiHomeContent({ spaces, recent, mindSystemSpaces }: Wi
           {lastFile && (
             <Link
               href={`/view/${encodePath(lastFile.path)}`}
-              className="hit-target-box inline-flex items-center gap-2 px-3.5 py-2 text-sm font-medium transition-colors text-muted-foreground hover:text-foreground [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-lg)]"
+              title={lastFile.path}
+              className="hit-target-box inline-flex min-h-11 min-w-0 flex-1 items-center gap-2 px-3 py-2 text-muted-foreground transition-colors hover:text-foreground sm:flex-none [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-lg)]"
             >
-              <ArrowRight size={14} className="text-[var(--amber)]/60" />
-              <span>{t.home.continueEditing}</span>
-              <span className="text-xs text-muted-foreground truncate max-w-32" suppressHydrationWarning>
-                {lastFile.path.split('/').pop()}
+              <ArrowRight size={14} className="shrink-0 text-[var(--amber)]/60" aria-hidden="true" />
+              <span className="min-w-0">
+                <span className="block text-sm font-medium">{t.home.continueEditing}</span>
+                <span className="block truncate text-xs text-muted-foreground" suppressHydrationWarning>
+                  {lastFile.path.split('/').pop()}
+                </span>
               </span>
             </Link>
           )}
