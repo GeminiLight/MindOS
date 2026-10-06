@@ -92,6 +92,14 @@ export const MINDOS_PROVIDER_PRESETS: Record<string, MindosProviderPreset> = {
     apiType: 'openai-completions',
     envKeys: ['OPENROUTER_API_KEY'],
   },
+  requesty: {
+    name: 'Requesty',
+    defaultModel: 'openai/gpt-4o-mini',
+    defaultBaseUrl: 'https://router.requesty.ai/v1',
+    supportsListModels: true,
+    apiType: 'openai-completions',
+    envKeys: ['REQUESTY_API_KEY'],
+  },
   mistral: {
     name: 'Mistral',
     defaultModel: 'mistral-large-latest',

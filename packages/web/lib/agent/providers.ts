@@ -9,7 +9,7 @@ type KnownProvider = string;
  */
 export type ProviderId =
   | 'anthropic' | 'openai' | 'google' | 'groq'
-  | 'xai' | 'openrouter' | 'mistral' | 'deepseek'
+  | 'xai' | 'openrouter' | 'requesty' | 'mistral' | 'deepseek'
   | 'zai' | 'zai-cn' | 'kimi-coding'
   | 'cerebras' | 'minimax' | 'minimax-cn' | 'huggingface'
   | 'ollama' | 'lm-studio' | 'vllm';
@@ -110,6 +110,20 @@ export const PROVIDER_PRESETS: Record<ProviderId, ProviderPreset> = {
     supportsBaseUrl: false,
     supportsThinking: false,
     supportsListModels: true,
+    category: 'more',
+  },
+  requesty: {
+    id: 'requesty',
+    name: 'Requesty',
+    nameZh: 'Requesty',
+    shortLabel: 'Requesty',
+    defaultModel: 'openai/gpt-4o-mini',
+    piProviderOverride: 'openai' as KnownProvider,
+    fixedBaseUrl: 'https://router.requesty.ai/v1',
+    supportsBaseUrl: true,
+    supportsThinking: false,
+    supportsListModels: true,
+    signupUrl: 'https://app.requesty.ai/api-keys',
     category: 'more',
   },
   mistral: {
@@ -314,6 +328,7 @@ export function toPiProvider(id: ProviderId): string {
  */
 const EXTRA_ENV_KEYS: Partial<Record<ProviderId, string>> = {
   deepseek: 'DEEPSEEK_API_KEY',
+  requesty: 'REQUESTY_API_KEY',
 };
 
 const DEFAULT_API_BY_PROVIDER: Partial<Record<ProviderId, string>> = {
@@ -323,6 +338,7 @@ const DEFAULT_API_BY_PROVIDER: Partial<Record<ProviderId, string>> = {
   groq: 'openai-completions',
   xai: 'openai-completions',
   openrouter: 'openai-completions',
+  requesty: 'openai-completions',
   mistral: 'openai-completions',
   deepseek: 'openai-completions',
   zai: 'openai-completions',
@@ -359,6 +375,7 @@ export function getApiKeyEnvVar(id: ProviderId): string | undefined {
 /** Read the actual API key from env for a provider */
 export function getApiKeyFromEnv(id: ProviderId): string | undefined {
   if (id === 'deepseek') return process.env.DEEPSEEK_API_KEY;
+  if (id === 'requesty') return process.env.REQUESTY_API_KEY;
   return loadPiAiRuntime()?.getEnvApiKey?.(toPiProvider(id) as KnownProvider);
 }
 
