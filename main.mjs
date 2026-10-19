@@ -9,6 +9,19 @@ function syncThemeButton() {
   themeButton?.setAttribute('aria-pressed', String(html.dataset.theme === 'dark'));
 }
 syncThemeButton();
+
+const languageLink = document.querySelector('.language-link');
+function syncLanguageAnchor() {
+  if (!languageLink) return;
+  let id = '';
+  try { id = decodeURIComponent(location.hash.slice(1)); } catch { /* Ignore malformed fragments. */ }
+  const target = new URL(languageLink.href);
+  target.hash = id && document.getElementById(id) ? location.hash : '';
+  languageLink.href = target.href;
+}
+syncLanguageAnchor();
+window.addEventListener('hashchange', syncLanguageAnchor);
+
 themeButton?.addEventListener('click', () => {
   const theme = html.dataset.theme === 'dark' ? 'light' : 'dark';
   html.dataset.theme = theme;
@@ -38,6 +51,11 @@ document.addEventListener('click', event => {
 
 document.querySelectorAll('[data-tabs]').forEach(list => {
   const tabs = [...list.querySelectorAll('[role="tab"]')];
+  const narrow = window.matchMedia('(max-width: 700px)');
+  const syncOrientation = () => list.setAttribute('aria-orientation',
+    list.dataset.tabs === 'screens' && !narrow.matches ? 'vertical' : 'horizontal');
+  syncOrientation();
+  narrow.addEventListener('change', syncOrientation);
   const moveIndicator = mountTabIndicator(list, tabs);
   function activate(index, focus = false) {
     const previous = tabs.findIndex(tab => tab.getAttribute('aria-selected') === 'true');
@@ -49,6 +67,7 @@ document.querySelectorAll('[data-tabs]').forEach(list => {
       stopMotion(panel);
       panel.hidden = !selected;
     });
+    if (list.dataset.tabs === 'phases') list.closest('#coevolution').dataset.flowPhase = String(index);
     if (previous !== index) {
       moveIndicator();
       revealPanel(document.getElementById(tabs[index].getAttribute('aria-controls')), index > previous ? 1 : -1);
@@ -59,6 +78,9 @@ document.querySelectorAll('[data-tabs]').forEach(list => {
     tab.addEventListener('click', () => activate(i));
     tab.addEventListener('keydown', event => {
       let next;
+      const vertical = list.getAttribute('aria-orientation') === 'vertical';
+      if (vertical && event.key === 'ArrowDown') next = (i + 1) % tabs.length;
+      if (vertical && event.key === 'ArrowUp') next = (i + tabs.length - 1) % tabs.length;
       if (event.key === 'ArrowRight') next = (i + 1) % tabs.length;
       if (event.key === 'ArrowLeft') next = (i + tabs.length - 1) % tabs.length;
       if (event.key === 'Home') next = 0;
@@ -134,32 +156,6 @@ if (releaseLink) {
     })
     .catch(() => { /* Keep the native latest-release link and all download routes. */ })
     .finally(() => clearTimeout(timeout));
-}
-// Pointer tilt stays independent of the optional ambient scene animation.
-const scene = document.querySelector('[data-constellation]');
-if (scene) {
-  const motion = window.matchMedia('(hover: hover) and (prefers-reduced-motion: no-preference)');
-  let frame;
-  const resetScene = () => {
-    cancelAnimationFrame(frame);
-    scene.style.setProperty('--scene-x', '0deg');
-    scene.style.setProperty('--scene-y', '0deg');
-  };
-  resetScene();
-  scene.addEventListener('pointermove', event => {
-    if (!motion.matches || event.pointerType === 'touch') return;
-    const bounds = scene.getBoundingClientRect();
-    if (!bounds.width || !bounds.height) return;
-    const x = Math.max(-1, Math.min(1, (event.clientX - bounds.left) / bounds.width * 2 - 1));
-    const y = Math.max(-1, Math.min(1, (event.clientY - bounds.top) / bounds.height * 2 - 1));
-    cancelAnimationFrame(frame);
-    frame = requestAnimationFrame(() => {
-      scene.style.setProperty('--scene-x', (x * 6).toFixed(2) + 'deg');
-      scene.style.setProperty('--scene-y', (-y * 4).toFixed(2) + 'deg');
-    });
-  });
-  scene.addEventListener('pointerleave', resetScene);
-  motion.addEventListener('change', resetScene);
 }
 html.classList.add('js-ready');
 mountPageMotion();

@@ -10,106 +10,195 @@ A local-first, open-source knowledge workspace for human–agent co-evolution. S
 
 You think here. Agents act on it. Evolve together.
 
-The local-first knowledge workspace for you and your agents.
 
-A shared place for you and your AI agents to think, work, and grow. Keep your knowledge local. Let each experience shape what comes next.
 
-Your knowledge.
-A place to work from.
+A local knowledge workspace. Shared context for the agents you use.
 
-Capture a thought, give it to an agent, and keep what you learn. One workspace connects the pieces.
+From context
+to action.
 
-### A home for your context.
+Start with a note. Put it to work.
 
-Browse and organize local notes, project knowledge, and workflows.
+Keep context
 
-### Put your knowledge to work.
+Work together
 
-Work with an agent in the context of your files, then review the result.
+Keep going
 
-### A shared starting point.
+Carry lessons
 
-Manage connected agents and inspect their connection status.
+### Your context, within reach.
 
-### Make room for reflection.
+Local notes, projects and workflows.
 
-Revisit your notes and unfinished threads. Decide what deserves to carry forward.
+### Context that gets work done.
 
-## 02 / THE CO-EVOLUTION LOOP
+Bring the background. Move the task forward.
 
-Human–agent co-evolution is a practice: your judgment guides agent work; reviewing that work helps you refine your judgment. Save what matters, and start the next task with a stronger shared context.
+### Switch agents. Keep the context.
 
-### Make your judgment explicit.
+See what is connected.
 
-Capture the context an agent cannot guess: what matters, what good looks like, and where the boundaries are.
+### Experience worth keeping.
 
-Launch a small, useful first version.
-Prioritize a clear onboarding experience.
-Show me the tradeoffs before making changes.
+Revisit the work. Carry the lesson forward.
 
-A thought becomes shared context.
+## 02 / FROM THOUGHT TO ACTION
 
-### Turn understanding into action.
+You set the direction. Agents act. Review the result and carry the lesson forward.
 
-A connected agent reads the relevant knowledge and helps move the task forward. You review the work against your own standards.
+Capture a thought
 
-Read the launch goals.
-Review the first-run experience.
-Propose changes with their tradeoffs.
+Make it shared context
 
-Shared context becomes reviewable work.
+Put it to work
 
-### Find the lesson in the result.
+A first version, with a clear first-run experience.
 
-Keep useful ideas, correct assumptions, and notice what changed your mind. Reflection is part of the work, not an afterthought.
+Projects / launch.md
 
-The shorter path made the next step clearer.
-But we hid an important choice.
-Next time: simplify the path, keep the decision visible.
+The next release
 
-Work becomes a lesson you can inspect.
+A clear first-run experience
 
-### Give the next task a better start.
+Review important changes
 
-Turn a reviewed lesson into a note, Skill, or SOP. Reuse it with another connected agent, and keep refining it as you learn.
+Read the same project context
+
+Review the first-run flow
+
+Build the proposed changes
+
+Review before reuse
+
+Your judgment leads. Reviewed experience comes back.
+
+## 03 / THE DIFFERENCE
+
+Same task.
+A different starting point.
+
+Spend less time rebuilding context.
+
+### Switch agents
+
+Start the explanation again.
+
+Repeat the goal and constraints.
+
+Rebuild the current project state.
+
+Continue from shared notes.
+
+Connect the next agent to the project notes.
+
+Continue from the same written decisions.
+
+A common starting point.
+
+### Start a new session
+
+Find the history. Retell the story.
+
+Search old conversations for the decision.
+
+Piece together what changed.
+
+Bring the project into the session.
+
+Point the agent to reviewed project context.
+
+Check what it read before proceeding.
+
+The context stays within reach.
+
+### Reuse a lesson
+
+A useful lesson stays in a chat.
+
+Repeat a mistake from the previous task.
+
+Write the same correction again.
+
+A reviewed lesson helps next time.
+
+Keep the lesson in a note or workflow.
+
+Use it as context for the next task.
+
+Experience you can carry forward.
+
+### Set the direction.
+
+Write down the goal, context and boundaries.
+
+Goal: ship the first version.
+Priority: the first-run experience.
+Boundary: review key changes first.
+
+Judgment becomes shared context.
+
+### Move it forward.
+
+Agents read the context and produce work you can review.
+
+Read the project goal.
+Review the first-run flow.
+Explain changes and tradeoffs.
+
+Context becomes action.
+
+### Keep the lesson.
+
+Keep useful judgments. Correct the assumptions.
+
+The shorter path is clearer.
+Key choices still need to be visible.
+Keep this lesson.
+
+Action becomes experience.
+
+### Start further ahead.
+
+Reviewed lessons become context for the next task.
 
 Make the next action clear.
-Keep meaningful choices visible.
-Explain the reason behind each recommendation.
+Keep key choices visible.
+Explain the reason.
 
-You refine your judgment. Agents gain better context.
+Clearer judgment. Better agent context.
 
-### Readable by you.
+### Keep it local.
 
-Your knowledge lives in local Markdown and other plain-text files. Open it, edit it, back it up, or take it elsewhere.
+Markdown files you can edit, back up and take with you.
 
-### Directed by you.
+### Review the work.
 
-Review and correct the context agents use. Keep important decisions and reusable workflows in a form you can understand.
+Inspect context and important changes.
 
-### Connected on your terms.
+### Connect your way.
 
-MCP + Skills give supported agents access to your knowledge. Cloud model calls may send selected context to your chosen provider.
+MCP and Skills connect agents. Cloud models may receive selected context.
 
 ### Is MindOS free?
 
-MindOS is open source under the MIT license. Your chosen model provider or connected services may charge for their usage.
+MindOS is MIT open source. Models and third-party services may charge separately.
 
-### Does co-evolution mean training an AI model?
+### Does co-evolution train the model?
 
-No. Here it means improving how you and agents work together: you reflect and refine your judgment, while reviewed notes, Skills, and SOPs give agents better context. It does not mean automatically changing model weights.
+It improves judgment and shared context. It does not change model weights.
 
-### Can I use my existing notes?
+### Can I use existing notes?
 
-MindOS works with a local knowledge directory. Start with a small copy of existing Markdown notes, check the setup, and back up important files before giving agents write access.
+Yes. Test with a small Markdown folder and back up important files first.
 
-### Will every agent automatically remember everything?
+### Will agents remember everything?
 
-No. A client needs a supported connection and the right setup. What an agent reads depends on its tools, instructions, and the current task. Verify the connection and review the context it uses.
+No. Set up the connection. Tools, instructions and the task determine what is read.
 
-### Does local-first mean nothing leaves my computer?
+### Does all data stay local?
 
-Your knowledge files are stored locally. When you use a cloud model or an external agent/service, selected context can be sent to that provider. The data guide explains the boundary.
+Files stay local. Cloud models or external services may receive selected context.
 
 ### Install MindOS
 
@@ -147,9 +236,9 @@ Configured synchronization and third-party services can send data outside the lo
 
 Choose a small starting directory, review the agent connection, and use non-sensitive example notes to check the complete workflow before adding important material.
 
-Install MindOS, bring a few notes, and connect an agent. You do not need to organize your whole life to begin.
+Get MindOS. Connect an agent. Bring your first note.
 
-Ask your agent to read a project note, help with a task, and save a lesson you have reviewed.
+Complete a task. Keep one reviewed lesson.
 
 ## zh-Hans
 
@@ -159,106 +248,195 @@ MindOS 是面向 Human–Agent Co-evolution 的本地优先开源知识工作台
 
 你在此思考。 Agent 依此行动。 共同进化。
 
-属于你与 Agent 的本地知识工作台。
 
-一个让你与 AI Agent 共同思考、行动与成长的地方。知识留在本地，每一次经历，都成为下一次协作的养分。
 
-让积累的知识，
-成为行动的起点。
+本地知识工作台，让你的 Agent 带着上下文行动。
 
-记录一个想法，交给 Agent 协作，再留下值得复用的经验。在同一个工作台里，把这些事连起来。
+你的知识，
+用起来。
 
-### 你的上下文，有处安放。
+从一篇笔记，开始一次协作。
 
-浏览、整理本地笔记、项目知识与工作流。
+整理上下文
 
-### 从理解，到一起完成。
+一起完成
 
-带着文件上下文与 Agent 协作，再审阅行动的结果。
+接续协作
 
-### 换个 Agent，从这里继续。
+留下经验
 
-管理已连接的 Agent，检查它们的连接状态。
+### 随时找到你的上下文。
 
-### 为复盘，留一点空间。
+笔记、项目、工作流，都在本地。
 
-重访笔记与未完成的线索，决定哪些经验值得带向下一次。
+### 带着知识，一起完成。
 
-## 02 / 共同演进
+让 Agent 读懂背景，再推进任务。
 
-Human–Agent Co-evolution，是一种持续的协作方式：你的判断指引 Agent 行动，审阅行动的结果也帮助你修正判断。把值得留下的经验写进知识库，下一次便有了更好的共同起点。
+### 换个 Agent，接着工作。
 
-### 把你的判断，写清楚。
+连接状态，一眼可见。
 
-记录 Agent 无法凭空猜到的背景：什么最重要，怎样才算做好，哪些边界需要遵守。
+### 经历，变成经验。
 
-先发布一个小而有用的版本。
-优先做好首次使用体验。
-改动之前，先让我看到方案与取舍。
+回看线索，留下值得复用的判断。
 
-一个想法，成为共享的上下文。
+## 02 / 从想法到行动
 
-### 让理解，向前走一步。
+你定方向，Agent 行动。复盘留下经验，下一次接着进步。
 
-连接的 Agent 读取相关知识，帮助推进任务。你根据自己的标准，审阅它给出的方案和结果。
+记下一个想法
 
-读取产品的发布目标。
-检查首次使用的完整流程。
-提出改进建议，并说明每项取舍。
+成为共享上下文
 
-共享的上下文，成为可审阅的行动。
+让行动接上
 
-### 从做过的事里，看见经验。
+做一个首版，把首次使用体验打磨清楚。
 
-保留有用的想法，纠正不准确的假设，也留意什么改变了你的判断。复盘，是工作的一部分。
+Projects / launch.md
 
-更短的流程，让下一步更清楚。
-但我们也藏起了一个重要选择。
-下次：简化路径，保留关键决策。
+下一次发布
 
-行动的结果，成为可以检查的经验。
+清晰的首次使用体验
 
-### 下一次，从更好的起点出发。
+重要改动，由你审阅
 
-将审阅过的经验沉淀为笔记、Skill 或 SOP。让另一位兼容 Agent 也能读取，并在新的实践中继续修正。
+读取同一份项目上下文
 
-让下一步行动清晰可见。
-保留真正影响结果的选择。
-给出建议时，也说明背后的理由。
+检查首次使用流程
 
-你的判断更清晰，Agent 的上下文更充分。
+实现审阅后的方案
 
-### 你读得懂。
+审阅后再复用
 
-知识保存在本地 Markdown 等纯文本文件中。随时打开、编辑、备份，也可以带去别的工具。
+你定方向。行动留下经验，经验回到下一次。
 
-### 你来修正。
+## 03 / 两种体验
 
-检查并纠正 Agent 使用的上下文。重要决策与可复用工作流，以你能理解的方式留下。
+同一个任务，
+不同的起点。
 
-### 按你的方式连接。
+少一点重讲背景，多一点接着往前。
 
-通过 MCP + Skills 向兼容 Agent 提供知识。调用云模型时，所选上下文可能发送给你选择的服务商。
+### 换个 Agent
+
+背景，又要讲一遍。
+
+重讲目标、约定与限制。
+
+重新拼出项目的当前状态。
+
+换个工具，接着工作。
+
+让新 Agent 读取项目笔记。
+
+沿着同一份决策继续推进。
+
+从同一份上下文出发。
+
+### 开启新对话
+
+翻历史，重新交代。
+
+在旧对话里寻找那次决策。
+
+再解释后来发生了什么。
+
+带着项目，开始对话。
+
+提供审阅过的项目上下文。
+
+核对读取内容，再继续行动。
+
+背景，就在手边。
+
+### 复用经验
+
+好经验，留在聊天里。
+
+再次遇到上次的问题。
+
+把同一条纠正再说一遍。
+
+留下这次，帮到下次。
+
+把经验写进笔记或工作流。
+
+作为下一次任务的参考。
+
+把经历变成可复用的判断。
+
+### 定方向。
+
+目标、背景与边界，写进一篇笔记。
+
+目标：发布首个版本。
+优先：首次使用体验。
+边界：关键改动先确认。
+
+判断，成为共享上下文。
+
+### 向前推进。
+
+Agent 读取上下文，推进可审阅的行动。
+
+读取项目目标。
+检查首次使用流程。
+提出方案与取舍。
+
+上下文，成为行动。
+
+### 留下经验。
+
+保留有效判断，修正错误假设。
+
+路径更短，下一步更清楚。
+关键选择，也应看得见。
+保留这一条经验。
+
+行动，留下经验。
+
+### 带进下一次。
+
+审阅过的经验，进入下一次协作。
+
+下一步，清晰可见。
+关键选择，不被隐藏。
+建议，说明理由。
+
+你的判断更清晰，Agent 上下文更充分。
+
+### 本地保存。
+
+Markdown 文件，随时编辑、备份和带走。
+
+### 你来审阅。
+
+查看上下文，检查重要改动。
+
+### 按需连接。
+
+MCP 与 Skills 接入 Agent。云模型可能接收所选上下文。
 
 ### MindOS 免费吗？
 
-MindOS 以 MIT 协议开源。你选择的模型服务商或连接的第三方服务，可能会按各自规则收取使用费用。
+MindOS 以 MIT 协议开源。模型与第三方服务可能另行收费。
 
-### 共同演进，是指训练 AI 模型吗？
+### 共同演进是在训练模型吗？
 
-不是。这里指的是改善你与 Agent 的协作：你通过复盘修正判断，经过审阅的笔记、Skills 与 SOP 则为 Agent 提供更好的上下文。这不意味着自动改变模型权重。
+共同演进改善判断与共享上下文，不改变模型权重。
 
-### 可以用我已有的笔记吗？
+### 能用已有的笔记吗？
 
-MindOS 使用本地知识目录。建议先复制少量已有 Markdown 笔记验证配置，并在向 Agent 提供写入权限前备份重要文件。
+可以。先用少量 Markdown 验证配置，重要文件做好备份。
 
-### 每个 Agent 都会自动记住所有内容吗？
+### Agent 会自动记住一切吗？
 
-不会。客户端需要兼容的连接方式和正确配置。Agent 读取什么取决于工具、指令和当前任务。请先验证连接，并审阅实际使用的上下文。
+不会。需要正确连接；读取什么由工具、指令与任务决定。
 
-### 本地优先，是指所有数据都不离开电脑吗？
+### 数据都留在本地吗？
 
-知识文件存储在本地。但使用云模型、外部 Agent 或服务时，所选上下文可能发送至对应服务商。数据说明页解释了这一边界。
+文件保存在本地。云模型或外部服务可能接收所选上下文。
 
 ### 安装 MindOS
 
@@ -296,6 +474,6 @@ MindOS 将知识保存在本地目录。你可以在 MindOS 或常用编辑器�
 
 选择一个小范围目录，检查 Agent 连接，先用非敏感示例笔记验证完整流程，再加入重要资料。
 
-安装 MindOS，带来几篇笔记，连接一个 Agent。不必先整理好整个人生，才开始使用。
+下载 MindOS，连接 Agent，带上第一篇笔记。
 
-让 Agent 读一篇项目笔记，协作完成一个任务，再保存一条经过你审阅的经验。
+完成一个任务，留下一个经过审阅的经验。

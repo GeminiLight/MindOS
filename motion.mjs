@@ -24,9 +24,9 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) cance
 
 export function revealPanel(element, direction = 1) {
   animate(element, [
-    { opacity: .55, transform: `translateX(${direction * 8}px)` },
+    { opacity: .7, transform: `translateX(${direction * 6}px)` },
     { opacity: 1, transform: 'translateX(0)' },
-  ]);
+  ],220);
 }
 
 export function mountTabIndicator(list, tabs) {
@@ -43,12 +43,13 @@ export function mountTabIndicator(list, tabs) {
     const parent = list.getBoundingClientRect();
     const width = selected.offsetWidth;
     const left = selected.offsetLeft;
+    const top = selected.offsetTop + selected.offsetHeight - marker.offsetHeight;
     stopMotion(marker);
     marker.style.width = width + 'px';
-    marker.style.transform = `translateX(${left}px)`;
+    marker.style.transform = `translate(${left}px, ${top}px)`;
     if (withMotion && before.width) animate(marker, [
-      { transform: `translateX(${before.left - parent.left - list.clientLeft}px) scaleX(${before.width / width})` },
-      { transform: `translateX(${left}px) scaleX(1)` },
+      { transform: `translate(${before.left - parent.left - list.clientLeft}px, ${before.top - parent.top - list.clientTop}px) scaleX(${before.width / width})` },
+      { transform: `translate(${left}px, ${top}px) scaleX(1)` },
     ], 220);
   };
   requestAnimationFrame(() => update());

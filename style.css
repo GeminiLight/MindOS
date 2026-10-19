@@ -61,13 +61,6 @@ html[lang="zh-Hans"] .hero h1 .hero-accent { font-family: var(--font-sans); font
 .trust-list li { display: inline-flex; gap: 6px; align-items: center; }
 .section-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 40px; margin-bottom: 42px; }
 .section-intro { max-width: 360px; font-size: 16px; line-height: 1.8; color: var(--muted-foreground); padding-bottom: 3px; }
-.js-ready .tab-list { display: flex !important; }
-.tab-list { gap: 0; padding: 4px; }
-.tab-list button { min-height: 48px; background: transparent; border: 0; padding: 12px 24px; border-radius: var(--radius-md); font-size: 14px; color: var(--muted-foreground); display: inline-flex; align-items: center; justify-content: center; gap: 12px; white-space: nowrap; }
-.tab-list button[aria-selected="true"] { color: var(--foreground); background: var(--popover); box-shadow: 0 1px 3px var(--border); }
-.tab-list button:hover { color: var(--foreground); }
-.screen-tabs { width: max-content; max-width: 100%; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-lg); margin-bottom: 24px; }
-.tab-number { font-size: 11px; color: var(--amber-text); }
 .screen-frame { border: 1px solid var(--border); border-radius: var(--radius-xl); background: var(--card); overflow: clip; box-shadow: var(--shadow); }
 .screen-panel { scroll-margin-top: 110px; }
 .screen-panel:focus-visible { outline-offset: -4px; }
@@ -86,9 +79,6 @@ html[lang="zh-Hans"] .hero h1 .hero-accent { font-family: var(--font-sans); font
 .evolution-intro > p:not(.eyebrow) { color: var(--muted-foreground); font-size: 16px; line-height: 1.85; margin-top: 24px; max-width: 370px; }
 .loop-index { display: flex; align-items: center; gap: 15px; margin-top: 38px; font-size: 12px; line-height: 1.4; color: var(--muted-foreground); }
 .loop-index .brand-mark { width: 66px; height: 44px; }
-.phase-tabs { background: var(--background); border: 1px solid var(--border); border-radius: var(--radius-lg); justify-content: space-between; margin-bottom: 34px; }
-.phase-tabs button { padding-inline: 14px; flex: 1; gap: 8px; }
-.phase-tabs button span { font-size: 11px; color: var(--amber-text); }
 .phase-panel { min-height: 400px; }
 .phase-panel .eyebrow { margin-bottom: 10px; }
 .phase-panel h3 { font-size: 27px; }
@@ -217,16 +207,12 @@ html[lang="zh-Hans"] .principles blockquote { font-family: var(--font-sans); fon
   .section-heading { flex-direction: column; align-items: flex-start; gap: 20px; }
   .section-intro { max-width: 460px; font-size: 15px; }
   h2 { font-size: 34px; }
-  .screen-tabs { width: 100%; }
-  .tab-list button { padding: 10px; flex: 1; gap: 5px; font-size: 12px; }
-  .tab-number { display: none; }
   .screen-meta { padding: 18px; gap: 10px; }
   .screen-meta h3 { font-size: 16px; }
   .screen-meta p { font-size: 12px; }
   .screen-image-link { margin: 0 8px 8px; }
   .screen-frame { border-radius: var(--radius-lg); }
   .image-note { font-size: 11px; text-align: left; }
-  .phase-tabs { margin-bottom: 26px; }
   .phase-panel { min-height: 425px; }
   .phase-panel h3 { font-size: 25px; }
   .phase-description { min-height: 105px; font-size: 15px; }
@@ -260,3 +246,7 @@ html[lang="zh-Hans"] .principles blockquote { font-family: var(--font-sans); fon
   html { scroll-behavior: auto; }
   *,*::before,*::after { animation: none !important; transition: none !important; }
 }
+
+/* Reuse the product artwork rather than drawing a second website identity. */
+.brand .brand-mark { width: 52px; height: 44px; object-fit: contain; }
+.loop-index .brand-mark { object-fit: contain; }

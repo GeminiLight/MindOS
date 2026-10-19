@@ -1,0 +1,55 @@
+/* Shared tabs: content is available before enhancement, selection never waits for motion. */
+.js-ready .tab-list { display: flex !important; }
+.tab-list { position: relative; isolation: isolate; }
+.tab-list button { position: relative; border: 0; background: transparent; color: var(--muted-foreground); cursor: pointer; }
+.tab-list button[aria-selected="true"],.tab-list button:hover { color: var(--foreground); }
+.tab-indicator { position: absolute; left: 0; top: 0; width: 0; height: 2px; pointer-events: none; background: var(--amber-text); transform-origin: left center; z-index: 10; }
+
+/* The actual product is the focal point; the rail stays smaller than the view. */
+.experience-stage { background: linear-gradient(135deg,var(--card),var(--background)); border: 1px solid var(--border); border-radius: var(--radius-xl); overflow: clip; box-shadow: 0 30px 80px color-mix(in srgb,var(--foreground) 6%,transparent); }
+.js-ready .experience-stage { display: grid; grid-template-columns: 206px minmax(0,1fr); }
+.js-ready .screen-tabs { display: grid !important; grid-template-columns: 1fr; align-content: start; }
+.screen-tabs { padding: 16px 10px; gap: 8px; border-right: 1px solid var(--border); background: transparent; }
+.screen-tabs button { display: grid; grid-template-columns: 28px minmax(0,1fr) 12px; column-gap: 10px; row-gap: 6px; align-items: center; text-align: left; padding: 19px 12px; min-height: 92px; border-radius: var(--radius-md); transition: background-color .2s,color .2s; }
+.tab-topline { display: contents; }
+.tab-symbol { grid-column: 1; grid-row: 1 / 3; display: grid; place-items: center; width: 28px; height: 32px; color: var(--muted-foreground); transition: color .2s,transform .2s; }
+.tab-symbol .ui-icon { width: 22px; height: 22px; }
+.tab-number { grid-column: 3; grid-row: 1; font-size: 10px; color: var(--muted-foreground); }
+.tab-title { grid-column: 2; grid-row: 1; font-size: 15px; line-height: 1.4; font-weight: 500; }
+.tab-caption { grid-column: 2 / 4; grid-row: 2; font-size: 12px; line-height: 1.5; }
+.screen-tabs button:hover { background: var(--muted); }
+.screen-tabs button:hover .tab-symbol { transform: translateY(-2px); color: var(--amber-text); }
+.screen-tabs button[aria-selected="true"] { background: var(--popover); box-shadow: inset 0 0 0 1px var(--border),0 4px 12px color-mix(in srgb,var(--foreground) 4%,transparent); }
+.screen-tabs button[aria-selected="true"] .tab-symbol { color: var(--amber-text); }
+.screen-tabs button:focus-visible,.phase-tabs button:focus-visible { outline-offset: -4px; }
+.experience-stage .screen-frame { min-width: 0; background: transparent; border: 0; box-shadow: none; border-radius: 0; }
+.screen-meta { padding: 22px 26px; border: 0; background: transparent; }
+.screen-meta h3 { font-size: 23px; letter-spacing: -.03em; text-wrap: balance; }
+.screen-meta [data-enlarge] { width: auto; padding: 8px 12px; gap: 8px; border: 1px solid var(--border); border-radius: var(--radius-md); font-size: 12px; }
+.screen-meta [data-enlarge] svg { width: 16px; height: 16px; }
+.screen-image-link { display: block; margin: 0 14px 14px; aspect-ratio: 1.54; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: 0 14px 30px color-mix(in srgb,var(--foreground) 7%,transparent); }
+.screen-image-link img { width: 100%; height: 100%; object-fit: cover; object-position: top; border: 0; border-radius: 0; }
+.image-note { margin-top: 14px; font-size: 12px; text-align: right; }
+@media (max-width: 900px) and (min-width: 701px) {
+ .js-ready .experience-stage { grid-template-columns: 174px minmax(0,1fr); }
+ .screen-tabs button { padding-inline: 8px; column-gap: 8px; grid-template-columns: 24px minmax(0,1fr); }
+ .tab-number { display: none; }
+ .tab-title { font-size: 14px; }
+ .screen-meta [data-enlarge] span { display: none; }
+}
+@media (max-width: 700px) {
+ .js-ready .experience-stage { display: block; }
+ .js-ready .screen-tabs { grid-template-columns: repeat(4,minmax(0,1fr)); padding: 6px; gap: 2px; border-right: 0; border-bottom: 1px solid var(--border); }
+ .screen-tabs button { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 78px; padding: 8px 2px; gap: 7px; text-align: center; }
+ .tab-topline { display: block; }
+ .tab-symbol { width: 24px; height: 24px; }
+ .tab-symbol .ui-icon { width: 21px; height: 21px; }
+ .tab-title { font-size: 12px; }
+ .tab-caption,.tab-number { display: none; }
+ .screen-meta { padding: 18px 16px; gap: 8px; }
+ .screen-meta h3 { font-size: 19px; }
+ .screen-meta [data-enlarge] { width: 44px; padding: 10px; }
+ .screen-meta [data-enlarge] span { display: none; }
+ .screen-image-link { margin: 0 8px 8px; }
+ .image-note { text-align: center; }
+}

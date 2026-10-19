@@ -3,7 +3,9 @@
 [data-scene-ready]:not([data-scene-reduced]) .mesh-signals,
 [data-scene-ready]:not([data-scene-reduced]) .mesh-pulses { display: inline; }
 [data-scene-ready]:not([data-scene-reduced]) .scene-motion-toggle { display: inline-flex; }
-.scene-motion-toggle { position: absolute; top: -6px; right: 5%; z-index: 10; width: 36px; height: 36px; min-width: 44px; min-height: 44px; color: var(--hero-muted); }
+.scene-motion-toggle { position: absolute; top: -6px; right: 5%; z-index: 10; width: 36px; height: 36px; min-width: 44px; min-height: 44px; border-radius: var(--radius-lg); color: var(--hero-muted); transition: color .16s, background-color .16s, border-color .16s, transform .16s; }
+.scene-motion-toggle:hover { color: var(--hero-foreground); background: var(--hero-glass); border-color: var(--hero-border); }
+.scene-motion-toggle[aria-pressed="true"] { color: var(--hero-amber); border-color: color-mix(in srgb, var(--hero-amber) 35%, transparent); }
 .scene-motion-toggle .ui-icon { width: 14px; height: 14px; }
 .scene-motion-toggle .ui-icon:last-child { display: none; }
 .scene-motion-toggle[aria-pressed="true"] .ui-icon:first-child { display: none; }
@@ -35,3 +37,41 @@
   .mesh-signals,.mesh-pulses,.scene-motion-toggle { display: none !important; }
   .mesh-ribbon,.mesh-core-spark { animation: none !important; transform: none !important; }
 }
+
+/* The canvas contains genuine 3D geometry. Text stays on the readable HTML plane. */
+.scene-navigation { display: none; }
+.scene-canvas { display: block; visibility: hidden; position: absolute; inset: 0; width: 100%; height: 100%; }
+[data-scene-3d] .constellation-art { visibility: hidden; }
+[data-scene-3d] .constellation-stage { transform: none; transition: none; }
+[data-scene-3d] .scene-canvas { visibility: visible; position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; touch-action: pan-y pinch-zoom; border-radius: var(--radius-lg); }
+[data-scene-dragging] .scene-canvas { cursor: grabbing; }
+[data-scene-3d] .scene-label,[data-scene-3d] .scene-center-label,[data-scene-3d] .context-chip { pointer-events: none; user-select: none; }
+[data-scene-3d] .scene-canvas:focus-visible { outline-offset: -3px; }
+/* One quiet capsule: the hint whispers, the reset action reads as the only control. */
+[data-scene-3d] .scene-navigation { display: flex; position: absolute; bottom: 28px; left: 8%; right: 0; width: max-content; max-width: calc(100% - 8%); margin-inline: auto; align-items: center; justify-content: center; gap: 10px; padding: 3px 3px 3px 14px; border: 1px solid color-mix(in srgb, var(--hero-border) 70%, transparent); border-radius: var(--radius-xl); background: var(--hero-glass); box-shadow: 0 8px 24px var(--hero-glow); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); color: var(--hero-muted); font-size: 11px; letter-spacing: .02em; }
+#scene-drag-hint { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+#scene-drag-hint::before { content: ''; width: 12px; height: 1px; background: var(--hero-amber); opacity: .7; transition: opacity .2s; }
+[data-scene-resting] #scene-drag-hint::before { opacity: .3; }
+.scene-reset { min-height: 30px; padding: 4px 12px; border: 1px solid var(--hero-border); border-radius: var(--radius-md); background: color-mix(in srgb, var(--hero-surface) 70%, transparent); color: var(--hero-foreground); font: inherit; font-weight: 500; letter-spacing: .01em; cursor: pointer; transition: border-color .16s, background-color .16s, color .16s, transform .16s; }
+.scene-reset:hover { border-color: var(--hero-amber); color: var(--hero-amber); }
+.scene-reset:active { transform: scale(.97); }
+.scene-reset:focus-visible { outline-offset: 2px; }
+.scene-touch-hint { display: none; }
+@media (pointer: coarse) {
+  .scene-touch-hint { display: inline; }
+  .scene-pointer-hint { display: none; }
+  .scene-reset { min-height: 44px; padding-inline: 16px; }
+}
+@media (max-width: 600px) {
+  [data-scene-3d] .scene-navigation { bottom: 24px; left: 0; max-width: calc(100% - 16px); padding-left: 12px; font-size: 10px; gap: 8px; }
+  [data-scene-3d] .constellation-stage { bottom: 36px; }
+  [data-scene-3d] .context-chip { font-size: 8px; }
+  [data-scene-3d] .chip-memory { bottom: 22%; }
+}
+
+/* Keep motion controls in one place; the SVG fallback retains its pause action. */
+[data-scene-ready]:not([data-scene-reduced]):not([data-scene-3d]) .scene-navigation { display:flex; position:absolute; bottom:28px; left:0; right:0; justify-content:center; }
+[data-scene-ready]:not([data-scene-3d]) .scene-navigation #scene-drag-hint, [data-scene-ready]:not([data-scene-3d]) .scene-reset { display:none; }
+.scene-navigation .scene-motion-toggle { position:static; flex-shrink:0; margin:0; width:36px; min-width:36px; min-height:30px; height:30px; }
+.scene-caption { display:none; }
+@media(pointer:coarse) { .scene-navigation .scene-motion-toggle { min-width:44px; min-height:44px; } }

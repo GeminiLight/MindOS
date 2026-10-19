@@ -32,6 +32,7 @@
   --hero-border: #d8d2c7;
   --hero-surface: #f2efe9;
   --hero-amber: #82531f;
+  --hero-title: #ad742e;
   --hero-filament: #ad742e;
   --hero-action: #95551b;
   --hero-core: #82531f;
@@ -62,6 +63,7 @@
   --hero-border: #3d3930;
   --hero-surface: #1d1d19;
   --hero-amber: #efb86d;
+  --hero-title: #efb86d;
   --hero-filament: #efb86d;
   --hero-action: #a46328;
   --hero-core: #ffe4b3;
@@ -88,6 +90,7 @@
   --color-hero-border: var(--hero-border);
   --color-hero-surface: var(--hero-surface);
   --color-hero-amber: var(--hero-amber);
+  --color-hero-title: var(--hero-title);
   --color-hero-filament: var(--hero-filament);
   --color-hero-action: var(--hero-action);
   --color-hero-core: var(--hero-core);
