@@ -126,3 +126,74 @@ Integration: PR #347 merged into main at `1e80ebe7` on 2026-09-12. The main work
 Removed the 22 static SVG orbit nodes and their unused style. Filaments, moving signal heads, trails and the central shared-context mark remain. The bilingual headline now explicitly connects thinking here to agents acting on that context, ending with shared evolution. Mobile font minima were lowered only for the narrowest screens so each phrase stays on one line from 320px. No motion lifecycle or integration behavior changed.
 
 Validation: 28 website/workflow contracts and 36 browser tests pass, including 16 bilingual/theme screenshots at 320/390/768/1440px. The original headline assertion failed before implementation; the 320px Chinese line-wrap check caught and verified the narrow-screen sizing correction. Screenshot paths: `/tmp/mindos-website-{en|zh}-{320|390|768|1440}-{light|dark}.png`.
+
+
+## Three-dimensional shared mind — 2026-09-13
+
+`scene-geometry.mjs` generates a closed, thin ribbon with varying width around a genuine three-dimensional figure-eight: the two crossings occupy different depths. `scene-renderer.mjs` draws its surface, filaments and moving signal heads using native WebGL with a depth buffer and premultiplied alpha. It reads existing semantic theme colors; there are no additional libraries or external assets. Fitting follows the current orientation so side and back views remain inside the viewport. Ambient drawing is capped at 30fps and DPR at 1.5; direct input and inertia retain the display refresh rate. Projection fitting is cached until the view or dimensions change, and shader time wraps without a visible jump.
+
+`scene.mjs` owns unrestricted yaw/pitch, damped release velocity, reset, keyboard navigation, visibility and reduced-motion state. The original whole-stage CSS pointer tilt handler was removed from `main.mjs`. Mouse dragging rotates both axes; touch-action pan-y keeps vertical scrolling native while horizontal gestures rotate the object. Labels remain upright. The canvas has a localized keyboard description, focus treatment and a visible reset button. Reduced motion keeps deliberate rotation available while stopping inertia and automatic light movement.
+
+The original SVG remains in generated HTML and is hidden only after the first GPU draw. Missing WebGL, allocation/compile failure or context loss restores it; context restoration recreates GPU resources. No-JavaScript and missing observer APIs retain the SVG directly. Tests inspect actual canvas pixels and GPU rotation uniforms, including full turns, exact paused-view reset, inertia/cancellation, native touch scrolling, background/offscreen behavior, GPU failure and recovery.
+
+Validation: 31 contract tests and 43 Playwright tests pass, with 16 bilingual/theme/viewport screenshots. Supplemental Chromium and WebKit mobile rotation/reset checks pass; headless Firefox lacks WebGL in this environment and its SVG fallback was verified. The test server accepts WEBSITE_PORT to isolate this candidate preview on port 4580 from the main preview on 4578. No product runtime or release gate is involved. Candidate scope and acceptance: `wiki/specs/spec-website-3d-scene.md`.
+
+
+Visual refinement: the ribbon follows the original SVG’s widening and gathering instead of a uniform pipe. A depth prepass prevents translucent rear strands from forming a grid; normal-based highlights and derivative-filtered strands retain the fine amber texture. Four counter-flowing heads, subtle material light and slow context pulses replace the busier particle field. Drag sensitivity and release damping are softer; reset follows the shortest arc in 260ms, with nonnegative progress to avoid first-frame recoil. Browser coverage includes intermediate reset angles and the missing-derivatives fallback. Updated Chromium/WebKit captures: `/tmp/mindos-silk-{chromium|webkit}-{light|dark|rotated|mobile}.png`.
+
+
+## Product and evolution navigation refinement — 2026-09-13
+
+The product tabs now form the upper edge of the screenshot stage, with vector icons, short descriptions and an amber selection rule. On phones they wrap into two columns; the indicator follows both axes. The evolution tabs use four connected stations, with a clearer role/title hierarchy and numbered note lines in the panel. The old shared pill rules were removed. Existing keyboard selection, reduced motion, interrupted transitions, image enlargement and static fallbacks remain. No additional library or external asset was added.
+
+Validation: 31 website/workflow contracts and 45 browser tests passed. Two new behavioral tests failed before implementation and now cover mobile rows, indicator alignment and accessible labels/icons. Sixteen full-page screenshots and twenty focused Chromium/WebKit captures were refreshed. Spec: `wiki/specs/spec-website-experience-navigation.md`. Product release checks were not run for these static website changes.
+
+
+## Shared three-dimensional core — 2026-09-13
+
+The fixed SVG center overlay has been replaced by scene-core.mjs: a thin, double-sided medallion with beveled edges and a raised four-point star. It sits near the front ribbon crossing and uses the same rotation, projection and depth buffer; the rear view is naturally occluded by the foreground ribbon. Text labels remain readable on the HTML plane. Slow pearl highlights, a small axial rocking motion and two expanding rings share the existing scene clock, so pause, reduced motion and visibility changes freeze all effects together. Existing SVG failure recovery is intact. DPR is now capped at 2 for finer small edges, with the ambient 30fps limit retained.
+
+Validation: 33 contract tests and 46 browser tests, including opaque center pixels, autonomous shimmer, paused stability and rotated/reset views. Geometry rejects unsafe resolution inputs and verifies finite unit normals and real depth. Screenshot paths: `/tmp/mindos-core-{chromium|webkit}-{light|dark}.png`, plus side/back/mobile captures. No product release gate was run for this isolated website rendering change.
+
+
+## First-party identity and Opus craft pass — 2026-10-10
+
+Local Claude Code 2.1.295 with `claude-opus-5-5` implemented the thin faceted clasp, satin/key-light treatment, comet tails, shared arrival glint/pulse, earlier mobile strand filtering, control styling and notebook typography. Its focused brand review passed the identity/theme/proportion changes, with a source-table formatting defect subsequently corrected. Codex independently inspected source and real page states, fixed preserved language anchors, restored native pinch zoom and separated the true-touch phone control row from the caption/context label. Final control corners use the website's existing radius tokens.
+
+Codex, Kimi and OpenCode now use unchanged first-party vector editions; MindOS header/footer reuse the product source rather than an inline redraw. See `landing/img/brands/SOURCES.md`, which explicitly identifies the Codex extension's Blossom and Kimi family marks. FAQ structured data is generated from visible bilingual content; this is not a claim of ranking or answer-engine inclusion.
+
+Validation: 41 contract tests, 49 full browser checks, then 3 focused phone checks after the final spacing correction (50 distinct browser cases overall). Supplemental Chromium/WebKit captures cover both languages and themes, real coarse-pointer phones at 320/390px, and 768/1440px desktop layouts. WebKit rotation/reset succeeded; Chromium's synthesized pinch gesture validated native zoom. Screenshot set: `/tmp/mindos-final-{home|scene}-{chromium|webkit}-{zh|en}-{width}-{light|dark}.png`. No product release gate was needed. Candidate scope only, PR #350 still unmerged; full acceptance in `wiki/specs/spec-website-refinement-20261010.md`.
+
+
+## Concise copy and product composition — 2026-10-10
+
+Following the user’s rejection of the verbose, fragmented presentation, homepage explanatory copy was cut by roughly 60% in both languages. The approved three-line hero remains, supported by one direct product sentence. Product exploration now uses a navigation rail beside the original screenshot on desktop; mobile keeps two columns. Repeated screenshot explanations and decorative external arrows were removed. The four-stage illustration uses short roles, actions and notes. Critical model/data/cost/connection boundaries remain in concise FAQs and dedicated documents.
+
+The sculpture now has bounded 25/20-second idle view cycles. Manual input absorbs the displayed pose and takes over; reset returns to the default pose at the shared scene time. Pause/reset are grouped together, including a pause-only SVG fallback. The renderer keeps nominal-view fitting cached. UI panel transitions remain under 300ms and cancellable.
+
+Validation: 43 contracts, 52 serial browser checks, then 11 affected scene/mobile checks after final control grouping. Initial parallel timeouts occurred during unrelated browser/VM CPU load; no timeout threshold was relaxed and no unrelated process was stopped. See `wiki/specs/spec-website-concise-visual-system-20261010.md` and `/tmp/mindos-redesign-final-*.png`. Candidate only; no product release or website deployment.
+
+## Historical design synthesis — 2026-10-10
+
+The user identified the April-era site as a stronger reference than the recent revisions. Snapshot `fa1eb4b1` was extracted unchanged to `/tmp/mindos-website-archive-20260405/landing` and served independently at port 4581. The current candidate now borrows its editorial typography, capture → shared context → agent work illustration, and task comparisons. The approved headline and interactive 3D sculpture remain.
+
+`story.mjs` renders bilingual static illustrations and three comparison scenarios; the existing tab controller updates the workflow emphasis from the same phase selection. No JavaScript exposes all comparisons; rapid selection, keyboard wrapping, reduced motion, 320px reflow, original downloads and GPU fallback remain verified. No live agent execution, automatic model training, universal memory, or measured conversion claim is implied. The flow remains explicitly labelled an illustration with reviewed reuse.
+
+Validation: 44 contracts; 56 complete browser cases plus 5 focused follow-up cases after adding narrow rapid-selection coverage. WebKit 390/1440 light/dark renders have no page errors or overflow. Screenshots `/tmp/mindos-history-craft-*.png`. Spec `wiki/specs/spec-website-historical-design-20261010.md`; candidate preview `http://127.0.0.1:4580/zh/`. PR #350 remains a candidate, not merged or deployed.
+
+## Centered headline and backlight — 2026-10-15
+
+The user prefers the old homepage’s centered text and soft backlighting. The hero now centers its headline, description, actions and trust labels above the interactive sculpture. The wide background grid is replaced by static amber radial light using existing semantic colors in both themes. The three approved headline lines are unchanged. Only story.css changes; no interaction logic or build output changes.
+
+Verified 44 contracts and 22 affected browser cases (responsive bilingual themes, full rotation/reset, offscreen behavior, touch scrolling, control spacing and GPU fallback). Screenshots `/tmp/mindos-centered-20261015-zh-{light|dark|phone}.png`; current candidate remains on port 4580 / PR #350, not deployed. Equivalent affected checks were completed before push; repeated pre-push tests can be skipped for this CSS-only change.
+
+
+## 2026-10-15 — Deep craft review
+
+The centered/backlit hero now fits its complete sculpture and controls in a 1440×1000 view. Actual product proof precedes the longer explanation; at 390px the Chinese product section begins at y≈976 rather than y≈2906. Product tabs form one mobile row and support vertical keyboard navigation on desktop. The four co-evolution stages, immediately adjacent example and spatial overview share one storyboard. Principles use a quieter two-column reading layout; narrow downloads retain complete accessible names with shorter visible route labels.
+
+Lora normal is now self-hosted alongside the existing italic face, preventing unintentional italic headings. Panel transitions use 220ms/6px without text blur. All existing 3D, brand-loop, theme and fallback behavior remains. Simulated persona review, measured changes, screenshots, verification and remaining human-validation questions are recorded in [the deep-craft spec](../specs/spec-website-deep-craft-20261015.md). This remains PR #350 candidate work, not a production deployment.
+
+### 2026-10-20：首屏字级回归原版
+
+主标题保留已确认的三句文案，以 94–96px 桌面衬线主句、紧凑行距、较小的「共同进化」收束和居中留白恢复原版气质。介绍句使用衬线斜体，手机保留独立字级，避免大标题挤出屏幕。`--hero-title` / `--color-hero-title` 是仅用于大字标题的明暗语义色（亮色 `#ad742e`，暗色 `#efb86d`）；不用于小字或按钮，CTA 继续使用可读的动作色。复用自托管 Lora 与系统宋体后备，不引入网络字体或额外运行时依赖。
