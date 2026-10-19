@@ -32,6 +32,7 @@
 <link rel="stylesheet" href="/scene.css">
 <link rel="stylesheet" href="/experience.css">
 <link rel="stylesheet" href="/story.css">
+<link rel="stylesheet" href="/craft.css">
 <script src="/theme-init.js">
 </script>
 <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://mindos.you/#website","name":"MindOS","alternateName":"MindOS by GeminiLight","url":"https://mindos.you/","inLanguage":["en","zh-Hans"],"publisher":{"@id":"https://mindos.you/#creator"}},{"@type":"Person","@id":"https://mindos.you/#creator","name":"GeminiLight","url":"https://github.com/GeminiLight","sameAs":["https://github.com/GeminiLight"]},{"@type":"SoftwareApplication","@id":"https://mindos.you/#software","name":"MindOS","url":"https://mindos.you/","description":"A local-first, open-source knowledge workspace for human–agent co-evolution. Share context across AI agents, review their work, and turn experience into reusable knowledge.","applicationCategory":"ProductivityApplication","operatingSystem":"macOS, Windows, Linux","license":"https://github.com/GeminiLight/MindOS/blob/main/LICENSE","author":{"@id":"https://mindos.you/#creator"},"image":"https://mindos.you/img/logo-square.svg","sameAs":["https://github.com/GeminiLight/MindOS"]},{"@type":"WebPage","@id":"https://mindos.you/#page","url":"https://mindos.you/","name":"MindOS — Human–Agent Co-evolution, Built on Shared Context","description":"A local-first, open-source knowledge workspace for human–agent co-evolution. Share context across AI agents, review their work, and turn experience into reusable knowledge.","inLanguage":"en","isPartOf":{"@id":"https://mindos.you/#website"},"about":{"@id":"https://mindos.you/#software"}},{"@type":"FAQPage","@id":"https://mindos.you/#faq","inLanguage":"en","mainEntity":[{"@type":"Question","name":"Is MindOS free?","acceptedAnswer":{"@type":"Answer","text":"MindOS is MIT open source. Models and third-party services may charge separately."}},{"@type":"Question","name":"Does co-evolution train the model?","acceptedAnswer":{"@type":"Answer","text":"It improves judgment and shared context. It does not change model weights."}},{"@type":"Question","name":"Can I use existing notes?","acceptedAnswer":{"@type":"Answer","text":"Yes. Test with a small Markdown folder and back up important files first."}},{"@type":"Question","name":"Will agents remember everything?","acceptedAnswer":{"@type":"Answer","text":"No. Set up the connection. Tools, instructions and the task determine what is read."}},{"@type":"Question","name":"Does all data stay local?","acceptedAnswer":{"@type":"Answer","text":"Files stay local. Cloud models or external services may receive selected context."}}]}]}</script>
@@ -553,11 +554,141 @@
 <div class="shell evolution-grid">
 <div class="evolution-intro">
 <p class="eyebrow">02 / FROM THOUGHT TO ACTION</p>
-<h2>One thought. A shared thread.</h2>
+<h2>One thought. A wiser next step.</h2>
 <p>You set the direction. Agents act. Review the result and carry the lesson forward.</p>
 </div>
 <div class="workflow-theater">
 <div class="evolution-work">
+<figure class="workflow-map">
+    <div class="workbench-heading">
+<span>Workflow illustration</span>
+<span class="font-mono">THE CONTINUOUS WORKBENCH</span>
+</div>
+    <div class="workflow-lane">
+      <article class="flow-station flow-capture">
+        <div class="flow-station-label">
+<span class="font-mono">01</span>
+<h3>Capture a thought</h3>
+</div>
+        <div class="thought-sheet">
+<div class="sheet-top">
+<svg class="ui-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+<path d="M12 3Q13 11 21 12Q13 13 12 21Q11 13 3 12Q11 11 12 3Z"/>
+</svg>
+<span>HUMAN</span>
+</div>
+<p>A first version, with a clear first-run experience.</p>
+<span class="thought-tag font-mono"># idea</span>
+<div class="thought-line">
+</div>
+<div class="thought-line short">
+</div>
+</div>
+      </article>
+      <div class="flow-link" aria-hidden="true">
+<svg viewBox="0 0 100 60" preserveAspectRatio="none">
+<path d="M0 50C40 50 60 10 96 10"/>
+<path d="m89 5 7 5-7 5"/>
+</svg>
+</div>
+      <article class="flow-station flow-workspace">
+        <div class="flow-station-label">
+<span class="font-mono">02</span>
+<h3>Make it shared context</h3>
+</div>
+        <div class="shared-workspace">
+<div class="workspace-bar">
+<span class="window-marks" aria-hidden="true">
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+</span>
+<img class="brand-mark" src="/img/logo-square.svg" width="80" height="80" alt="" decoding="async">
+<strong>MindOS</strong>
+<span class="font-mono">.md</span>
+</div>
+<div class="workspace-file font-mono">Projects / launch.md</div>
+<div class="workspace-content">
+<span class="workspace-label">The next release</span>
+<h4>A clear first-run experience</h4>
+<p>
+<svg class="ui-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+<path d="m5 12 4 4L19 6"/>
+</svg>Review important changes</p>
+<div class="context-files">
+<span class="font-mono">Profile</span>
+<span class="font-mono">Projects</span>
+<span class="font-mono">Workflows</span>
+</div>
+</div>
+</div>
+      </article>
+      <div class="flow-link" aria-hidden="true">
+<svg viewBox="0 0 100 60" preserveAspectRatio="none">
+<path d="M0 50C40 50 60 10 96 10"/>
+<path d="m89 5 7 5-7 5"/>
+</svg>
+</div>
+      <article class="flow-station flow-agents">
+        <div class="flow-station-label">
+<span class="font-mono">03</span>
+<h3>Put it to work</h3>
+</div>
+        <div class="agent-work">
+<p class="agent-work-label">
+<svg class="ui-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+<rect x="3" y="8" width="6" height="8" rx="2"/>
+<rect x="15" y="8" width="6" height="8" rx="2"/>
+<path d="M9 12h6M6 5v3m0 8v3m12-14v3m0 8v3"/>
+</svg>Read the same project context</p>
+<div class="flow-client">
+<span class="agent-artwork">
+<img class="" src="/img/brands/claude.svg" width="32" height="32" alt="">
+</span>
+<div>
+<strong>Claude Code</strong>
+<p>Review the first-run flow</p>
+</div>
+</div>
+<div class="flow-client">
+<span class="agent-artwork">
+<img class="brand-light" src="/img/brands/codex-light.svg" width="32" height="32" alt="">
+<img class="brand-dark" src="/img/brands/codex-dark.svg" width="32" height="32" alt="">
+</span>
+<div>
+<strong>Codex</strong>
+<p>Build the proposed changes</p>
+</div>
+</div>
+<span class="protocol-label font-mono">MCP + SKILLS</span>
+</div>
+      </article>
+    </div>
+    <div class="feedback-stage">
+      <svg class="feedback-route" aria-hidden="true" viewBox="0 0 600 100" preserveAspectRatio="none">
+<path d="M570 0V70H120M120 70V44Q120 36 128 36H220Q228 36 228 28V0"/>
+<path d="m564 58 6 8 6-8M280 65l-8 5 8 5M222 8l6-8 6 8"/>
+</svg>
+      <ol class="flow-feedback" aria-label="Review before reuse">
+<li class="feedback-review">
+<svg class="ui-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+<path d="m5 12 4 4L19 6"/>
+</svg>
+<span>Your review</span>
+</li>
+<li class="feedback-save">
+<svg class="ui-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+<path d="M4 4h6l2 2 2-2h6v15h-6l-2 2-2-2H4zM12 6v15M7 8h2m-2 4h2m6-4h2m-2 4h2"/>
+</svg>
+<span>Keep the lesson</span>
+</li>
+</ol>
+    </div>
+    <figcaption>Your judgment leads. Reviewed experience comes back.</figcaption>
+  </figure>
 <div class="tab-list phase-tabs enhanced" role="tablist" aria-label="Co-evolution stages" data-tabs="phases">
 <button role="tab" type="button" id="phase-tab-0" aria-controls="phase-0" aria-selected="true" tabindex="0" aria-label="Think" data-tab="0">
 <span class="phase-node" aria-hidden="true">
@@ -721,112 +852,6 @@
 <path d="M5 4v10h14m-5-5 5 5-5 5"/>
 </svg> Clearer judgment. Better agent context.</p>
 </section>
-<figure class="workflow-map">
-    <div class="workflow-lane">
-      <article class="flow-station flow-capture">
-        <div class="flow-station-label">
-<span class="font-mono">01</span>
-<h3>Capture a thought</h3>
-</div>
-        <div class="thought-sheet">
-<div class="sheet-top">
-<svg class="ui-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-<path d="M12 3Q13 11 21 12Q13 13 12 21Q11 13 3 12Q11 11 12 3Z"/>
-</svg>
-<span>HUMAN</span>
-</div>
-<p>A first version, with a clear first-run experience.</p>
-<span class="thought-tag font-mono"># idea</span>
-<div class="thought-line">
-</div>
-<div class="thought-line short">
-</div>
-</div>
-      </article>
-      <div class="flow-link" aria-hidden="true">
-<svg class="ui-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-<path d="M5 12h14m-6-6 6 6-6 6"/>
-</svg>
-</div>
-      <article class="flow-station flow-workspace">
-        <div class="flow-station-label">
-<span class="font-mono">02</span>
-<h3>Make it shared context</h3>
-</div>
-        <div class="shared-workspace">
-<div class="workspace-bar">
-<img class="brand-mark" src="/img/logo-square.svg" width="80" height="80" alt="" decoding="async">
-<strong>MindOS</strong>
-<span class="font-mono">.md</span>
-</div>
-<div class="workspace-file font-mono">Projects / launch.md</div>
-<div class="workspace-content">
-<span class="workspace-label">The next release</span>
-<h4>A clear first-run experience</h4>
-<p>
-<svg class="ui-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-<path d="m5 12 4 4L19 6"/>
-</svg>Review important changes</p>
-<div class="context-files">
-<span class="font-mono">Profile</span>
-<span class="font-mono">Projects</span>
-<span class="font-mono">Workflows</span>
-</div>
-</div>
-</div>
-      </article>
-      <div class="flow-link" aria-hidden="true">
-<svg class="ui-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-<path d="M5 12h14m-6-6 6 6-6 6"/>
-</svg>
-</div>
-      <article class="flow-station flow-agents">
-        <div class="flow-station-label">
-<span class="font-mono">03</span>
-<h3>Put it to work</h3>
-</div>
-        <div class="agent-work">
-<p class="agent-work-label">
-<svg class="ui-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-<rect x="3" y="8" width="6" height="8" rx="2"/>
-<rect x="15" y="8" width="6" height="8" rx="2"/>
-<path d="M9 12h6M6 5v3m0 8v3m12-14v3m0 8v3"/>
-</svg>Read the same project context</p>
-<div class="flow-client">
-<span class="agent-artwork">
-<img class="" src="/img/brands/claude.svg" width="32" height="32" alt="">
-</span>
-<div>
-<strong>Claude Code</strong>
-<p>Review the first-run flow</p>
-</div>
-</div>
-<div class="flow-client">
-<span class="agent-artwork">
-<img class="brand-light" src="/img/brands/codex-light.svg" width="32" height="32" alt="">
-<img class="brand-dark" src="/img/brands/codex-dark.svg" width="32" height="32" alt="">
-</span>
-<div>
-<strong>Codex</strong>
-<p>Build the proposed changes</p>
-</div>
-</div>
-<span class="protocol-label font-mono">MCP + SKILLS</span>
-</div>
-      </article>
-    </div>
-    <div class="flow-feedback">
-<span class="feedback-line" aria-hidden="true">
-</span>
-<span>
-<svg class="ui-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-<path d="M5 4v10h14m-5-5 5 5-5 5"/>
-</svg>Review before reuse</span>
-<span class="feedback-line" aria-hidden="true">
-</span>
-</div>
-    <figcaption>Your judgment leads. Reviewed experience comes back.</figcaption>
-  </figure>
 <noscript>
 <h3>Act</h3>
 <p>Agents read the context and produce work you can review.</p>

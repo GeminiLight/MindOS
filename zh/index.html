@@ -32,6 +32,7 @@
 <link rel="stylesheet" href="/scene.css">
 <link rel="stylesheet" href="/experience.css">
 <link rel="stylesheet" href="/story.css">
+<link rel="stylesheet" href="/craft.css">
 <script src="/theme-init.js">
 </script>
 <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://mindos.you/#website","name":"MindOS","alternateName":"MindOS by GeminiLight","url":"https://mindos.you/","inLanguage":["en","zh-Hans"],"publisher":{"@id":"https://mindos.you/#creator"}},{"@type":"Person","@id":"https://mindos.you/#creator","name":"GeminiLight","url":"https://github.com/GeminiLight","sameAs":["https://github.com/GeminiLight"]},{"@type":"SoftwareApplication","@id":"https://mindos.you/#software","name":"MindOS","url":"https://mindos.you/","description":"A local-first, open-source knowledge workspace for human–agent co-evolution. Share context across AI agents, review their work, and turn experience into reusable knowledge.","applicationCategory":"ProductivityApplication","operatingSystem":"macOS, Windows, Linux","license":"https://github.com/GeminiLight/MindOS/blob/main/LICENSE","author":{"@id":"https://mindos.you/#creator"},"image":"https://mindos.you/img/logo-square.svg","sameAs":["https://github.com/GeminiLight/MindOS"]},{"@type":"WebPage","@id":"https://mindos.you/zh/#page","url":"https://mindos.you/zh/","name":"MindOS｜人类与 Agent 共同演进的本地知识工作台","description":"MindOS 是面向 Human–Agent Co-evolution 的本地优先开源知识工作台。共享上下文，审阅 Agent 行动，将复盘经验沉淀为下一次协作的知识。","inLanguage":"zh-Hans","isPartOf":{"@id":"https://mindos.you/#website"},"about":{"@id":"https://mindos.you/#software"}},{"@type":"FAQPage","@id":"https://mindos.you/zh/#faq","inLanguage":"zh-Hans","mainEntity":[{"@type":"Question","name":"MindOS 免费吗？","acceptedAnswer":{"@type":"Answer","text":"MindOS 以 MIT 协议开源。模型与第三方服务可能另行收费。"}},{"@type":"Question","name":"共同演进是在训练模型吗？","acceptedAnswer":{"@type":"Answer","text":"共同演进改善判断与共享上下文，不改变模型权重。"}},{"@type":"Question","name":"能用已有的笔记吗？","acceptedAnswer":{"@type":"Answer","text":"可以。先用少量 Markdown 验证配置，重要文件做好备份。"}},{"@type":"Question","name":"Agent 会自动记住一切吗？","acceptedAnswer":{"@type":"Answer","text":"不会。需要正确连接；读取什么由工具、指令与任务决定。"}},{"@type":"Question","name":"数据都留在本地吗？","acceptedAnswer":{"@type":"Answer","text":"文件保存在本地。云模型或外部服务可能接收所选上下文。"}}]}]}</script>
@@ -553,11 +554,141 @@
 <div class="shell evolution-grid">
 <div class="evolution-intro">
 <p class="eyebrow">02 / 从想法到行动</p>
-<h2>一个想法，一路接续。</h2>
-<p>你定方向，Agent 行动。复盘留下经验，下一次接着进步。</p>
+<h2>从一个想法，到下一次更懂你。</h2>
+<p>你做判断，Agent 接续行动。</p>
 </div>
 <div class="workflow-theater">
 <div class="evolution-work">
+<figure class="workflow-map">
+    <div class="workbench-heading">
+<span>工作流示意</span>
+<span class="font-mono">THE CONTINUOUS WORKBENCH</span>
+</div>
+    <div class="workflow-lane">
+      <article class="flow-station flow-capture">
+        <div class="flow-station-label">
+<span class="font-mono">01</span>
+<h3>记下一个想法</h3>
+</div>
+        <div class="thought-sheet">
+<div class="sheet-top">
+<svg class="ui-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+<path d="M12 3Q13 11 21 12Q13 13 12 21Q11 13 3 12Q11 11 12 3Z"/>
+</svg>
+<span>HUMAN</span>
+</div>
+<p>做一个首版，把首次使用体验打磨清楚。</p>
+<span class="thought-tag font-mono"># idea</span>
+<div class="thought-line">
+</div>
+<div class="thought-line short">
+</div>
+</div>
+      </article>
+      <div class="flow-link" aria-hidden="true">
+<svg viewBox="0 0 100 60" preserveAspectRatio="none">
+<path d="M0 50C40 50 60 10 96 10"/>
+<path d="m89 5 7 5-7 5"/>
+</svg>
+</div>
+      <article class="flow-station flow-workspace">
+        <div class="flow-station-label">
+<span class="font-mono">02</span>
+<h3>成为共享上下文</h3>
+</div>
+        <div class="shared-workspace">
+<div class="workspace-bar">
+<span class="window-marks" aria-hidden="true">
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+</span>
+<img class="brand-mark" src="/img/logo-square.svg" width="80" height="80" alt="" decoding="async">
+<strong>MindOS</strong>
+<span class="font-mono">.md</span>
+</div>
+<div class="workspace-file font-mono">Projects / launch.md</div>
+<div class="workspace-content">
+<span class="workspace-label">下一次发布</span>
+<h4>清晰的首次使用体验</h4>
+<p>
+<svg class="ui-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+<path d="m5 12 4 4L19 6"/>
+</svg>重要改动，由你审阅</p>
+<div class="context-files">
+<span class="font-mono">Profile</span>
+<span class="font-mono">Projects</span>
+<span class="font-mono">Workflows</span>
+</div>
+</div>
+</div>
+      </article>
+      <div class="flow-link" aria-hidden="true">
+<svg viewBox="0 0 100 60" preserveAspectRatio="none">
+<path d="M0 50C40 50 60 10 96 10"/>
+<path d="m89 5 7 5-7 5"/>
+</svg>
+</div>
+      <article class="flow-station flow-agents">
+        <div class="flow-station-label">
+<span class="font-mono">03</span>
+<h3>让行动接上</h3>
+</div>
+        <div class="agent-work">
+<p class="agent-work-label">
+<svg class="ui-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+<rect x="3" y="8" width="6" height="8" rx="2"/>
+<rect x="15" y="8" width="6" height="8" rx="2"/>
+<path d="M9 12h6M6 5v3m0 8v3m12-14v3m0 8v3"/>
+</svg>读取同一份项目上下文</p>
+<div class="flow-client">
+<span class="agent-artwork">
+<img class="" src="/img/brands/claude.svg" width="32" height="32" alt="">
+</span>
+<div>
+<strong>Claude Code</strong>
+<p>检查首次使用流程</p>
+</div>
+</div>
+<div class="flow-client">
+<span class="agent-artwork">
+<img class="brand-light" src="/img/brands/codex-light.svg" width="32" height="32" alt="">
+<img class="brand-dark" src="/img/brands/codex-dark.svg" width="32" height="32" alt="">
+</span>
+<div>
+<strong>Codex</strong>
+<p>实现审阅后的方案</p>
+</div>
+</div>
+<span class="protocol-label font-mono">MCP + SKILLS</span>
+</div>
+      </article>
+    </div>
+    <div class="feedback-stage">
+      <svg class="feedback-route" aria-hidden="true" viewBox="0 0 600 100" preserveAspectRatio="none">
+<path d="M570 0V70H120M120 70V44Q120 36 128 36H220Q228 36 228 28V0"/>
+<path d="m564 58 6 8 6-8M280 65l-8 5 8 5M222 8l6-8 6 8"/>
+</svg>
+      <ol class="flow-feedback" aria-label="审阅后再复用">
+<li class="feedback-review">
+<svg class="ui-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+<path d="m5 12 4 4L19 6"/>
+</svg>
+<span>由你审阅</span>
+</li>
+<li class="feedback-save">
+<svg class="ui-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+<path d="M4 4h6l2 2 2-2h6v15h-6l-2 2-2-2H4zM12 6v15M7 8h2m-2 4h2m6-4h2m-2 4h2"/>
+</svg>
+<span>沉淀为经验</span>
+</li>
+</ol>
+    </div>
+    <figcaption>你定方向。行动留下经验，经验回到下一次。</figcaption>
+  </figure>
 <div class="tab-list phase-tabs enhanced" role="tablist" aria-label="共同演进的四个阶段" data-tabs="phases">
 <button role="tab" type="button" id="phase-tab-0" aria-controls="phase-0" aria-selected="true" tabindex="0" aria-label="思考" data-tab="0">
 <span class="phase-node" aria-hidden="true">
@@ -721,112 +852,6 @@
 <path d="M5 4v10h14m-5-5 5 5-5 5"/>
 </svg> 你的判断更清晰，Agent 上下文更充分。</p>
 </section>
-<figure class="workflow-map">
-    <div class="workflow-lane">
-      <article class="flow-station flow-capture">
-        <div class="flow-station-label">
-<span class="font-mono">01</span>
-<h3>记下一个想法</h3>
-</div>
-        <div class="thought-sheet">
-<div class="sheet-top">
-<svg class="ui-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-<path d="M12 3Q13 11 21 12Q13 13 12 21Q11 13 3 12Q11 11 12 3Z"/>
-</svg>
-<span>HUMAN</span>
-</div>
-<p>做一个首版，把首次使用体验打磨清楚。</p>
-<span class="thought-tag font-mono"># idea</span>
-<div class="thought-line">
-</div>
-<div class="thought-line short">
-</div>
-</div>
-      </article>
-      <div class="flow-link" aria-hidden="true">
-<svg class="ui-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-<path d="M5 12h14m-6-6 6 6-6 6"/>
-</svg>
-</div>
-      <article class="flow-station flow-workspace">
-        <div class="flow-station-label">
-<span class="font-mono">02</span>
-<h3>成为共享上下文</h3>
-</div>
-        <div class="shared-workspace">
-<div class="workspace-bar">
-<img class="brand-mark" src="/img/logo-square.svg" width="80" height="80" alt="" decoding="async">
-<strong>MindOS</strong>
-<span class="font-mono">.md</span>
-</div>
-<div class="workspace-file font-mono">Projects / launch.md</div>
-<div class="workspace-content">
-<span class="workspace-label">下一次发布</span>
-<h4>清晰的首次使用体验</h4>
-<p>
-<svg class="ui-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-<path d="m5 12 4 4L19 6"/>
-</svg>重要改动，由你审阅</p>
-<div class="context-files">
-<span class="font-mono">Profile</span>
-<span class="font-mono">Projects</span>
-<span class="font-mono">Workflows</span>
-</div>
-</div>
-</div>
-      </article>
-      <div class="flow-link" aria-hidden="true">
-<svg class="ui-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-<path d="M5 12h14m-6-6 6 6-6 6"/>
-</svg>
-</div>
-      <article class="flow-station flow-agents">
-        <div class="flow-station-label">
-<span class="font-mono">03</span>
-<h3>让行动接上</h3>
-</div>
-        <div class="agent-work">
-<p class="agent-work-label">
-<svg class="ui-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-<rect x="3" y="8" width="6" height="8" rx="2"/>
-<rect x="15" y="8" width="6" height="8" rx="2"/>
-<path d="M9 12h6M6 5v3m0 8v3m12-14v3m0 8v3"/>
-</svg>读取同一份项目上下文</p>
-<div class="flow-client">
-<span class="agent-artwork">
-<img class="" src="/img/brands/claude.svg" width="32" height="32" alt="">
-</span>
-<div>
-<strong>Claude Code</strong>
-<p>检查首次使用流程</p>
-</div>
-</div>
-<div class="flow-client">
-<span class="agent-artwork">
-<img class="brand-light" src="/img/brands/codex-light.svg" width="32" height="32" alt="">
-<img class="brand-dark" src="/img/brands/codex-dark.svg" width="32" height="32" alt="">
-</span>
-<div>
-<strong>Codex</strong>
-<p>实现审阅后的方案</p>
-</div>
-</div>
-<span class="protocol-label font-mono">MCP + SKILLS</span>
-</div>
-      </article>
-    </div>
-    <div class="flow-feedback">
-<span class="feedback-line" aria-hidden="true">
-</span>
-<span>
-<svg class="ui-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-<path d="M5 4v10h14m-5-5 5 5-5 5"/>
-</svg>审阅后再复用</span>
-<span class="feedback-line" aria-hidden="true">
-</span>
-</div>
-    <figcaption>你定方向。行动留下经验，经验回到下一次。</figcaption>
-  </figure>
 <noscript>
 <h3>行动</h3>
 <p>Agent 读取上下文，推进可审阅的行动。</p>

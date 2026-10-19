@@ -1,0 +1,129 @@
+/* A continuous bench, with no enclosing dashboard-style box. */
+.evolution-band { background: var(--background); border: 0; }
+.evolution-intro h2 { max-width: 1000px; margin-inline: auto; }
+.evolution-intro > p:not(.eyebrow) { font-family: var(--font-serif); font-size: 18px; }
+.workflow-theater { border: 0; border-radius: 0; box-shadow: none; background: transparent; overflow: visible; margin-top: 48px; }
+.workflow-map { padding: 0 0 32px; background: radial-gradient(ellipse at 50% 48%,var(--amber-subtle),transparent 64%); }
+.workbench-heading { display: flex; align-items: center; gap: 24px; margin-bottom: 38px; }
+.workbench-heading > span:first-child { font-family: var(--font-serif); font-size: 20px; flex-shrink: 0; }
+.workbench-heading::after { content: ''; order: 1; height: 1px; flex: 1; background: var(--border); }
+.workbench-heading > span:last-child { order: 2; color: var(--amber-text); font-size: 9px; letter-spacing: .16em; }
+.workflow-lane { grid-template-columns: minmax(0,.85fr) minmax(40px,.28fr) minmax(0,1.25fr) minmax(40px,.28fr) minmax(0,.95fr); align-items: center; }
+.flow-station { display: flex; flex-direction: column; }
+.flow-station-label { order: 2; margin: 20px 0 0; align-items: baseline; gap: 12px; }
+.flow-station-label > span { font-family: var(--font-serif); font-size: 18px; }
+.flow-station-label h3 { font-family: var(--font-serif); font-size: 16px; }
+.thought-sheet { isolation: isolate; position: relative; min-height: 205px; border-radius: var(--radius); padding: 24px; transform: rotate(-5deg); background: linear-gradient(145deg,var(--popover),var(--amber-subtle)); box-shadow: 0 14px 24px color-mix(in srgb,var(--foreground) 8%,transparent); }
+.thought-sheet::before,.thought-sheet::after { content: ''; position: absolute; inset: 4px; border: 1px solid var(--border); border-radius: var(--radius); pointer-events: none; }
+.thought-sheet::before { inset: -8px 8px 8px -8px; transform: rotate(-3deg); }
+.thought-sheet::after { inset: 10px; border-color: color-mix(in srgb,var(--amber-text) 18%,transparent); }
+.thought-sheet > p { font-size: 23px; line-height: 1.7; }
+.sheet-top { font-size: 9px; }
+.thought-line { display: none; }
+.thought-tag { margin-top: 20px; font-size: 10px; }
+.shared-workspace { transform: none; box-shadow: 0 20px 35px color-mix(in srgb,var(--foreground) 12%,transparent),0 3px 6px color-mix(in srgb,var(--foreground) 4%,transparent); }
+.workspace-bar { padding: 13px 16px; }
+.workspace-bar .brand-mark { width: 24px; height: 18px; }
+.workspace-bar strong { font-family: var(--font-serif); }
+.window-marks { display: flex; gap: 4px; margin-right: 4px; }
+.window-marks i { width: 5px; height: 5px; border-radius: var(--radius); background: var(--border); }
+.window-marks i:first-child { background: var(--amber); }
+.workspace-file { font-size: 10px; }
+.workspace-content { min-height: 210px; padding: 24px; border-left: 34px solid var(--card); }
+.workspace-content h4 { font-family: var(--font-serif); font-weight: 400; font-size: 26px; }
+.workspace-content > p { font-size: 11px; line-height: 1.8; }
+.context-files { gap: 8px; }
+.context-files span { padding: 0; border: 0; font-size: 9px; }
+.agent-work { border: 0; box-shadow: none; background: transparent; padding: 0; }
+.agent-work-label { border: 0; padding-bottom: 2px; font-size: 10px; }
+.flow-client { padding: 17px; margin-top: 14px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--popover); box-shadow: 0 12px 24px color-mix(in srgb,var(--foreground) 9%,transparent); }
+.flow-client:nth-of-type(2) { margin-left: 10px; }
+.flow-client strong { font-size: 12px; }
+.flow-client p { font-size: 12px; }
+.protocol-label { font-size: 9px; padding-top: 14px; }
+.flow-link { padding: 0 4px 60px; }
+.flow-link svg { width: 100%; height: 52px; overflow: visible; fill: none; stroke: var(--amber-text); stroke-width: 1.3; vector-effect: non-scaling-stroke; }
+.flow-link svg path { vector-effect: non-scaling-stroke; }
+.feedback-stage { position: relative; margin: -30px 0 0 38%; height: 128px; }
+.feedback-route { position: absolute; inset: 0; width: 100%; height: 100%; fill: none; stroke: var(--amber-text); stroke-width: 1.2; }
+.feedback-route path { vector-effect: non-scaling-stroke; }
+.flow-feedback { position: absolute; inset: 0; margin: 0; padding: 0; list-style: none; display: block; }
+.flow-feedback li { position: absolute; top: calc(70% - 17px); transform: translateX(-50%); display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 34px; padding: 6px 14px; border: 1px solid color-mix(in srgb,var(--amber-text) 48%,var(--border)); border-radius: var(--radius-xl); background: var(--popover); color: var(--amber-text); font-size: 12px; white-space: nowrap; transition: background-color .2s,box-shadow .2s; }
+.feedback-review { left: 85%; }
+.feedback-save { left: 20%; }
+.flow-feedback .ui-icon { width: 14px; height: 14px; }
+.workflow-map figcaption { font-size: 11px; margin: 2px 0 0; }
+[data-flow-phase="0"] .thought-sheet { transform: rotate(-3deg) translateY(-3px); }
+[data-flow-phase="1"] .agent-work { box-shadow: none; border: 0; transform: none; }
+[data-flow-phase="1"] .flow-client { border-color: var(--amber-text); }
+[data-flow-phase="2"] .feedback-review,[data-flow-phase="3"] .feedback-save { background: var(--amber-subtle); box-shadow: 0 0 0 4px color-mix(in srgb,var(--amber-text) 7%,transparent); }
+.phase-tabs { margin-top: 18px; padding: 0; border-block: 1px solid var(--border); }
+.phase-tabs button { min-height: 64px; }
+.phase-node { width: 28px; height: 28px; }
+.phase-tab-label { font-size: 13px; }
+.phase-panel { padding: 28px 0 0; column-gap: 72px; background: transparent; border: 0; }
+.phase-panel h3 { font-size: 28px; }
+.phase-description { font-size: 13px; }
+.journal { box-shadow: 3px 3px 0 var(--background),4px 4px 0 var(--border); }
+.workflow-disclaimer { font-size: 11px; margin-top: 30px; }
+
+/* The comparison reads as a spread, not another dashboard. */
+.comparison-section { border-top: 1px solid var(--border); }
+.comparison-section .section-heading { justify-content: center; text-align: center; display: block; }
+.comparison-section .section-intro { margin: 16px auto 0; }
+.comparison-tabs { justify-content: center; }
+.comparison-panel { border: 0; border-radius: 0; box-shadow: none; background: transparent; }
+.comparison-side { padding: 30px 44px 0; background: transparent; }
+.comparison-after { background: transparent; border-left: 1px solid var(--border); }
+.comparison-side h3 { font-size: 28px; }
+.context-art::before { display: none; }
+.context-art-card { box-shadow: 0 12px 20px color-mix(in srgb,var(--foreground) 7%,transparent); }
+.comparison-side li { font-size: 13px; padding-block: 7px; }
+.comparison-result { margin-top: 16px; font-size: 13px; }
+
+@media(max-width:1000px) {
+ .thought-sheet { padding: 18px; }
+ .thought-sheet > p { font-size: 20px; }
+ .workspace-content { padding: 18px; border-left-width: 20px; }
+ .workspace-content h4 { font-size: 22px; }
+ .flow-client { padding: 12px; }
+ .flow-station-label h3 { font-size: 13px; }
+ .flow-feedback li { font-size: 10px; padding-inline: 9px; }
+ .phase-panel { column-gap: 32px; }
+ .comparison-side { padding-inline: 24px; }
+}
+@media(max-width:700px) {
+ .evolution-intro > p:not(.eyebrow) { font-size: 16px; }
+ .workflow-theater { margin-top: 30px; }
+ .workbench-heading { margin-bottom: 24px; gap: 12px; }
+ .workbench-heading > span:first-child { font-size: 17px; }
+ .workbench-heading > span:last-child { display: none; }
+ .workflow-lane { display: flex; flex-direction: column; align-items: stretch; gap: 0; padding-inline: 14px; }
+ .flow-station { width: 100%; align-items: stretch; }
+ .shared-workspace { padding: 0; }
+ .agent-work { display: block; padding: 0; }
+ .sheet-top,.workspace-file,.workspace-label,.context-files,.protocol-label,.agent-work-label { display: flex; }
+ .workspace-bar { padding: 12px 16px; margin: 0; }
+ .thought-sheet { min-height: 0; padding: 22px; margin-inline: 8px; }
+ .thought-sheet > p { font-size: 22px; margin-top: 12px; }
+ .thought-tag { margin-top: 10px; }
+ .flow-station-label { display: flex; margin-top: 16px; padding-top: 0; }
+ .flow-station-label h3 { font-size: 15px; }
+ .flow-link { display: flex; height: 34px; padding: 0; margin-block: 8px; }
+ .flow-link svg { width: 22px; height: 28px; transform: rotate(90deg); }
+ .workspace-content { min-height: 0; }
+ .flow-client:nth-of-type(2) { margin-left: 0; }
+ .feedback-stage { margin: 24px 14px 0; height: auto; }
+ .feedback-route { display: none; }
+ .flow-feedback { position: static; display: flex; flex-direction: column; align-items: stretch; gap: 18px; }
+ .flow-feedback li { position: relative; left: auto; top: auto; transform: none; min-height: 40px; font-size: 12px; }
+ .flow-feedback li:first-child::after { content: ''; position: absolute; top: 100%; left: 50%; height: 18px; width: 1px; background: var(--amber-text); }
+ .flow-feedback li:last-child::before { content: ''; position: absolute; top: -5px; left: calc(50% - 3px); width: 6px; height: 6px; border: solid var(--amber-text); border-width: 0 1px 1px 0; transform: rotate(45deg); }
+ .workflow-map figcaption { margin-top: 18px; }
+ .phase-tabs { margin-top: 0; }
+ .phase-tabs button { min-height: 68px; }
+ .phase-panel { padding: 22px 0 0; }
+ .comparison-side { padding: 24px 10px; }
+ .comparison-after { border-left: 0; border-top: 1px solid var(--border); }
+ .comparison-side h3 { font-size: 24px; }
+}

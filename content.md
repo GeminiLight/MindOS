@@ -71,6 +71,12 @@ Build the proposed changes
 
 Review before reuse
 
+Your review
+
+Keep the lesson
+
+Workflow illustration
+
 Your judgment leads. Reviewed experience comes back.
 
 ## 03 / THE DIFFERENCE
@@ -283,7 +289,7 @@ MindOS 是面向 Human–Agent Co-evolution 的本地优先开源知识工作台
 
 ## 02 / 从想法到行动
 
-你定方向，Agent 行动。复盘留下经验，下一次接着进步。
+你做判断，Agent 接续行动。
 
 记下一个想法
 
@@ -308,6 +314,12 @@ Projects / launch.md
 实现审阅后的方案
 
 审阅后再复用
+
+由你审阅
+
+沉淀为经验
+
+工作流示意
 
 你定方向。行动留下经验，经验回到下一次。
 
