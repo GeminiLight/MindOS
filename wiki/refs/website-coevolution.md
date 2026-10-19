@@ -197,3 +197,12 @@ Lora normal is now self-hosted alongside the existing italic face, preventing un
 ### 2026-10-20：首屏字级回归原版
 
 主标题保留已确认的三句文案，以 94–96px 桌面衬线主句、紧凑行距、较小的「共同进化」收束和居中留白恢复原版气质。介绍句使用衬线斜体，手机保留独立字级，避免大标题挤出屏幕。`--hero-title` / `--color-hero-title` 是仅用于大字标题的明暗语义色（亮色 `#ad742e`，暗色 `#efb86d`）；不用于小字或按钮，CTA 继续使用可读的动作色。复用自托管 Lora 与系统宋体后备，不引入网络字体或额外运行时依赖。
+
+
+## Continuous workbench and original hero — 2026-10-20
+
+PR #366 retains the paper-workbench reference: thought → shared context → Agent action → human review → retained experience. A semantic ordered list preserves review-before-learning order. Desktop return lines lead back to the document; phones use a vertical sequence. The workflow appears before the phase selector, and its selected example stays adjacent. Task comparisons use an open spread with quiet borders and paper shadows.
+
+The user rejected the new large sculpture. All candidate hero changes have therefore been withdrawn: generated Chinese/English hero sections match `85263f38` byte for byte, scene geometry/material/core/SVG files match main, and `craft.css` contains only workflow/comparison styling. Original centered typography, fine ribbon, central star, supporting text placement and 3D controls are preserved.
+
+The final scope changes only static website presentation, generation, tests and documentation. There are no product runtime, package version, dependency, lockfile, installer or deployment changes. Acceptance and current verification: `wiki/specs/spec-website-sculpture-workbench-20261020.md`. PR #366 remains a candidate; production is unchanged.
