@@ -127,6 +127,23 @@ function lookupCatalogCapabilities(input: ResolveModelCapabilitiesInput): Candid
   const endpoint = endpointIdentity(input.baseUrl);
   const modelId = input.modelId;
 
+  if ((input.protocol === 'minimax' || input.protocol === 'minimax-cn')
+    && (modelId === 'MiniMax-M3.1-Flash' || modelId === 'MiniMax-M3')) {
+    return {
+      contextWindow: 1_000_000,
+      ...(modelId === 'MiniMax-M3.1-Flash' ? { maxTokens: 524_288 } : {}),
+      reasoning: true,
+      source: 'catalog',
+    };
+  }
+
+  // Verified OpenRouter route metadata; do not apply direct-provider limits to
+  // other gateway IDs or custom endpoints.
+  if (input.protocol === 'openrouter' && modelId === 'minimax/minimax-m3.1-flash:free'
+    && (!input.baseUrl || input.baseUrl.replace(/\/+$/, '') === 'https://openrouter.ai/api/v1')) {
+    return { contextWindow: 1_000_000, maxTokens: 524_288, reasoning: true, source: 'catalog' };
+  }
+
   if (endpoint?.provider === 'stepfun') {
     if (modelId === 'step-3.7-flash') {
       return {

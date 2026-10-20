@@ -1,4 +1,5 @@
 import { effectiveAiConfig } from '@/lib/settings';
+import { applyMiniMaxModelCompatibility } from '@geminilight/mindos/agent/mindos-pi';
 import type { Provider } from '@/lib/custom-endpoints';
 import { resolveModelCapabilities, type ResolvedModelCapabilities } from './model-capabilities';
 import { type ProviderId, getPreset, toPiProvider, getDefaultApi, getDefaultBaseUrl } from './providers';
@@ -173,5 +174,5 @@ function applyEndpointOverrides(model: Model<any>, providerId: ProviderId, baseU
     };
   }
 
-  return model;
+  return applyMiniMaxModelCompatibility(model, providerId);
 }
