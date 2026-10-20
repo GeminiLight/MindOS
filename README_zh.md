@@ -380,8 +380,9 @@ MindOS/
 
 ### 🙏 致谢
 
-本项目已在 [LINUX DO 社区](https://linux.do) 发布，感谢社区的支持与反馈。
-
+- 本项目已在 [LINUX DO 社区](https://linux.do) 发布，感谢社区的支持与反馈。
+  
+- 国内 [AtomGit](https://atomgit.com/GeminiLight/MindOS)同步托管，便于国内开发者用户访问。
 ---
 
 ## 📚 引用
