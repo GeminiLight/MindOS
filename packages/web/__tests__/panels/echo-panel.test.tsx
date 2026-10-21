@@ -16,6 +16,12 @@ vi.mock('@/lib/stores/locale-store', () => ({
 }));
 
 describe('EchoPanel sidebar navigation', () => {
+  it('offers the replay page without removing existing Echo destinations',()=>{
+    routeState.pathname='/echo/replay';
+    const html=renderToStaticMarkup(<EchoPanel active/>);
+    expect(html).toMatch(/<a[^>]*aria-current="page"[^>]*href="\/echo\/replay"/);
+    expect(html).toContain('href="/echo/imprint"');expect(html).toContain('href="/echo/growth"');
+  });
   it('marks the active Echo segment with the primary sidebar rail style', () => {
     routeState.pathname = '/echo/imprint';
 

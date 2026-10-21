@@ -73,6 +73,13 @@ function runGit(args: string[], cwd: string): string {
 }
 
 function commitAll(cwd: string, message: string): void {
+  // The real sync subprocess needs a committer too; helper-only env identity
+  // must not accidentally depend on the developer's global Git config.
+  if (!path.resolve(cwd).startsWith(path.resolve(tempDir) + path.sep)) {
+    throw new Error('Sync fixture identity must stay inside the temporary repository');
+  }
+  runGit(['config', '--local', 'user.name', 'MindOS Test'], cwd);
+  runGit(['config', '--local', 'user.email', 'mindos-test@example.com'], cwd);
   runGit(['add', '-A'], cwd);
   runGit(['commit', '-m', message], cwd);
 }

@@ -23,6 +23,7 @@ export default function ChangesBanner() {
   const [isRendered, setIsRendered] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
   const pathname = usePathname();
+  const isReadingReplay = pathname === '/echo/replay' || pathname?.startsWith('/echo/replay/') === true;
   const { t } = useLocale();
   const review = useAgentChangeReview();
   const hasAgentReview = review.unreadAgentCount > 0;
@@ -53,13 +54,14 @@ export default function ChangesBanner() {
   }, [activeUnreadCount, autoDismissed]);
 
   const shouldShow = useMemo(() => {
+    if (isReadingReplay) return false;
     if (activeUnreadCount <= 0) return false;
     if (pathname?.startsWith('/changes') || pathname?.startsWith('/changelog')) return false;
     if (hasAgentReview) return hasNewAgentReview;
     if (dismissedAtCount !== null && activeUnreadCount <= dismissedAtCount) return false;
     if (autoDismissed) return false;
     return true;
-  }, [activeUnreadCount, dismissedAtCount, pathname, autoDismissed, hasAgentReview, hasNewAgentReview]);
+  }, [activeUnreadCount, dismissedAtCount, pathname, autoDismissed, hasAgentReview, hasNewAgentReview, isReadingReplay]);
 
   const dismissNotice = () => {
     if (!hasAgentReview) {
@@ -90,7 +92,7 @@ export default function ChangesBanner() {
     return () => clearTimeout(timer);
   }, [shouldShow]);
 
-  if (!isRendered) return null;
+  if (!isRendered || isReadingReplay) return null;
 
   const Icon = notice.Icon;
   const containerClass = hasAgentReview

@@ -128,6 +128,8 @@ describe('MindOS runtime product kernel contract', () => {
       './foundation/security/redaction',
       './intelligence',
       './knowledge',
+      './knowledge/branch-replay',
+      './knowledge/branch-replay/store',
       './plugin',
       './protocols',
       './protocols/acp',

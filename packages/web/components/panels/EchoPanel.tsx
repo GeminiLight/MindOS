@@ -15,7 +15,7 @@ interface EchoPanelProps {
 }
 
 export default function EchoPanel({ active }: EchoPanelProps) {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const e = t.panels.echo;
   const pathname = usePathname() ?? '';
 
@@ -30,6 +30,7 @@ export default function EchoPanel({ active }: EchoPanelProps) {
     <div className={`flex flex-col h-full ${active ? '' : 'hidden'}`}>
       <PanelHeader title={e.title} />
       <PanelPrimaryNav aria-label={e.title}>
+        <PanelNavRow href="/echo/replay" icon={<GitBranch size={14}/>} title={locale === 'zh' ? '分支剧情' : 'Story replay'} active={pathname === '/echo/replay'} activeVariant="rail" />
         {ECHO_PRIMARY_SEGMENT_ORDER.map((segment) => {
           const row = rowBySegment[segment];
           if (!row) return null;

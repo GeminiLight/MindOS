@@ -119,6 +119,7 @@ export const MINDOS_WEB_API_ROUTE_OWNERSHIP: MindosWebApiRouteOwnership[] = [
   delegated('/api/studio/automation-events', 'high'),
   delegated('/api/connect'),
   host('/api/echo', 'Echo save/list APIs currently use Web-owned echo-store helpers and local content-change logging; Product Server should own this once Echo persistence is promoted.', 'medium'),
+  host('/api/echo/replays', 'Replay reconstruction reads native CLI transcripts and local saved stories through the authenticated Web host; Product Server exposure requires an explicit host-local source capability.', 'medium'),
   host('/api/echo/cards', 'Echo card generation currently reads Web agent sessions, schedule state, and Web-local LM task runners; Product Server should own it once Echo card persistence and AI task orchestration are promoted.', 'medium'),
   host('/api/echo/imprints', 'Echo Imprint generation currently owns Web-local schedule state, agent-session reads, and LM task execution; Product Server should own it once Echo generation persistence and AI task orchestration are promoted.', 'medium'),
   host('/api/echo/corrections', 'Echo learning / coevolution research APIs read and write Web-owned knowledge stores through the Web adapter; Product Server should own them once the learning loop persistence is promoted.', 'medium'),

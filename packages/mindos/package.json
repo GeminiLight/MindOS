@@ -160,6 +160,14 @@
       "types": "./dist/knowledge.d.ts",
       "import": "./dist/knowledge.js"
     },
+    "./knowledge/branch-replay/store": {
+      "types": "./dist/knowledge/branch-replay/store.d.ts",
+      "import": "./dist/knowledge/branch-replay/store.js"
+    },
+    "./knowledge/branch-replay": {
+      "types": "./dist/knowledge/branch-replay/index.d.ts",
+      "import": "./dist/knowledge/branch-replay/index.js"
+    },
     "./intelligence": {
       "types": "./dist/intelligence.d.ts",
       "import": "./dist/intelligence.js"

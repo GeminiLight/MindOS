@@ -12,6 +12,8 @@ import { ECHO_CARDS_UPDATED_EVENT } from '@/lib/echo-card-events';
 vi.mock('@/lib/stores/locale-store', () => ({
   useLocale: () => ({ locale: 'zh' }),
 }));
+const routeState=vi.hoisted(()=>({pathname:'/echo/overview'}));
+vi.mock('next/navigation',()=>({usePathname:()=>routeState.pathname}));
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -32,6 +34,7 @@ describe('EchoCardSchedulerInit', () => {
   let fetchMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
+    routeState.pathname='/echo/overview';
     vi.useFakeTimers();
     Object.defineProperty(document, 'visibilityState', {
       configurable: true,
@@ -57,6 +60,24 @@ describe('EchoCardSchedulerInit', () => {
       return jsonResponse({ ok: true });
     });
     vi.stubGlobal('fetch', fetchMock);
+  });
+
+  it('defers background card work during replay and catches up after leaving',async()=>{
+    routeState.pathname='/echo/replay';
+    await act(async()=>{root=createRoot(container);root.render(<EchoCardSchedulerInit/>);await flushAsyncWork();await vi.advanceTimersByTimeAsync(60_000);});
+    expect(fetchMock).not.toHaveBeenCalled();
+    routeState.pathname='/echo/overview';
+    await act(async()=>{root!.render(<EchoCardSchedulerInit/>);await flushAsyncWork();});
+    expect(fetchMock.mock.calls.some(([url])=>url==='/api/echo/cards?segment=imprint')).toBe(true);
+  });
+
+  it('does not generate or start the next segment after entering replay mid-request',async()=>{
+    let complete!:(response:Response)=>void;
+    fetchMock.mockImplementationOnce(()=>new Promise(resolve=>{complete=resolve;}));
+    await act(async()=>{root=createRoot(container);root.render(<EchoCardSchedulerInit/>);await flushAsyncWork();});
+    routeState.pathname='/echo/replay';await act(async()=>root!.render(<EchoCardSchedulerInit/>));
+    await act(async()=>{complete(jsonResponse({state:{schedule:{due:true}}}));await flushAsyncWork();});
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   afterEach(() => {

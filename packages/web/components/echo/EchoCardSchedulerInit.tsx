@@ -1,6 +1,7 @@
 'use client';
 
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
+import { usePathname } from 'next/navigation';
 import { ECHO_CARDS_UPDATED_EVENT } from '@/lib/echo-card-events';
 import { useLocale } from '@/lib/stores/locale-store';
 import { useVisiblePolling } from '@/lib/use-visible-polling';
@@ -20,18 +21,19 @@ type EchoCardsStatusResponse = {
 
 export default function EchoCardSchedulerInit() {
   const { locale } = useLocale();
+  const pathname=usePathname()??'';
+  const paused=pathname==='/echo/replay'||pathname.startsWith('/echo/replay/');
+  const pausedRef=useRef(paused);
+  useEffect(()=>{pausedRef.current=paused;return()=>{pausedRef.current=true;};},[paused]);
   const tickInFlightRef = useRef(false);
   const segmentInFlightRef = useRef<Set<EchoCardSchedulerSegment>>(new Set());
 
-  useVisiblePolling(() => {
-    void runScheduledEchoCards();
-  }, ECHO_CARD_SCHEDULER_INTERVAL_MS);
-
   async function runScheduledEchoCards() {
-    if (tickInFlightRef.current) return;
+    if (tickInFlightRef.current||pausedRef.current) return;
     tickInFlightRef.current = true;
     try {
       for (const segment of ECHO_CARD_SCHEDULER_SEGMENTS) {
+        if(pausedRef.current)break;
         await runSegmentIfDue(segment);
       }
     } finally {
@@ -46,6 +48,7 @@ export default function EchoCardSchedulerInit() {
       const statusResponse = await fetch(`/api/echo/cards?segment=${segment}`, { cache: 'no-store' });
       if (!statusResponse.ok) return;
       const status = await statusResponse.json() as EchoCardsStatusResponse;
+      if(pausedRef.current)return;
       if (status.state?.schedule?.due !== true) return;
 
       const generateResponse = await fetch('/api/echo/cards', {
@@ -63,6 +66,11 @@ export default function EchoCardSchedulerInit() {
       segmentInFlightRef.current.delete(segment);
     }
   }
+
+  // Card generation is opportunistic; replay keeps its reading task in front.
+  useVisiblePolling(() => {
+    void runScheduledEchoCards();
+  }, ECHO_CARD_SCHEDULER_INTERVAL_MS,{enabled:!paused});
 
   return null;
 }
