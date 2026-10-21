@@ -206,6 +206,8 @@ export const MINDOS_WEB_API_ROUTE_OWNERSHIP: MindosWebApiRouteOwnership[] = [
   delegated('/api/retrieval-receipts'),
   delegated('/api/context-feedback', 'high'),
   delegated('/api/studio/automations', 'high'),
+  delegated('/api/views', 'high'),
+  delegated('/api/views/v2', 'high'),
   delegated('/api/settings/list-models', 'medium'),
   host('/api/settings/model-thinking', 'Concrete model thinking capability resolution depends on the Web host Pi model catalog and active provider settings until Product Server owns the shared Models runtime boundary.', 'medium'),
   delegated('/api/settings/reset-token', 'high'),

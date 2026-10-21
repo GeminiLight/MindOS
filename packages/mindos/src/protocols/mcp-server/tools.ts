@@ -1,3 +1,4 @@
+import { registerViewsTools } from './views-tools.js';
 /**
  * MindOS MCP Server — tool registry
  *
@@ -77,6 +78,7 @@ async function logOp(tool: string, params: Record<string, unknown>, result: 'ok'
 // ─── Tool Registration ───────────────────────────────────────────────────────
 
 function registerTools(server: McpServer) {
+registerViewsTools(server, BASE_URL, AUTH_TOKEN);
 
 /** Get the MCP client name for this server session (e.g. "claude-code", "cursor"). */
 function clientName(): string | undefined {

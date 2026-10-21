@@ -107,3 +107,6 @@ wiki/migration/
 
 # generated CLI bundle (scripts/build-cli-bundles.mjs)
 packages/mindos/bin/lib/generated/
+
+# Shared distributable plugin wiring; contains no credentials.
+!plugins/mindos/.mcp.json

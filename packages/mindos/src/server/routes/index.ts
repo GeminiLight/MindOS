@@ -13,6 +13,7 @@ import { settingsRoutes } from './settings.js';
 import { setupRoutes } from './setup.js';
 import { skillRoutes } from './skills.js';
 import { systemRoutes } from './system.js';
+import { viewRoutes } from './views.js';
 
 /**
  * The Product Server route table. Adding a route is one entry in the matching
@@ -24,6 +25,7 @@ export const MINDOS_ROUTE_TABLE: MindosRouteDefinition[] = [
   ...fileRoutes,
   ...searchRoutes,
   ...knowledgeRoutes,
+  ...viewRoutes,
   ...automationRoutes,
   ...a2aRoutes,
   ...acpRoutes,

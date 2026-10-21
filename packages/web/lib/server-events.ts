@@ -22,6 +22,7 @@ export const SERVER_EVENTS_RECONNECT_MIN_MS = 1_000;
 export const SERVER_EVENTS_RECONNECT_MAX_MS = 30_000;
 
 export const SERVER_EVENT_TYPES = [
+  'views.changed',
   'tree.changed',
   'agent-run.event',
   'skills.changed',
@@ -50,6 +51,7 @@ export interface AgentRunEventSummary {
 }
 
 export interface ServerEventMap {
+  'views.changed': { type: 'views.changed'; rootId: string; registryRevision: string };
   'tree.changed': { type: 'tree.changed'; version: number };
   'agent-run.event': { type: 'agent-run.event'; runId: string; chatSessionId?: string; event: AgentRunEventSummary };
   'skills.changed': { type: 'skills.changed' };

@@ -7,6 +7,7 @@ import { notifyTreeVersionChanged } from '@/lib/server-events-bridge';
 
 vi.mock('@/lib/fs', () => ({
   getTreeVersion: () => 7,
+  getMindRoot: () => process.cwd(),
 }));
 
 type Frame = { id?: number; event?: string; data: Record<string, unknown> };

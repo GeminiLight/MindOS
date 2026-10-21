@@ -5,19 +5,17 @@ import { usePathname } from 'next/navigation';
 import {
   CalendarClock,
   FolderOpen,
-  GraduationCap,
   LayoutDashboard,
   LayoutGrid,
-  NotebookTabs,
   Plus,
   ScanSearch,
-  Sparkles,
 } from 'lucide-react';
 import { type ReactNode, useEffect, useState } from 'react';
 import PanelHeader from './PanelHeader';
 import { PanelPrimaryNav, PanelNavRow } from './PanelNavRow';
 import { useLocale } from '@/lib/stores/locale-store';
 import { cn } from '@/lib/utils';
+import { useViewsIndex, viewHref } from '@/lib/views/hooks';
 import {
   getStudioProjectHref,
   localize,
@@ -36,7 +34,7 @@ const COPY = {
     title: 'Studio',
     overview: 'Overview',
     projects: 'Projects',
-    apps: 'Apps',
+    apps: 'Views',
     automation: 'Automation',
     context: 'Context',
     newProject: 'New Project',
@@ -51,7 +49,7 @@ const COPY = {
     title: '工作台',
     overview: '总览',
     projects: '项目',
-    apps: '应用',
+    apps: '视图',
     automation: '自动化',
     context: '上下文',
     newProject: '新建项目',
@@ -63,27 +61,6 @@ const COPY = {
     appLaunch: '发布实践',
   },
 } as const;
-
-const STUDIO_PANEL_APP_ROWS = [
-  {
-    id: 'relationships',
-    href: '/capture',
-    icon: <NotebookTabs size={14} aria-hidden="true" />,
-    titleKey: 'appRelationships',
-  },
-  {
-    id: 'learning',
-    href: '/echo/growth',
-    icon: <GraduationCap size={14} aria-hidden="true" />,
-    titleKey: 'appLearning',
-  },
-  {
-    id: 'launch',
-    href: '/studio/projects',
-    icon: <Sparkles size={14} aria-hidden="true" />,
-    titleKey: 'appLaunch',
-  },
-] as const;
 
 function isStudioOverviewPath(pathname: string): boolean {
   return pathname === '/studio' || pathname === '/studio/';
@@ -98,7 +75,7 @@ function isStudioAutomationPath(pathname: string): boolean {
 }
 
 function isStudioAppsPath(pathname: string): boolean {
-  return pathname === '/studio/apps' || pathname.startsWith('/studio/apps/');
+  return pathname === '/studio/apps' || pathname.startsWith('/studio/apps/') || pathname === '/studio/views' || pathname.startsWith('/studio/views/');
 }
 
 function isStudioContextPath(pathname: string): boolean {
@@ -182,6 +159,7 @@ export default function StudioPanel({ active }: StudioPanelProps) {
   const pathname = usePathname() ?? '';
   const overviewActive = isStudioOverviewPath(pathname);
   const appsActive = isStudioAppsPath(pathname);
+  const viewsIndex = useViewsIndex(active && appsActive);
   const automationActive = isStudioAutomationPath(pathname);
   const contextActive = isStudioContextPath(pathname);
   const currentProjectId = getProjectIdFromPath(pathname);
@@ -227,7 +205,7 @@ export default function StudioPanel({ active }: StudioPanelProps) {
           activeVariant="rail"
         />
         <PanelNavRow
-          href="/studio/apps"
+          href="/studio/views"
           icon={<LayoutGrid size={14} aria-hidden="true" />}
           title={copy.apps}
           active={appsActive}
@@ -256,14 +234,10 @@ export default function StudioPanel({ active }: StudioPanelProps) {
               {copy.apps}
             </p>
             <div className="space-y-1">
-              {STUDIO_PANEL_APP_ROWS.map((app) => (
-                <StudioPanelObjectRow
-                  key={app.id}
-                  href={app.href}
-                  icon={app.icon}
-                  title={copy[app.titleKey]}
-                />
+              {viewsIndex.data?.views.slice(0, 8).map(view => (
+                <StudioPanelObjectRow key={view.id} href={viewHref(view)} icon={<LayoutGrid size={14} aria-hidden="true" />} title={view.name} selected={pathname === `/studio/views/${view.id}`} />
               ))}
+              {viewsIndex.error && <p role="status" className="px-4 py-2 text-xs text-muted-foreground">{locale === 'zh' ? '视图暂时无法读取，请在主区重试。' : 'Views unavailable. Retry in the content area.'}</p>}
             </div>
           </nav>
         ) : automationActive ? (

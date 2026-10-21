@@ -15,6 +15,7 @@ import {
 // dependency tree). Only global help loads everything.
 const agentCmd = () => import('../bin/commands/agent.js');
 const askCmd = () => import('../bin/commands/ask.js');
+const viewsCmd = () => import('../bin/commands/views.js');
 const fileCmd = () => import('../bin/commands/file.js');
 const spaceCmd = () => import('../bin/commands/space.js');
 const searchCmd = () => import('../bin/commands/search.js');
@@ -47,6 +48,7 @@ const commandLoaders = [
   agentCmd,
   askCmd,
   fileCmd,
+  viewsCmd,
   spaceCmd,
   searchCmd,
   startCmd,
@@ -84,6 +86,7 @@ const loaderByDisplayName = {
   status: statusCmd,
   open: openCmd,
   file: fileCmd,
+  views: viewsCmd,
   space: spaceCmd,
   search: searchCmd,
   mcp: mcpCmd,

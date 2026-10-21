@@ -13,6 +13,7 @@ import { getProcessGlobal, deleteProcessGlobal } from '../../agent/global-state.
  */
 
 export type MindosServerEventType =
+  | 'views.changed'
   | 'tree.changed'
   | 'agent-run.event'
   | 'skills.changed'
@@ -38,6 +39,7 @@ export type MindosAgentRunEventSummary = {
 };
 
 export type MindosServerEvent =
+  | { type: 'views.changed'; rootId: string; registryRevision: string }
   | { type: 'tree.changed'; version: number }
   | { type: 'agent-run.event'; runId: string; chatSessionId?: string; event: MindosAgentRunEventSummary }
   | { type: 'skills.changed' }
@@ -55,6 +57,7 @@ export type MindosServerEvent =
   | { type: 'heartbeat' };
 
 export const MINDOS_SERVER_EVENT_TYPES: readonly MindosServerEventType[] = [
+  'views.changed',
   'tree.changed',
   'agent-run.event',
   'skills.changed',

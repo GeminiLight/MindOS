@@ -29,11 +29,11 @@ import { StudioContextBraid, StudioProjectStage } from './StudioProjectItem';
 const COPY = {
   en: {
     title: 'Studio',
-    subtitle: 'Overview for projects, apps, automations, and inspectable context.',
+    subtitle: 'Overview for projects, views, automations, and inspectable context.',
     projectsTitle: 'Projects',
     projectsDesc: 'Keep related notes, conversations, and next steps together.',
     toolsTitle: 'Studio tools',
-    appsTitle: 'Apps',
+    appsTitle: 'Views',
     automationTitle: 'Automation',
     contextTitle: 'Context',
     continueTitle: 'Continue',
@@ -47,11 +47,11 @@ const COPY = {
   },
   zh: {
     title: '工作台',
-    subtitle: '项目、应用、自动化与可检查上下文的总览。',
+    subtitle: '项目、视图、自动化与可检查上下文的总览。',
     projectsTitle: '项目',
     projectsDesc: '把相关笔记、对话和下一步行动放在一起。',
     toolsTitle: '工作台工具',
-    appsTitle: '应用',
+    appsTitle: '视图',
     automationTitle: '自动化',
     contextTitle: '上下文',
     continueTitle: '继续推进',
@@ -193,7 +193,7 @@ export default function StudioOverviewContent() {
     : 0;
   const toolLinks = [
     ...(projects.length > 0 ? [{ href: '/studio/projects', icon: FolderOpen, label: copy.projectsTitle }] : []),
-    { href: '/studio/apps', icon: Blocks, label: copy.appsTitle },
+    { href: '/studio/views', icon: Blocks, label: copy.appsTitle },
     { href: '/studio/automation', icon: CalendarClock, label: copy.automationTitle },
     { href: '/studio/context', icon: ScanSearch, label: copy.contextTitle },
   ];

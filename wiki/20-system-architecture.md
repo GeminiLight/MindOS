@@ -2,6 +2,10 @@
 
 # MindOS 系统架构 (System Architecture)
 
+## 本地工作视图（候选）
+
+`knowledge/views` 持有人脉/任务 adapter、registry v2、ViewSpec 和恢复回执；CLI、MCP、Web 共同访问 Product Server `/api/views/v2`。宿主插件只带共享工作流和启动配置，不复制业务逻辑。[数据流与安装契约](refs/generative-views-plugin.md)。
+
 ## 整体架构
 
 ```

@@ -7,7 +7,6 @@ describe('Studio Chinese copy contract', () => {
     const files = [
       'components/studio/StudioOverviewContent.tsx',
       'components/studio/StudioContent.tsx',
-      'components/studio/StudioAppsContent.tsx',
       'components/studio/StudioAutomationView.tsx',
       'components/studio/ContextInspectorContent.tsx',
       'components/studio/StudioProjectContent.tsx',
@@ -34,7 +33,6 @@ describe('Studio Chinese copy contract', () => {
     const studioZhCopy = [
       'components/studio/StudioOverviewContent.tsx',
       'components/studio/StudioContent.tsx',
-      'components/studio/StudioAppsContent.tsx',
       'components/studio/StudioAutomationView.tsx',
       'components/studio/ContextInspectorContent.tsx',
       'components/studio/StudioProjectContent.tsx',
@@ -48,7 +46,7 @@ describe('Studio Chinese copy contract', () => {
     expect(source).toContain("studio: '工作台'");
     expect(studioPanelSource).toContain("overview: '总览'");
     expect(studioPanelSource).toContain("projects: '项目'");
-    expect(studioPanelSource).toContain("apps: '应用'");
+    expect(studioPanelSource).toContain("apps: '视图'");
     expect(studioPanelSource).toContain("automation: '自动化'");
     expect(studioPanelSource).toContain("context: '上下文'");
     expect(source).toContain("returnStudio: '返回工作台'");

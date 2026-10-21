@@ -7,6 +7,10 @@
 
 ---
 
+## 结构化工作视图（候选）
+
+`/api/views/v2` GET/POST 共用核心 service，提供 describe/read/create/mutate/preview/save，强制 root/revision/schema guard；[完整参数与恢复语义](refs/generative-views-plugin.md)。旧 `/api/views` 人脉写入转到同一服务。
+
 ## 文件操作
 
 | 端点 | 方法 | 说明 |

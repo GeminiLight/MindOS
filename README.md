@@ -216,6 +216,8 @@ MindOS knowledge doesn't have to start from scratch — bring in what you alread
 **For Humans**
 
 - **GUI Workbench**: browse, edit, search notes with unified search + AI entry (`⌘K` / `⌘/`), designed for human-AI co-creation.
+- **Views (source candidate)**: people Markdown and project TODO.csv share guarded writes across the UI, Codex and Claude Code. Generate list, table and board layouts from validated declarations; [plugin installation and limits](plugins/mindos/README.md). This candidate is not yet published on npm.
+- **People workflow**: the built-in people template links a folder to a focused interface for background, interactions and follow-ups; changes stay in ordinary Markdown. Preview selected records before taking them to an Agent.
 - **Built-in Agent Assistant**: converse with the knowledge base in context; edits seamlessly capture human-curated knowledge.
 - **One-Click Import**: drag-and-drop files with Inline AI Organize — auto-analyzes, categorizes, and writes into the knowledge base with progress tracking and undo support.
 - **Guided Onboarding**: step-by-step first-run experience that helps new users set up their knowledge base and connect their first Agent.

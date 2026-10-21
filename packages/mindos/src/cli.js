@@ -5,6 +5,7 @@ export const MINDOS_CORE_COMMANDS = [
   'status',
   'open',
   'file',
+  'views',
   'space',
   'search',
   'mcp',

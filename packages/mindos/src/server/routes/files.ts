@@ -30,7 +30,7 @@ function normalizeAgentHeader(value: string | null): string | undefined {
  * `knowledgeWrites.onChanged` hook lets a host with its own caches refresh
  * incrementally instead of the app-level full invalidation.
  */
-function recordKnowledgeWrite(services: MindosHttpServices, response: FilePostResponse, agentName: string | undefined): void {
+export function recordKnowledgeWrite(services: MindosHttpServices, response: FilePostResponse, agentName: string | undefined): void {
   if (response.changeEvent) {
     try {
       appendContentChangeToLog(services.mindRoot, {

@@ -41,6 +41,7 @@ const CLI_RUNTIME_ROOT_DEPENDENCIES = [
   'hono',
   'jsonc-parser',
   'picomatch',
+  'papaparse',
   'zod',
 ];
 

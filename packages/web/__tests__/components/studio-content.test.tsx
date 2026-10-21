@@ -30,6 +30,7 @@ vi.mock('@/lib/stores/locale-store', () => ({
 
 vi.mock('next/navigation', () => ({
   usePathname: () => mockPathname,
+  useRouter: () => ({ push, refresh: vi.fn() }),
 }));
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -329,18 +330,18 @@ describe('StudioContent', () => {
     expect(host.textContent).not.toContain('0 Projects');
   });
 
-  it('renders Studio overview as the parent surface for Projects, Apps, and Automation', async () => {
+  it('renders Studio overview as the parent surface for Projects, Views, and Automation', async () => {
     await renderStudioOverview();
 
     expect(host.querySelector('[data-studio-overview]')).not.toBeNull();
     expect(host.textContent).toContain('Studio');
-    expect(host.textContent).toContain('Overview for projects, apps, automations, and inspectable context.');
+    expect(host.textContent).toContain('Overview for projects, views, automations, and inspectable context.');
     expect(host.querySelector('a[href="/studio/projects"]')).not.toBeNull();
-    expect(host.querySelector('a[href="/studio/apps"]')).not.toBeNull();
+    expect(host.querySelector('a[href="/studio/views"]')).not.toBeNull();
     expect(host.querySelector('a[href="/studio/automation"]')).not.toBeNull();
     expect(host.querySelector('a[href="/studio/context"]')).not.toBeNull();
     expect(host.textContent).toContain('Projects');
-    expect(host.textContent).toContain('Apps');
+    expect(host.textContent).toContain('Views');
     expect(host.textContent).toContain('Automation');
     expect(host.textContent).toContain('Continue');
     expect(host.querySelector('[data-studio-projects-surface]')).toBeNull();
@@ -443,7 +444,7 @@ describe('StudioContent', () => {
     expect(host.querySelectorAll('[data-studio-project-item="compact"]').length).toBeGreaterThan(0);
   });
 
-  it('renders the unified Studio panel with Overview, Projects, Apps, and Automation', async () => {
+  it('renders the unified Studio panel with Overview, Projects, Views, and Automation', async () => {
     host = document.createElement('div');
     document.body.appendChild(host);
     root = createRoot(host);
@@ -454,11 +455,11 @@ describe('StudioContent', () => {
 
     expect(host.textContent).toContain('Overview');
     expect(host.textContent).toContain('Projects');
-    expect(host.textContent).toContain('Apps');
+    expect(host.textContent).toContain('Views');
     expect(host.textContent).toContain('Automation');
     const overview = host.querySelector('a[href="/studio"]');
     const projects = host.querySelector('a[href="/studio/projects"]');
-    const apps = host.querySelector('a[href="/studio/apps"]');
+    const apps = host.querySelector('a[href="/studio/views"]');
     const automation = host.querySelector('a[href="/studio/automation"]');
     expect(overview).not.toBeNull();
     expect(projects).not.toBeNull();
@@ -484,20 +485,17 @@ describe('StudioContent', () => {
 
     const overview = host.querySelector('a[href="/studio"]');
     const projects = host.querySelector('a[href="/studio/projects"]');
-    const apps = host.querySelector('a[href="/studio/apps"]');
+    const apps = host.querySelector('a[href="/studio/views"]');
     const automation = host.querySelector('a[href="/studio/automation"]');
     const launchProject = host.querySelector('a[href="/studio/launch-practice"]');
-    const appsSection = host.querySelector('nav[aria-label="Apps"]');
+    const appsSection = host.querySelector('nav[aria-label="Views"]');
     expect(overview?.getAttribute('aria-current')).toBeNull();
     expect(projects?.getAttribute('aria-current')).toBeNull();
     expect(apps?.getAttribute('aria-current')).toBe('page');
     expect(automation?.getAttribute('aria-current')).toBeNull();
     expect(appsSection).not.toBeNull();
-    expect(appsSection?.textContent).toContain('Relationship Memory');
-    expect(appsSection?.textContent).toContain('Learning Practice');
-    expect(appsSection?.textContent).toContain('Launch Practice');
-    expect(appsSection?.querySelector('a[href="/capture"]')).not.toBeNull();
-    expect(appsSection?.querySelector('a[href="/echo/growth"]')).not.toBeNull();
+    expect(appsSection?.querySelector('a[href="/capture"]')).toBeNull();
+    expect(appsSection?.querySelector('a[href="/echo/growth"]')).toBeNull();
     expect(launchProject).toBeNull();
     expect(host.textContent).not.toContain('Recent Projects');
   });
@@ -544,24 +542,13 @@ describe('StudioContent', () => {
     expect(launchProject?.getAttribute('aria-current')).toBeNull();
   });
 
-  it('renders Studio Apps as a Studio subpage with an Overview return link', async () => {
+  it('keeps the legacy Apps component on the real Views surface', async () => {
     await renderStudioApps();
-
     expect(host.querySelector('[data-content-page-shell="studio"]')).not.toBeNull();
-    const backLink = host.querySelector('header a[data-studio-back-overview]');
-    expect(backLink).not.toBeNull();
-    expect(backLink?.getAttribute('href')).toBe('/studio');
-    expect(backLink?.textContent).toContain('Overview');
-    expect(host.textContent).toContain('Apps');
-    expect(host.textContent).not.toContain('Scene apps');
-    expect(host.textContent).not.toContain('First scene');
-    expect(host.textContent).toContain('Relationships');
-    expect(host.textContent).toContain('Relationship Memory');
-    expect(host.textContent).toContain('Learning Practice');
-    expect(host.textContent).toContain('Record touchpoint');
-    expect(host.querySelector('a[href="/capture"]')).not.toBeNull();
-    expect(host.querySelector('a[href="/echo/growth"]')).not.toBeNull();
-    expect(host.querySelector('a[href="/studio/projects"]')).not.toBeNull();
+    expect(host.querySelector('a[href="/studio"]')).not.toBeNull();
+    expect(host.querySelector('h1')?.textContent).toBe('Views');
+    expect(host.textContent).not.toContain('Relationship Memory');
+    expect(host.querySelector('a[href="/capture"]')).toBeNull();
   });
 
   it('renders Studio Automation as a Studio subpage with an Overview return link', async () => {

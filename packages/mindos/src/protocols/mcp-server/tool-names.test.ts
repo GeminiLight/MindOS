@@ -7,7 +7,7 @@ import { MINDOS_MCP_TOOL_COUNT, MINDOS_MCP_TOOL_NAMES } from './tool-names.js';
 const here = dirname(fileURLToPath(import.meta.url));
 
 function registeredToolNamesFromSource(): string[] {
-  const source = readFileSync(resolve(here, 'tools.ts'), 'utf-8');
+  const source = readFileSync(resolve(here, 'views-tools.ts'), 'utf-8') + readFileSync(resolve(here, 'tools.ts'), 'utf-8');
   return [...source.matchAll(/\bregisterTool\(\s*["']([^"']+)["']/g)].map((match) => match[1]!);
 }
 

@@ -1,3 +1,4 @@
+import { watchViews } from '../knowledge/views/watch.js';
 import {
   getDefaultMindRoot,
   listDirectoriesFromMindRoot,
@@ -211,6 +212,7 @@ export function createDefaultMindosHttpServices(options: DefaultMindosHttpServic
   const removeTreeSource = events.addSource(() => treeCache.subscribe((version) => {
     events.emit({ type: 'tree.changed', version });
   }));
+  const removeViewsSource = events.addSource(() => watchViews(mindRoot, event => events.emit(event)));
   const channels: MindosChannelServices = {};
   if (options.homeDir) {
     channels.configPath = `${options.homeDir}/.mindos/im.json`;
@@ -239,6 +241,7 @@ export function createDefaultMindosHttpServices(options: DefaultMindosHttpServic
     invalidateTreeCache: () => treeCache.invalidate(),
     dispose: () => {
       removeTreeSource();
+      removeViewsSource();
       treeCache.dispose();
     },
     events,

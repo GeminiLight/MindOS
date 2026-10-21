@@ -1,3 +1,5 @@
+import { ViewError } from '../../knowledge/views/types.js';
+import { withFileMutation } from '../../knowledge/views/file-lock.js';
 import {
   appendFileSync,
   copyFileSync,
@@ -209,7 +211,7 @@ export async function handleFilePost(
   });
 
   try {
-    const result = await executeKnowledgeOperation({
+    const execute = () => executeKnowledgeOperation({
       body: payload,
       source,
       actor: createKnowledgeOperationActor(source, options.agentHeader),
@@ -227,8 +229,11 @@ export async function handleFilePost(
       },
     });
 
+    const result = typeof payload.path === 'string' && ['save_file','create_file','append_to_file','insert_lines','update_lines','delete_lines'].includes(String(payload.op))
+      ? await withFileMutation(services.mindRoot, payload.path, execute) : await execute();
     return attachOperationMetadata(result.response, result);
   } catch (error) {
+    if (error instanceof ViewError) return json({ error: error.message }, { status: error.status });
     return mapFilePostError(error);
   }
 }

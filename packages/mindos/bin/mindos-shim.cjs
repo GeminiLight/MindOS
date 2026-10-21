@@ -44,6 +44,7 @@ COMMANDS
   status        Show service status
   open          Open Web UI in browser
   file          Manage files (list, read, write, edit, search, ...)
+  views         Manage local collections and generated views
   space         Manage spaces (list, tree, create, rename)
   search        Search your knowledge base
   mcp           Manage AI agent connections
