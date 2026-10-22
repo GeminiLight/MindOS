@@ -1,0 +1,2 @@
+# Keep executable ESM hashbangs compatible with Node/Vite on Windows.
+*.mjs text eol=lf

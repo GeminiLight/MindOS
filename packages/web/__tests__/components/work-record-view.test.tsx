@@ -69,16 +69,116 @@ it("shows explicit empty results and treats field content as text", async () => 
 });
 
 it("renders follow-up completion and recent interaction in a generated people table", async () => {
-  const { default: View } = await import("@/components/studio/views/WorkRecordView");
-  const host = document.createElement("div"), root = createRoot(host);
-  await act(async () => root.render(<View
-    records={[{ id: "p-person", fields: { name: "林悦", followupState: "done", lastInteraction: "确认参加访谈", interactionCount: "2" }, source: { path: "person.md" } } as any]}
-    spec={{ fields: ["name", "followupState", "lastInteraction", "interactionCount"], layout: "table", actions: [] } as any}
-    onEdit={() => {}} locale="zh"
-  />));
+  const { default: View } = await import(
+    "@/components/studio/views/WorkRecordView"
+  );
+  const host = document.createElement("div"),
+    root = createRoot(host);
+  await act(async () =>
+    root.render(
+      <View
+        records={[
+          {
+            id: "p-person",
+            fields: {
+              name: "林悦",
+              followupState: "done",
+              lastInteraction: "确认参加访谈",
+              interactionCount: "2",
+            },
+            source: { path: "person.md" },
+          } as any,
+        ]}
+        spec={
+          {
+            fields: [
+              "name",
+              "followupState",
+              "lastInteraction",
+              "interactionCount",
+            ],
+            layout: "table",
+            actions: [],
+          } as any
+        }
+        onEdit={() => {}}
+        locale="zh"
+      />,
+    ),
+  );
   expect(host.textContent).toContain("跟进状态");
   expect(host.textContent).toContain("已完成");
   expect(host.textContent).toContain("最近互动");
   expect(host.textContent).toContain("确认参加访谈");
+  await act(async () => root.unmount());
+});
+
+it("keeps board cards focused, names empty lanes and omits unauthorized source columns", async () => {
+  const { default: View } = await import(
+    "@/components/studio/views/WorkRecordView"
+  );
+  const host = document.createElement("div"),
+    root = createRoot(host);
+  const props = {
+    records: [
+      {
+        id: "t1",
+        fields: { title: "Plan", status: "todo", dueDate: "", x_notes: "" },
+        source: { path: "Tasks.csv" },
+      } as any,
+    ],
+    spec: {
+      fields: ["title", "status", "dueDate", "x_notes"],
+      layout: "board",
+      actions: ["record.update"],
+    } as any,
+    onEdit: vi.fn(),
+    locale: "en",
+  };
+  await act(async () => root.render(<View {...props} />));
+  expect(host.querySelector("article")!.textContent).not.toContain("Status");
+  expect(host.querySelector("article")!.textContent).not.toContain("Due date");
+  expect(host.textContent).toContain("No tasks yet");
+  await act(async () =>
+    root.render(<View {...props} spec={{ ...props.spec, layout: "table" }} />),
+  );
+  expect(
+    [...host.querySelectorAll("th")].map((n) => n.textContent),
+  ).not.toContain("Source");
+  expect(host.querySelector('[role="region"][tabindex="0"]')).not.toBeNull();
+  await act(async () => root.unmount());
+});
+
+it("keeps the edit action on the record name when a date is the first visible column", async () => {
+  const { default: View } = await import(
+    "@/components/studio/views/WorkRecordView"
+  );
+  const host = document.createElement("div"),
+    root = createRoot(host),
+    onEdit = vi.fn();
+  const record = {
+    id: "t1",
+    fields: { title: "Review", dueDate: "2026-10-22" },
+    source: { path: "Tasks.csv" },
+  } as any;
+  await act(async () =>
+    root.render(
+      <View
+        records={[record]}
+        spec={
+          {
+            fields: ["dueDate", "title"],
+            layout: "table",
+            actions: ["record.update"],
+          } as any
+        }
+        onEdit={onEdit}
+        locale="en"
+      />,
+    ),
+  );
+  expect(host.querySelector("button")!.textContent).toBe("Review");
+  await act(async () => host.querySelector("button")!.click());
+  expect(onEdit).toHaveBeenCalledWith(record);
   await act(async () => root.unmount());
 });

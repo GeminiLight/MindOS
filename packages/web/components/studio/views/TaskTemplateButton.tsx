@@ -1,5 +1,6 @@
 "use client";
 import { useSmoothRouterPush } from "@/hooks/useSmoothRouterPush";
+import { ListTodo } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,9 +41,15 @@ export default function TaskTemplateButton({
           setOpen(true);
         }}
       >
+        <ListTodo size={15} aria-hidden />
         {zh ? "项目待办模板" : "Project tasks template"}
       </Button>
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog
+        open={open}
+        onOpenChange={(value) => {
+          if (!busy) setOpen(value);
+        }}
+      >
         <DialogContent finalFocus={returnFocus}>
           <DialogHeader>
             <DialogTitle>
@@ -86,6 +93,9 @@ export default function TaskTemplateButton({
                   required
                   maxLength={80}
                   className={fieldClass}
+                  placeholder={
+                    zh ? "例如：产品访谈" : "e.g. Customer interviews"
+                  }
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                 />
@@ -97,6 +107,11 @@ export default function TaskTemplateButton({
                   id={id}
                   required
                   className={fieldClass}
+                  placeholder={
+                    zh
+                      ? "例如：项目/产品访谈"
+                      : "e.g. Projects/Customer interviews"
+                  }
                   value={folder}
                   onChange={(e) => setFolder(e.target.value)}
                 />
@@ -134,7 +149,13 @@ export default function TaskTemplateButton({
               variant="amber"
               disabled={busy || scope !== rootId}
             >
-              {zh ? "创建视图" : "Create view"}
+              {busy
+                ? zh
+                  ? "创建中…"
+                  : "Creating…"
+                : zh
+                  ? "创建视图"
+                  : "Create view"}
             </Button>
           </form>
         </DialogContent>

@@ -98,6 +98,14 @@ function writeRegistry(root: string, registry: ViewRegistry): void {
   const file = checkedPath(root, REGISTRY);
   mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
   normalize(registry);
+  // Readers cap both lists. Never atomically replace a readable registry with
+  // a state that the next request would reject (including copy/save paths).
+  if (registry.views.length > 500 || registry.collections.length > 500)
+    throw new ViewError(
+      "REGISTRY_LIMIT",
+      "At most 500 views and collections are supported",
+      413,
+    );
   const serialized = JSON.stringify(registry, null, 2) + "\n";
   if (Buffer.byteLength(serialized) > 1024 * 1024)
     throw new ViewError("REGISTRY_LIMIT", "View registry exceeds 1 MiB", 413);

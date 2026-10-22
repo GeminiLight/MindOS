@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const root = resolve(__dirname, '..');
@@ -231,4 +231,15 @@ describe('Desktop release packaging contract', () => {
     expect(workflow).toContain('latest will not be promoted');
     expect(workflow).toContain('Mirror is not verified');
   });
+});
+
+it('keeps ESM script hashbangs portable in Windows checkouts and public sync', () => {
+  expect(readText('.gitattributes')).toMatch(/^\*\.mjs text eol=lf$/m);
+  // The public repository receives .gitattributes but not the private sync policy.
+  if (!existsSync(resolve(root, '.syncinclude'))) return;
+  const sync = readText('.syncinclude');
+  expect(sync).toContain('  - .gitattributes');
+  const blocked = sync.split('blocked_patterns:')[1];
+  expect(blocked).toContain('  - .gitignore.prod');
+  expect(blocked).not.toMatch(/^  - \.gitignore$/m);
 });

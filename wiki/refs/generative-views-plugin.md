@@ -49,3 +49,55 @@
 `describe.mutationInputs` 提供每种动作的输入键、类型、示例和版本要求。`interaction.add` 使用 `{text,date,source?}`；`followup.update` 使用 `{text,date,completed}`，替换整条跟进，因此完成时保留原文与日期。任务 `personRef` 是 `collectionId/personId` 字符串。读取字段 `followup`、`followupState` 不直接传入 record.update。
 
 真实 Codex 验收包含建档、互动/跟进、关联任务、生成表格/看板、界面编辑后新会话接续、可选备注字段预览及保存。插件 MCP 进程只继承宿主允许的环境变量；隔离验收应在测试 HOME 中安装/解析 runtime，不能假定父进程临时 `MINDOS_VIEWS_CLI` 自动透传。不要为连接失败更换用户的知识库。
+
+## 在界面中日常使用
+
+- 在「工作台 → 视图」选择人脉或项目待办模板；已有视图按类型显示图标。
+- 项目待办支持当前视图搜索和状态筛选，随时清除；这些临时筛选不改变原文件或保存的视图定义。搜索仅匹配当前显示字段。
+- 点击任务名编辑：任务、状态、日期直接填写；关联人物先选择资料夹，再选择姓名；备注与来源按需展开。关联失效时保留旧值，不会自动删除引用。
+- 关闭编辑器会保留已经输入的草稿。保存失败也保留输入，恢复后仍用原始 revision 校验；不会静默覆盖其他 Agent 的修改。
+- 「调整视图」选择列表/表格/看板、显示字段和排序方向，点击「预览」即可在同一窗口看到真实资料；「保留此视图」才更新当前布局。改变布局/字段后需重新预览。原有独立预览链接、复制、置顶和恢复布局仍可用。
+- 看板省略空字段和重复状态；表格可横向滚动，姓名/任务名是编辑入口。窄屏使用纵向布局，操作保持可见。
+- 「复制给 Agent 的说明」成功后显示复制反馈，再到 Codex 或 Claude Code 粘贴并补充要求。
+
+本轮 UI 设计与验收范围见 [体验打磨 spec](../specs/spec-generative-views-ux-polish.md)。
+
+## 工作页面与查看方式
+
+导航以数据集合为单位：一份人脉或项目资料只出现一个工作页面，表格/看板等保存方式收在该页面内部。旧链接仍然有效，同名但不同资料不会合并。页面上的布局切换只改变当前浏览，不新增记录或视图；要保存为默认布局，在「调整视图」中预览并保留。
+
+页面配置可包含：
+
+```json
+{
+  "specVersion": 1,
+  "collectionId": "c-project-12345678",
+  "layout": "board",
+  "page": { "description": "把讨论转成行动，掌握下一步。", "showSummary": true },
+  "fields": ["title", "status", "dueDate"],
+  "groupBy": "status",
+  "actions": ["record.create", "record.update", "source.open"]
+}
+```
+
+`page` 可选，说明最多280字符；仅包含声明式属性，按既有预览/保存校验。Agent 应先检查 `describe.presentation` 再使用新配置；旧配置在新版继续可读，含新配置的视图需要支持该能力的运行时。概览统计的是当前保存视图的投影，不代表整个资料库。业务字段仍由 people/tasks schema 管理，与页面描述独立。人物概览的互动数是每人最近200条解析窗口的已载入记录数，不是按某个时间段统计。
+
+默认人物详情模板保留档案、互动和跟进的完整流程；自定义字段顺序/标签或收紧动作后，使用通用字段呈现器遵守保存的配置。筛选、排序在两种呈现器中一致。原文件与CSV导出入口面向整个源集合，页面筛选不代表数据访问权限。
+
+`create(mode=existing)` 对已关联的同模板/目录返回原页面；需要额外保存方式时使用 preview/save 或显式 copy。移除视图不会删除源资料，重放已移除的创建结果不会自动复活它。
+
+## 可重复的隔离验收
+
+```sh
+pnpm --filter @geminilight/mindos build
+pnpm --filter @mindos/web build
+# 同 Desktop runtime 一样补齐 standalone 的静态资源和依赖闭包
+node --input-type=module -e 'import {materializeStandaloneAssets,BUILTIN_AGENT_EXTENSION_RUNTIME_DEPENDENCY_SEEDS,IM_RUNTIME_DEPENDENCY_SEEDS} from "./packages/desktop/scripts/prepare-mindos-bundle.mjs"; import {resolve} from "node:path"; materializeStandaloneAssets(resolve("packages/web"),{runtimeDependencySeeds:[...BUILTIN_AGENT_EXTENSION_RUNTIME_DEPENDENCY_SEEDS,...IM_RUNTIME_DEPENDENCY_SEEDS]});'
+pnpm test:views:isolated
+# 同一个一次性服务内再验证两个 MCP 客户端
+pnpm test:views:isolated -- --mcp
+```
+
+Runner 每次创建独立临时HOME、资料库和随机端口。浏览器/MCP在写入前验证所有权token、路径、配置和服务rootId，结束清理自己的进程和资料；测试截图与Playwright结果仍留在测试输出目录。不得再把供人体验的4587服务或长期资料库用于回归测试，单独设置 `MINDOS_VIEWS_ISOLATED=1` 已不足以运行写入测试。
+
+架构及验收依据：[工作页面与隔离 spec](../specs/spec-views-workspaces-and-test-isolation.md)。

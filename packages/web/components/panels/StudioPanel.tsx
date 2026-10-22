@@ -16,6 +16,7 @@ import { PanelPrimaryNav, PanelNavRow } from './PanelNavRow';
 import { useLocale } from '@/lib/stores/locale-store';
 import { cn } from '@/lib/utils';
 import { useViewsIndex, viewHref } from '@/lib/views/hooks';
+import { groupViewWorkspaces } from '@/lib/views/view-workspaces';
 import {
   getStudioProjectHref,
   localize,
@@ -234,8 +235,8 @@ export default function StudioPanel({ active }: StudioPanelProps) {
               {copy.apps}
             </p>
             <div className="space-y-1">
-              {viewsIndex.data?.views.slice(0, 8).map(view => (
-                <StudioPanelObjectRow key={view.id} href={viewHref(view)} icon={<LayoutGrid size={14} aria-hidden="true" />} title={view.name} selected={pathname === `/studio/views/${view.id}`} />
+              {groupViewWorkspaces(viewsIndex.data?.views ?? []).slice(0, 8).map(group => (
+                <StudioPanelObjectRow key={group.id} href={viewHref(group.resume)} icon={<LayoutGrid size={14} aria-hidden="true" />} title={group.primary.name} selected={group.views.some(view => pathname === `/studio/views/${view.id}`)} />
               ))}
               {viewsIndex.error && <p role="status" className="px-4 py-2 text-xs text-muted-foreground">{locale === 'zh' ? '视图暂时无法读取，请在主区重试。' : 'Views unavailable. Retry in the content area.'}</p>}
             </div>

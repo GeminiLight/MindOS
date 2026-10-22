@@ -291,6 +291,7 @@ describe('GitHub workflow migration contract', () => {
     expect(tauriCargo).toContain('alloc-no-stdlib = "=2.0.4"');
     expect(tauriCargo).toContain('alloc-stdlib = "=0.2.2"');
     expect(tauriCargo).toContain('brotli-decompressor = "=5.0.1"');
+    expect(tauriCargo).toContain('rust-ini = "=0.21.1"');
     expect(tauriMain).toContain('use tauri_plugin_deep_link::DeepLinkExt;');
     expect(tauriMain).toContain('app.deep_link().on_open_url');
     expect(tauriMain).toContain('shortcuts::register_shortcuts(app.handle())');

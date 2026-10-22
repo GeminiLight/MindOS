@@ -6,6 +6,12 @@ export const viewSpecSchema = z.strictObject({
   specVersion: z.literal(1),
   collectionId: z.string().regex(/^c-[a-z0-9-]{8,80}$/),
   layout: z.enum(["list-detail", "table", "board"]),
+  page: z
+    .strictObject({
+      description: z.string().max(280).optional(),
+      showSummary: z.boolean().optional(),
+    })
+    .optional(),
   fields: z.array(field).min(1).max(20),
   groupBy: field.optional(),
   sort: z

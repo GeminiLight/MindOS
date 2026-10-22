@@ -247,23 +247,54 @@ it("replays a saved view after its preview has expired", async () => {
 
 it("describes executable interaction and follow-up inputs instead of requiring agents to guess fields", async () => {
   const { service: s } = setup();
-  const { collection } = await s.create({ name: "Contacts", folder: "Contacts", template: "people", mode: "new", operationId: op() });
+  const { collection } = await s.create({
+    name: "Contacts",
+    folder: "Contacts",
+    template: "people",
+    mode: "new",
+    operationId: op(),
+  });
   const contract = s.describe(collection.id).mutationInputs;
   expect(contract["interaction.add"].required).toEqual(["text", "date"]);
   expect(contract["followup.update"].properties.completed.type).toBe("boolean");
   expect(contract["schema.extend"].example).toEqual({ key: "x_context" });
-  await s.mutate({ collectionId: collection.id, action: "record.create", operationId: op(), expectedSchemaRevision: s.read(collection.id).schemaRevision, input: { name: "林悦" } });
+  await s.mutate({
+    collectionId: collection.id,
+    action: "record.create",
+    operationId: op(),
+    expectedSchemaRevision: s.read(collection.id).schemaRevision,
+    input: { name: "林悦" },
+  });
   for (const action of ["interaction.add", "followup.update"]) {
-    const snapshot = s.read(collection.id), person = snapshot.records[0];
-    await s.mutate({ collectionId: collection.id, recordId: person.id, action, operationId: op(), expectedRevision: person.source.revision, expectedSchemaRevision: snapshot.schemaRevision, input: contract[action].example });
+    const snapshot = s.read(collection.id),
+      person = snapshot.records[0];
+    await s.mutate({
+      collectionId: collection.id,
+      recordId: person.id,
+      action,
+      operationId: op(),
+      expectedRevision: person.source.revision,
+      expectedSchemaRevision: snapshot.schemaRevision,
+      input: contract[action].example,
+    });
   }
   const person = s.read(collection.id).records[0];
   expect(person.fields.followup).toBe(contract["followup.update"].example.text);
   expect(person.fields.followupState).toBe("todo");
   expect(person.fields.interactionCount).toBe("1");
-  expect(person.fields.lastInteraction).toBe(contract["interaction.add"].example.text);
+  expect(person.fields.lastInteraction).toBe(
+    contract["interaction.add"].example.text,
+  );
   expect(person.fields.lastInteractionDate).toBe("2026-10-22");
-  await s.mutate({ collectionId: collection.id, recordId: person.id, action: "followup.update", operationId: op(), expectedRevision: person.source.revision, expectedSchemaRevision: person.schemaRevision, input: { ...contract["followup.update"].example, completed: true } });
+  await s.mutate({
+    collectionId: collection.id,
+    recordId: person.id,
+    action: "followup.update",
+    operationId: op(),
+    expectedRevision: person.source.revision,
+    expectedSchemaRevision: person.schemaRevision,
+    input: { ...contract["followup.update"].example, completed: true },
+  });
   expect(s.read(collection.id).records[0].fields.followupState).toBe("done");
   expect(s.describe().mutationInputs).toEqual(contract);
   expect(() => s.describe("c-missing")).toThrow();
@@ -271,7 +302,55 @@ it("describes executable interaction and follow-up inputs instead of requiring a
 
 it("projects empty people history without inventing an interaction", async () => {
   const { service: s } = setup();
-  const { collection } = await s.create({ name: "Empty", folder: "Empty", template: "people", mode: "new", operationId: op() });
-  await s.mutate({ collectionId: collection.id, action: "record.create", operationId: op(), expectedSchemaRevision: s.read(collection.id).schemaRevision, input: { name: "New" } });
-  expect(s.read(collection.id).records[0].fields).toMatchObject({ followupState: "todo", interactionCount: "0", lastInteraction: "", lastInteractionDate: "" });
+  const { collection } = await s.create({
+    name: "Empty",
+    folder: "Empty",
+    template: "people",
+    mode: "new",
+    operationId: op(),
+  });
+  await s.mutate({
+    collectionId: collection.id,
+    action: "record.create",
+    operationId: op(),
+    expectedSchemaRevision: s.read(collection.id).schemaRevision,
+    input: { name: "New" },
+  });
+  expect(s.read(collection.id).records[0].fields).toMatchObject({
+    followupState: "todo",
+    interactionCount: "0",
+    lastInteraction: "",
+    lastInteractionDate: "",
+  });
+});
+
+it("reuses the existing workspace when another client binds the same task folder", async () => {
+  const { service: s } = setup();
+  const first = await s.create({
+    name: "Project",
+    folder: "Projects/Shared",
+    template: "tasks",
+    mode: "new",
+    operationId: op(),
+  });
+  const input = {
+    name: "Another name",
+    folder: "Projects/Shared",
+    template: "tasks",
+    mode: "existing",
+    operationId: op(),
+  };
+  const second = await s.create(input);
+  expect(second.view.id).toBe(first.view.id);
+  expect(s.list().views).toHaveLength(1);
+  expect((await s.create(input)).view.id).toBe(first.view.id);
+  await expect(s.create({ ...input, name: "Changed" })).rejects.toThrow();
+  await s.save({
+    action: "remove",
+    viewId: first.view.id,
+    expectedViewVersion: first.view.version,
+    operationId: op(),
+  });
+  await expect(s.create(input)).rejects.toThrow();
+  expect(s.list().views).toHaveLength(0);
 });

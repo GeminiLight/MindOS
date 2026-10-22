@@ -29,3 +29,8 @@ brotli-decompressor = "=5.0.1"
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# deep-link 2.6.2 constructs ParseOption with two fields. rust-ini 0.21.2+
+# added required fields in a patch release; remove after the plugin adapts.
+rust-ini = "=0.21.1"

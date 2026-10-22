@@ -121,3 +121,44 @@ describe("Views starts with real content states", () => {
     expect(host.textContent).toContain("生活/人脉");
   });
 });
+
+it("presents one workspace card for a collection with multiple saved views", async () => {
+  const common = {
+    folder: "Projects/A",
+    template: "tasks",
+    collectionId: "c-one",
+    version: 1,
+    createdAt: "2026-10-01",
+    updatedAt: "2026-10-01",
+    availability: "ready",
+  };
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(
+      response({
+        rootId: "root",
+        folders: [],
+        views: [
+          {
+            ...common,
+            id: "v-first",
+            name: "项目主页",
+            spec: { layout: "table" },
+          },
+          {
+            ...common,
+            id: "v-second",
+            name: "推进看板",
+            spec: { layout: "board" },
+            createdAt: "2026-10-02",
+          },
+        ],
+      }),
+    ),
+  );
+  await render();
+  expect(host.querySelectorAll("[data-view-workspace]")).toHaveLength(1);
+  expect(host.textContent).toContain("项目主页");
+  expect(host.textContent).toContain("2 种查看方式");
+  expect(host.querySelector('a[href="/studio/views/v-second"]')).not.toBeNull();
+});

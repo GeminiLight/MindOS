@@ -1,3 +1,4 @@
+import { assertViewsFixture } from "../helpers/views-fixture.mjs";
 import { test, expect as baseExpect } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import {
@@ -301,7 +302,7 @@ test('associates existing files, renames the view, exports and stays usable at 3
     })
   ).json();
   expect(original.content).toBe(csv);
-  await page.getByRole('button', { name: '人脉视图', exact: true }).click();
+  await page.getByRole('button', { name: '返回联系人', exact: true }).click();
   await page.getByRole('button', { name: /叶遥/ }).click();
   await page.setViewportSize({ width: 320, height: 740 });
   await expect
@@ -443,3 +444,6 @@ test('an open template cannot carry its old draft into another knowledge library
     rmSync(other, { recursive: true, force: true });
   }
 });
+
+// Every mutating test verifies disposable ownership and server root before creating data.
+test.beforeEach(async ({request}) => { await assertViewsFixture(request); });

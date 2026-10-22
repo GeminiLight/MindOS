@@ -65,3 +65,20 @@ it("rejects impossible date filter values and task-only actions on the wrong tem
     api.validateViewSpec({ ...spec, actions: ["interaction.add"] }, fields),
   ).toThrow();
 });
+it("accepts bounded page presentation while rejecting executable or oversized metadata", () => {
+  expect(
+    api.validateViewSpec(
+      {
+        ...spec,
+        page: { description: "项目的下一步与协作记录", showSummary: true },
+      },
+      fields,
+    ).page.description,
+  ).toBe("项目的下一步与协作记录");
+  for (const page of [
+    { description: "x".repeat(281) },
+    { html: "<script>run()</script>" },
+    { showSummary: "yes" },
+  ])
+    expect(() => api.validateViewSpec({ ...spec, page }, fields)).toThrow();
+});

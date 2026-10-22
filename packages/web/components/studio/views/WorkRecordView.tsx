@@ -1,9 +1,12 @@
 "use client";
 import React from "react";
 import Link from "next/link";
+import { Circle, CircleCheck, CircleDot, FileText, Inbox } from "lucide-react";
 import type { WorkRecord, ViewSpec } from "@geminilight/mindos/knowledge/views";
 const labels: Record<string, [string, string]> = {
   title: ["任务", "Task"],
+  x_notes: ["备注", "Notes"],
+  x_context: ["补充背景", "Context"],
   status: ["状态", "Status"],
   dueDate: ["截止日期", "Due date"],
   personRef: ["相关人物", "Person"],
@@ -19,13 +22,32 @@ const labels: Record<string, [string, string]> = {
   lastInteractionDate: ["互动日期", "Interaction date"],
 };
 export const fieldLabel = (key: string, locale: string, spec?: ViewSpec) =>
-  spec?.labels?.[key] ?? labels[key]?.[locale === "zh" ? 0 : 1] ?? key;
+  spec?.labels?.[key] ??
+  labels[key]?.[locale === "zh" ? 0 : 1] ??
+  key.replace(/^x_/, "").replaceAll("_", " ");
 export const statusLabel = (value: string, locale: string) =>
   ({
     todo: locale === "zh" ? "待办" : "To do",
     doing: locale === "zh" ? "进行中" : "Doing",
     done: locale === "zh" ? "已完成" : "Done",
   })[value] ?? value;
+export function StatusMark({ value }: { value: string }) {
+  const Icon =
+    value === "done" ? CircleCheck : value === "doing" ? CircleDot : Circle;
+  return (
+    <Icon
+      size={14}
+      aria-hidden
+      className={
+        value === "done"
+          ? "shrink-0 text-success"
+          : value === "doing"
+            ? "shrink-0 text-[var(--amber)]"
+            : "shrink-0 text-muted-foreground"
+      }
+    />
+  );
+}
 const action =
   "rounded text-left underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 export default function WorkRecordView({
@@ -39,72 +61,143 @@ export default function WorkRecordView({
   onEdit: (record: WorkRecord) => void;
   locale: string;
 }) {
+  const zh = locale === "zh",
+    hasSource = spec.actions.includes("source.open");
   if (!records.length)
     return (
-      <div className="rounded-lg border border-dashed border-border p-10 text-center text-muted-foreground">
-        {locale === "zh" ? "暂无符合条件的记录" : "No matching records"}
+      <div className="rounded-xl border border-dashed border-border px-5 py-14 text-center">
+        <Inbox
+          size={24}
+          aria-hidden
+          className="mx-auto mb-4 text-muted-foreground"
+        />
+        <p className="text-sm font-medium">
+          {zh ? "暂无符合条件的记录" : "No matching records"}
+        </p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {zh
+            ? "试试其他关键词，或添加第一条记录。"
+            : "Try another search, or add your first record."}
+        </p>
       </div>
     );
   const title = (r: WorkRecord) => r.fields.title ?? r.fields.name ?? r.id;
-  const cell = (r: WorkRecord, key: string) =>
-    key === "personRef" && r.personHref ? (
-      <Link href={r.personHref} className={action}>
-        {locale === "zh" ? "打开相关人物" : "Open person"}
-      </Link>
-    ) : key === "status" || key === "followupState" ? (
-      statusLabel(r.fields[key] ?? "", locale)
-    ) : (
-      r.fields[key] || "—"
-    );
-  const open = (r: WorkRecord, label = title(r)) =>
+  const identityKey = spec.fields.find((k) => k === "title" || k === "name");
+  const cell = (r: WorkRecord, key: string) => {
+    const value = r.fields[key];
+    if (key === "personRef" && r.personHref)
+      return (
+        <Link href={r.personHref} className={action}>
+          {zh ? "打开相关人物" : "Open person"}
+        </Link>
+      );
+    if ((key === "status" || key === "followupState") && value)
+      return (
+        <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium">
+          <StatusMark value={value} />
+          {statusLabel(value, locale)}
+        </span>
+      );
+    if (key.toLowerCase().endsWith("date") && value)
+      return (
+        <time dateTime={value} className="whitespace-nowrap tabular-nums">
+          {value}
+        </time>
+      );
+    return value || <span className="text-muted-foreground">—</span>;
+  };
+  const open = (r: WorkRecord) =>
     !spec.actions.includes("record.update") ? (
-      <span>{label}</span>
+      <span>{title(r)}</span>
     ) : (
-      <button className={action} onClick={() => onEdit(r)}>
-        {label}
+      <button
+        className={action + " min-h-8 font-medium"}
+        onClick={() => onEdit(r)}
+      >
+        {title(r)}
       </button>
     );
   const source = (r: WorkRecord) =>
-    spec.actions.includes("source.open") && (
+    hasSource && (
       <Link
-        className={action + " text-xs text-muted-foreground"}
+        className={
+          action +
+          " inline-flex min-h-8 items-center gap-1.5 text-xs text-muted-foreground"
+        }
         href={
           "/view/" + r.source.path.split("/").map(encodeURIComponent).join("/")
         }
       >
-        {locale === "zh" ? "查看原文" : "Open source"}
+        <FileText size={13} aria-hidden />
+        {zh ? "查看原文" : "Open source"}
       </Link>
     );
   if (spec.layout === "table")
     return (
-      <div className="overflow-x-auto rounded-lg border border-border">
+      <div
+        role="region"
+        aria-label={
+          zh ? "记录表格，可横向滚动" : "Records table, scroll horizontally"
+        }
+        tabIndex={0}
+        className="max-w-full overflow-x-auto rounded-xl border border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
         <table className="w-full text-left text-sm">
-          <thead className="bg-muted/40">
+          <thead className="bg-muted/40 text-muted-foreground">
             <tr>
               {spec.fields.map((k) => (
-                <th key={k} scope="col" className="px-4 py-3 font-medium">
+                <th
+                  key={k}
+                  scope="col"
+                  className="whitespace-nowrap px-5 py-3 text-xs font-medium"
+                >
                   {fieldLabel(k, locale, spec)}
                 </th>
               ))}
-              <th scope="col" className="px-4 py-3">
-                {locale === "zh" ? "原文" : "Source"}
-              </th>
+              {!identityKey && spec.actions.includes("record.update") && (
+                <th scope="col" className="px-5 py-3 text-xs">
+                  {zh ? "编辑" : "Edit"}
+                </th>
+              )}
+              {hasSource && (
+                <th
+                  scope="col"
+                  className="whitespace-nowrap px-5 py-3 text-xs font-medium"
+                >
+                  {zh ? "原文" : "Source"}
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
             {records.map((r) => (
-              <tr key={r.id} className="border-t border-border">
-                {spec.fields.map((k, i) => (
+              <tr
+                key={r.id}
+                className="border-t border-border transition-colors duration-150 hover:bg-muted/20 focus-within:bg-muted/20"
+              >
+                {spec.fields.map((k) => (
                   <td
                     key={k}
-                    className="max-w-sm whitespace-pre-wrap break-words px-4 py-3"
+                    className={
+                      (k === identityKey
+                        ? "min-w-40 "
+                        : k.toLowerCase().endsWith("date") ||
+                            k.endsWith("State") ||
+                            k === "status"
+                          ? ""
+                          : "min-w-44 ") +
+                      "max-w-sm whitespace-pre-wrap break-words px-5 py-4 leading-6"
+                    }
                   >
-                    {i === 0 && k !== "personRef"
-                      ? open(r, String(cell(r, k)))
-                      : cell(r, k)}
+                    {k === identityKey ? open(r) : cell(r, k)}
                   </td>
                 ))}
-                <td className="px-4 py-3">{source(r)}</td>
+                {!identityKey && spec.actions.includes("record.update") && (
+                  <td className="min-w-40 px-5 py-4">{open(r)}</td>
+                )}
+                {hasSource && (
+                  <td className="whitespace-nowrap px-5 py-4">{source(r)}</td>
+                )}
               </tr>
             ))}
           </tbody>
@@ -115,40 +208,62 @@ export default function WorkRecordView({
     rows.map((r) => (
       <article
         key={r.id}
-        className="space-y-3 rounded-lg border border-border bg-background p-4"
+        className="min-w-0 space-y-3 rounded-xl border border-border bg-background p-4 transition-shadow duration-150 hover:shadow-sm focus-within:shadow-sm"
       >
-        <h3 className="font-medium">{open(r)}</h3>
-        {spec.fields
-          .filter((k) => !["title", "name"].includes(k))
-          .map((k) => (
-            <p
-              key={k}
-              className="whitespace-pre-wrap break-words text-sm text-muted-foreground"
-            >
-              <span className="font-medium">
-                {fieldLabel(k, locale, spec)} ·{" "}
-              </span>
-              {cell(r, k)}
-            </p>
-          ))}
+        <h3 className="break-words text-sm leading-6">{open(r)}</h3>
+        <dl className="space-y-2.5">
+          {spec.fields
+            .filter(
+              (k) =>
+                !["title", "name"].includes(k) &&
+                !(spec.layout === "board" && k === "status") &&
+                r.fields[k],
+            )
+            .map((k) => (
+              <div key={k} className="min-w-0 text-sm leading-5">
+                <dt className="mb-1 text-xs text-muted-foreground">
+                  {fieldLabel(k, locale, spec)}
+                </dt>
+                <dd className="whitespace-pre-wrap break-words">
+                  {cell(r, k)}
+                </dd>
+              </div>
+            ))}
+        </dl>
         {source(r)}
       </article>
     ));
   if (spec.layout === "board")
     return (
-      <div className="grid gap-5 md:grid-cols-3">
-        {["todo", "doing", "done"].map((status) => (
-          <section key={status} className="min-w-0 space-y-3">
-            <h2 className="text-sm font-medium">
-              {statusLabel(status, locale)}{" "}
-              <span className="text-muted-foreground">
-                {records.filter((r) => r.fields.status === status).length}
-              </span>
-            </h2>
-            {cards(records.filter((r) => r.fields.status === status))}
-          </section>
-        ))}
+      <div className="grid items-start gap-4 lg:grid-cols-3">
+        {["todo", "doing", "done"].map((status) => {
+          const rows = records.filter((r) => r.fields.status === status);
+          return (
+            <section
+              key={status}
+              className="min-w-0 rounded-xl bg-muted/30 p-3"
+            >
+              <h2 className="mb-4 flex items-center gap-2 px-1 text-sm font-medium">
+                <StatusMark value={status} />
+                {statusLabel(status, locale)}{" "}
+                <span className="ml-auto rounded-md bg-background px-2 py-0.5 text-xs tabular-nums text-muted-foreground">
+                  {rows.length}
+                </span>
+              </h2>
+              <div className="space-y-3">{cards(rows)}</div>
+              {!rows.length && (
+                <p className="rounded-lg border border-dashed border-border px-3 py-8 text-center text-xs text-muted-foreground">
+                  {zh ? "暂无任务" : "No tasks yet"}
+                </p>
+              )}
+            </section>
+          );
+        })}
       </div>
     );
-  return <div className="grid gap-4 md:grid-cols-2">{cards(records)}</div>;
+  return (
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      {cards(records)}
+    </div>
+  );
 }

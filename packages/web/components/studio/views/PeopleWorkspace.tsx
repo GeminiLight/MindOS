@@ -1,7 +1,7 @@
 'use client';
 import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft,
@@ -112,7 +112,14 @@ function SourceFiles({
   );
 }
 
-export default function PeopleWorkspace({ viewId }: { viewId: string }) {
+export default function PeopleWorkspace({
+  viewId, toolbar, description, projection,
+}: {
+  viewId: string;
+  toolbar?: ReactNode;
+  description?: string;
+  projection?: { rootId: string; recordIds: string[] };
+}) {
   const { locale } = useLocale();
   const c = viewsCopy(locale);
   const router = useRouter();
@@ -133,10 +140,22 @@ export default function PeopleWorkspace({ viewId }: { viewId: string }) {
     [rootId, viewId],
   );
   const collection = useViewResource(read, !!rootId && !index.error);
-  const data =
+  const rawData =
     collection.data?.view.id === viewId && collection.data.rootId === rootId
       ? collection.data
       : undefined;
+  const peopleById = new Map(rawData?.people.map(person => [person.id, person]));
+  const data = rawData && (!projection || projection.rootId === rootId)
+    ? {
+        ...rawData,
+        people: projection
+          ? projection.recordIds.flatMap(id => {
+              const person = peopleById.get(id);
+              return person ? [person] : [];
+            })
+          : rawData.people,
+      }
+    : undefined;
   const view = data?.view ?? index.data?.views.find((v) => v.id === viewId);
   const personQuery = params.get('person');
   const summary = personQuery
@@ -239,18 +258,21 @@ export default function PeopleWorkspace({ viewId }: { viewId: string }) {
             <p className="mb-2 text-xs text-muted-foreground">{c.peopleView}</p>
             <h1
               tabIndex={-1}
-              className="break-words font-display text-3xl tracking-tight"
+              className="break-words text-2xl font-semibold tracking-tight sm:text-3xl"
             >
               {view?.name ?? c.title}
             </h1>
+            {description && (
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">{description}</p>
+            )}
             {view && (
-              <div className="mt-2">
+              <div className="mt-3">
                 <FolderCaption path={view.folder} />
               </div>
             )}
           </div>
           {view && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 self-end">
               <Button
                 variant="ghost"
                 size="icon"
@@ -270,6 +292,7 @@ export default function PeopleWorkspace({ viewId }: { viewId: string }) {
             </div>
           )}
         </header>
+        {toolbar && <div className="mb-5">{toolbar}</div>}
         <ViewNotice
           c={c}
           loading={!data && (index.loading || collection.loading)}
@@ -287,7 +310,12 @@ export default function PeopleWorkspace({ viewId }: { viewId: string }) {
         {data && !collection.error && !index.error && (
           <>
             <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
-              <div
+              {toolbar ? (
+                <Button variant="ghost" size="sm" onClick={() => setMode(mode === 'people' ? 'files' : 'people')}>
+                  {mode === 'people' ? <FileText size={14} aria-hidden /> : <ArrowLeft size={14} aria-hidden />}
+                  {mode === 'people' ? c.file : c.backPeople}
+                </Button>
+              ) : <div
                 className="inline-flex gap-1 rounded-lg bg-muted/50 p-1"
                 role="group"
                 aria-label={view?.name}
@@ -308,7 +336,7 @@ export default function PeopleWorkspace({ viewId }: { viewId: string }) {
                     {m === 'people' ? c.peopleView : c.file}
                   </Button>
                 ))}
-              </div>
+              </div>}
               <a
                 href={`/api/views?op=csv&rootId=${encodeURIComponent(rootId)}&id=${encodeURIComponent(viewId)}`}
                 download="people.csv"

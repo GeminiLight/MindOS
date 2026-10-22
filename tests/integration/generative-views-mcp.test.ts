@@ -1,3 +1,4 @@
+import { viewsFixtureIdentity } from "../helpers/views-fixture.mjs";
 import { it, expect } from "vitest";
 import { createRequire } from "node:module";
 import { resolve } from "node:path";
@@ -7,6 +8,7 @@ const requireProduct = createRequire(resolve("packages/mindos/package.json"));
 it.skipIf(process.env.MINDOS_VIEWS_ISOLATED !== "1")(
   "two MCP clients continue the same records across reconnects",
   async () => {
+    const expectedFixtureRoot = viewsFixtureIdentity();
     const { Client } = await import(
       pathToFileURL(
         requireProduct.resolve("@modelcontextprotocol/sdk/client/index.js"),
@@ -46,6 +48,7 @@ it.skipIf(process.env.MINDOS_VIEWS_ISOLATED !== "1")(
       const codex = await connect("codex"),
         claude = await connect("claude-code");
       const info = await call(codex, "mindos_views_describe");
+      expect(info.rootId).toBe(expectedFixtureRoot);
       expect((await call(claude, "mindos_views_describe")).rootId).toBe(
         info.rootId,
       );

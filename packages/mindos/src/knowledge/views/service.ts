@@ -120,6 +120,14 @@ export class WorkViewsService {
         },
       ],
       layouts: ["list-detail", "table", "board"],
+      presentation: {
+        page: {
+          description: "Optional plain text, up to 280 characters",
+          showSummary: "Optional boolean; defaults to true",
+        },
+        navigation:
+          "One workspace per collection; saved views are alternatives inside it. Binding the same existing folder reuses its workspace.",
+      },
       actions: [
         "record.create",
         "record.update",
@@ -247,9 +255,7 @@ export class WorkViewsService {
       this.root,
       ".mindos/views/create-intent",
       async () => {
-        const prior = this.list().views.find(
-          (v) => v.id === "v-" + operationId,
-        );
+        let prior = this.list().views.find((v) => v.id === "v-" + operationId);
         const intentPath = `.mindos/views/creations/${operationId}.json`;
         if (existsSync(checkedPath(this.root, intentPath))) {
           const intent = JSON.parse(
@@ -261,6 +267,15 @@ export class WorkViewsService {
               "Creation ID has different input",
               409,
             );
+          if (intent.viewId) {
+            prior = this.list().views.find((v) => v.id === intent.viewId);
+            if (intent.status === "committed" && !prior)
+              throw new ViewError(
+                "VIEW_MISSING",
+                "The workspace was removed; create a new request",
+                404,
+              );
+          }
         } else {
           if (
             input.mode === "new" &&
@@ -318,6 +333,19 @@ export class WorkViewsService {
             };
             r.collections.push(collection);
           }
+          // Binding existing data opens its workspace. Additional projections are
+          // explicit preview/save or copy operations, not duplicate collections.
+          const existing = r.views.find(
+            (v) => v.collectionId === collection!.id,
+          );
+          if (existing && input.mode === "existing")
+            return { collection, view: existing };
+          if (r.views.length >= 500)
+            throw new ViewError(
+              "VIEW_LIMIT",
+              "The view limit was reached",
+              409,
+            );
           const date = new Date().toISOString(),
             view: ViewDefinition = {
               id: "v-" + operationId,
@@ -338,6 +366,7 @@ export class WorkViewsService {
           folder,
           template,
           status: "committed",
+          viewId: result.view.id,
         });
         return {
           ...result,

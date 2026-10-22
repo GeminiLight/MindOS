@@ -1,3 +1,4 @@
+import { assertViewsFixture } from "../helpers/views-fixture.mjs";
 import { test, expect } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 test.skip(
@@ -287,3 +288,6 @@ test("slow first reads settle, previews render, and external edits remain visibl
   await page.screenshot({ path: "/tmp/mindos-generative-views-preview.png" });
   expect(snapshot.records).toHaveLength(500);
 });
+
+// Every mutating test verifies disposable ownership and server root before creating data.
+test.beforeEach(async ({request}) => { await assertViewsFixture(request); });
