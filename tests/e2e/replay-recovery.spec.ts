@@ -84,13 +84,13 @@ test('five routes stay readable at 320px and allow a choice without canvas hunti
  const wide={...story,id:'replay-test-five',scenes:[{...story.scenes[0],choices:['a','b','c','d','e'].map((id,index)=>({...story.scenes[0].choices[0],id,label:`路线 ${index+1}：观察与验证`,description:'中文与 emoji 🧭 的较长选项仍能读完，再做选择。'}))}]};
  await page.route('**/api/echo/replays?*',route=>route.fulfill({json:{stories:[wide],sources:[],sourceErrors:[]}}));
  await page.setViewportSize({width:320,height:700});await page.goto(`/echo/replay?story=${wide.id}`,{waitUntil:'domcontentloaded'});
- const canvas=page.locator('[data-replay-canvas]');const decisions=canvas.getByRole('region',{name:'这次，换你来决定'});
+ const canvas=page.locator('[data-replay-canvas]');const decisions=canvas;
   await expect(canvas).toHaveAttribute('data-camera-ready','true',{timeout:60000});
  await expect(decisions).toBeVisible();
  await decisions.getByRole('button',{name:'跳到选项 E',exact:true}).click();
  const choice=decisions.getByRole('button',{name:'E · 路线 5：观察与验证',exact:true});await expect(choice).toBeInViewport();
  expect(await choice.evaluate(el=>parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(14);
- await choice.click();await expect(canvas.locator('.replay-moment-panel')).toContainText('第 1 步');
+ await choice.click();await expect(canvas.locator('.replay-map-step[data-status=current]')).toContainText('第 1 步');
  expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)).toBe(false);
 });
 
@@ -102,8 +102,8 @@ test('storage failure stays visible on a narrow screen while exploration still w
  await page.setViewportSize({width:390,height:844});await page.goto(`/echo/replay?story=${story.id}`,{waitUntil:'domcontentloaded'});
  await expect(page.locator('.replay-private')).toContainText('浏览器未允许保存进度');
  await expect(page.locator('.replay-private')).toBeVisible();
- await expect(page.locator('[data-replay-canvas]').getByRole('region',{name:'这次，换你来决定'})).toBeVisible();
+ await expect(page.locator('[data-replay-canvas]')).toBeVisible();
  await expect(page.locator('[data-replay-canvas]').getByRole('button',{name:'A · 先观察',exact:true})).toHaveCount(1);
  await page.locator('[data-replay-canvas]').getByRole('button',{name:'A · 先观察',exact:true}).click();
- await expect(page.locator('.replay-moment-panel')).toContainText('第 1 步');
+ await expect(page.locator('.replay-map-step[data-status=current]')).toContainText('第 1 步');
 });

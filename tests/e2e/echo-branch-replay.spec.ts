@@ -47,7 +47,7 @@ test('replay preserves a failed route, explores another, and restores progress',
   await expect(current.getByText('旧结果已到达，被忽略；当前内容保留。',{exact:true})).toBeVisible();
   await page.setViewportSize({width:390,height:844});
   await expect.poll(async()=>{
-    const outer=await canvas.boundingBox();const current=await canvas.locator('.replay-moment-panel').boundingBox();
+    const outer=await canvas.boundingBox();const current=await canvas.locator('.replay-map-step[data-status=current]').boundingBox();
     return !!outer&&!!current&&current.x>=outer.x+4&&current.x+current.width<=outer.x+outer.width-4;
   }).toBe(true);
   await page.setViewportSize({width:1536,height:1100});

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { EvidenceExcerpt, OriginalRecord } from './ReplayEvidence';
 import type { ReplayMapItem } from './replay-canvas-model';
 import type { ReplayCopy } from './replay-copy';
+import { ReplayArtifactView } from './ReplayParticipation';
 import { ReplaySignals, ReplayTradeoff } from './ReplayLearning';
 
 export function ReplayInspector({story,node,copy,onClose,practice}:{story:BranchStory;node:ReplayMapItem;copy:ReplayCopy;onClose:()=>void;practice?:ReactNode}){
@@ -24,6 +25,8 @@ export function ReplayInspector({story,node,copy,onClose,practice}:{story:Branch
       {original?<OriginalRecord story={story} copy={copy} focusId={original.messageId} highlightQuote={original.quote}/>:<>
         <h2 className="mb-4 text-lg font-semibold leading-7">{node.data.title}</h2>
         {practice}
+        {(node.data.artifactIds??[]).flatMap(id=>story.artifacts?.filter(artifact=>artifact.id===id)??[]).map(artifact=><ReplayArtifactView key={artifact.id} artifact={artifact} copy={copy}/>)}
+        {node.data.revisit&&<aside className="replay-learning-note"><p>{copy.revisitWithClue}</p><p>{node.data.revisit.clue}</p><p>{node.data.revisit.prompt??copy.thinkAgain}</p></aside>}
         <p className="mb-7 text-sm leading-7">{node.data.text||copy.noResult}</p>
         {node.data.tradeoff&&<div className="mb-6"><p className="text-xs text-muted-foreground">{copy.editorialTradeoff}</p><ReplayTradeoff tradeoff={node.data.tradeoff} copy={copy}/><p className="mt-3 text-sm leading-7">{node.data.tradeoff.check}</p></div>}
         {node.data.signals&&<ReplaySignals signals={node.data.signals}/>}

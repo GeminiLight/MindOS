@@ -1,4 +1,5 @@
 const zh = {
+  aboutReplay:'关于这段经历',writeCheck:'记下验证思路',canvasJourney:'选择 → 看结果 → 回来重选',compactIdentity:'你来选路 · 回放当时的记录',
   thinkAgain:'刚看到的证据，支持了你的哪项预期？还有什么没有被验证？',
   historicalRoute:'当时采用的路线',followHistory:'接回当时的记录',historyBoundary:'已接回历史。你的选择仍保留；下面不是它的执行结果。',
   identityHint:'此刻由你判断；后续中的“当时的你”指原会话里的表达。',yourNow:'这次你的选择',readCurrent:'阅读当前一步',
@@ -50,6 +51,7 @@ const zh = {
   visibleMessages:'条可见消息', simulationNote:'这里的变化由演练条件计算。改变返回顺序后，结果也会改变。',
 };
 const en: typeof zh = {
+  aboutReplay:'About this experience',writeCheck:'Note a way to test',canvasJourney:'Choose → Observe → Try another route',compactIdentity:'Your choices · Recorded history',
   thinkAgain:'Which expectation did the evidence support? What is still unverified?',
   historicalRoute:'Route taken then',followHistory:'Return to recorded history',historyBoundary:'Your choice is kept. What follows is the route taken in the session, not the outcome of your alternative.',
   identityHint:'You decide now. Historical statements refer to the people in the original session.',yourNow:'Your choice now',readCurrent:'Read current moment',

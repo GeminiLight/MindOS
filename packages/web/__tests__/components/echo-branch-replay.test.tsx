@@ -18,6 +18,26 @@ function story() {return validateBranchStory({ id:'ui-one',runtime:'codex',title
  ]}],});}
 const button=(text:string)=>Array.from(host.querySelectorAll('button')).find(b=>b.textContent?.includes(text))!;
 describe('branch replay experience',()=>{
+ it('keeps the canvas mounted while predicting and conceals the pending result',async()=>{
+  const base=story();const value=validateBranchStory(base.source,{...base,scenes:[{...base.scenes[0],prediction:{question:'你预计会怎样？',options:['会恢复','还不确定']}}]});
+  await act(async()=>root.render(<ReplayExperience story={value} locale="zh"/>));
+  await act(async()=>button('清理缓存').click());
+  expect(host.querySelector('[data-replay-canvas]')).not.toBeNull();
+  expect(host.querySelector('.replay-prediction')).not.toBeNull();
+  expect(host.textContent).not.toContain('当前内容恢复。');
+  await act(async()=>button('返回选择').click());
+  expect(host.querySelector('.replay-prediction')).toBeNull();
+  expect(host.querySelectorAll('.replay-map-choice')).toHaveLength(2);
+ });
+ it('keeps unknown endpoints on the interactive canvas with notes available on request',async()=>{
+  await act(async()=>root.render(<ReplayExperience story={story()} locale="zh"/>));
+  await act(async()=>button('确认归属').click());
+  expect(host.querySelector('.replay-flow-layer')?.hasAttribute('inert')).toBe(false);
+  expect(host.querySelector('.replay-moment-panel')).toBeNull();
+  await act(async()=>button('阅读当前一步').click());
+  expect(host.querySelector('#replay-nextCheck')).not.toBeNull();
+  expect(button('接回当时的记录')).toBeTruthy();
+ });
  it('keeps an unknown choice while predicting a separately labelled historical continuation',async()=>{
   const base=story();const value=validateBranchStory(base.source,{...base,scenes:[{...base.scenes[0],historicalChoiceId:'a',prediction:{question:'你预计会怎样？',options:['会恢复','还不确定']}}]});
   await act(async()=>root.render(<ReplayExperience story={value} locale="zh"/>));
@@ -38,15 +58,16 @@ describe('branch replay experience',()=>{
   expect(host.textContent).not.toContain('当前内容恢复。');
   await act(async()=>button('剧情回放').click());expect(host.textContent).toContain('揭晓之前');
  });
- it('opens a readable choice panel when requested on a large canvas',async()=>{
+ it('opens the full context on request while retaining the map',async()=>{
   await act(async()=>root.render(<ReplayExperience story={story()} locale="zh"/>));
   const opener=host.querySelector<HTMLButtonElement>('.replay-canvas-tools button')!;
-  await act(async()=>opener.click());expect(host.querySelector('.replay-decision-sheet')).not.toBeNull();
+  await act(async()=>opener.click());expect(host.querySelector('.replay-canvas-inspector')).not.toBeNull();expect(host.querySelector('.replay-flow-layer')?.hasAttribute('inert')).toBe(false);
  });
  it('reports unavailable prediction storage without blocking the choice or discarding the typed observation',async()=>{
   const value=story();const storage=globalThis.localStorage;vi.stubGlobal('localStorage',{getItem:()=>null,setItem:()=>{throw new Error('blocked');},clear:()=>{}});
   try{
    await act(async()=>root.render(<ReplayExperience story={value} locale="zh"/>));await act(async()=>button('确认归属').click());
+   await act(async()=>button('阅读当前一步').click());
    const field=host.querySelector<HTMLTextAreaElement>('#replay-nextCheck')!;
    await act(async()=>{Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')!.set!.call(field,'先做一个可区分的检查');field.dispatchEvent(new Event('input',{bubbles:true}));});
    expect(host.textContent).toContain('未能保存预测与体会');expect(field.value).toBe('先做一个可区分的检查');expect(button('接回当时的记录')).toBeTruthy();

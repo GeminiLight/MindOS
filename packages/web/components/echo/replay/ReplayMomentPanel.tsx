@@ -1,4 +1,5 @@
 'use client';
+import { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import type { BranchStory, ReplayState } from '@geminilight/mindos/knowledge/branch-replay';
 import { Button } from '@/components/ui/button';
@@ -7,12 +8,13 @@ import { ReplaySignals } from './ReplayLearning';
 import type { ReplayCopy } from './replay-copy';
 import type { ReplayJudgment } from './replay-judgments';
 
-/** Normal-scale reading stays separate from the scale of the navigable map. */
+/** Explicitly opened detail; the map stays usable alongside it. */
 export function ReplayMomentPanel({story,state,copy,entry,onChange,onClose,onInspect}:{story:BranchStory;state:ReplayState;copy:ReplayCopy;entry?:ReplayJudgment;onChange:(patch:Partial<ReplayJudgment>)=>void;onClose:()=>void;onInspect:()=>void}){
+ const panel=useRef<HTMLElement>(null);useEffect(()=>{panel.current?.focus({preventScroll:true});},[]);
  const scene=story.scenes[state.sceneIndex];const choice=scene.choices.find(c=>c.id===state.choiceId);if(!choice)return null;
  const step=choice.outcome.steps[state.visibleSteps-1];const unknown=choice.outcome.kind==='unobserved';
  const artifacts=(step?.artifactIds??[]).flatMap(id=>story.artifacts?.filter(a=>a.id===id)??[]);
- return <section className="replay-moment-panel nowheel nopan" aria-label={copy.readCurrent}>
+ return <section ref={panel} tabIndex={-1} onKeyDown={event=>{if(event.key==='Escape'){event.stopPropagation();onClose();}}} className="replay-moment-panel nowheel nopan" aria-label={copy.readCurrent}>
   <header className="replay-moment-header"><div><p className="text-xs text-muted-foreground">{state.historyFrom?copy.historicalRoute:copy.yourNow} · {choice.label}</p><h2 className="mt-2 text-lg font-semibold leading-7">{unknown?choice.outcome.title:step?.title??copy.notRevealed}</h2></div><Button variant="ghost" size="icon-sm" aria-label={copy.onlyMap} onClick={onClose}><X size={15}/></Button></header>
   <div className="replay-moment-body" key={`${scene.id}/${choice.id}/${state.visibleSteps}`}>
    {state.historyFrom&&<p className="replay-history-boundary" role="status">{copy.historyBoundary}</p>}

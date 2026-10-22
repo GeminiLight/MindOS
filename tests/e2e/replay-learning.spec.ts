@@ -31,7 +31,7 @@ test('unknown routes lead to a test question, revisiting uses observed clues, an
  expect(cards[1].top).toBeGreaterThan(cards[0].bottom);
  await expect(canvas).not.toContainText('总分无法替代逐个检查。');
  await canvas.getByRole('button',{name:'A · 先汇总筛查',exact:true}).click();
- await expect(canvas.locator('.replay-moment-panel')).toContainText('怎样用一个变异验证');await expect(canvas.getByRole('button',{name:'继续回放',exact:true})).toHaveCount(0);
+ await expect(canvas.locator('.replay-map-unknown')).toContainText('怎样用一个变异验证');await expect(canvas.getByRole('button',{name:'继续回放',exact:true})).toHaveCount(0);
  await canvas.getByRole('button',{name:'试另一条路',exact:true}).click();await canvas.getByRole('button',{name:'B · 增加逐个检查',exact:true}).click();
  await expect(canvas.locator('.replay-signals dd')).toHaveText('0.99');await expect(canvas.getByRole('complementary',{name:'原会话在这里调整了方向',exact:true})).toHaveCount(0);
  await page.getByRole('tab',{name:'路径对照',exact:true}).click();const review=canvas.getByRole('region',{name:'比较已看到的结果'});
@@ -45,7 +45,7 @@ test('unknown routes lead to a test question, revisiting uses observed clues, an
 
 test('benefits, costs and a return question stay readable on a narrow screen',async({page})=>{
  await page.setViewportSize({width:390,height:844});await page.goto(`/echo/replay?story=${story.id}`,{waitUntil:'domcontentloaded'});const canvas=page.locator('[data-replay-canvas]');
- const sheet=canvas.getByRole('region',{name:'这次，换你来决定'});await expect(sheet).toBeVisible();await expect(sheet).toContainText('可能遗漏局部');
+ const sheet=canvas;await expect(sheet).toBeVisible();await expect(sheet).toContainText('可能遗漏局部');
  await sheet.getByRole('button',{name:'跳到选项 B',exact:true}).click();await sheet.getByRole('button',{name:'B · 增加逐个检查',exact:true}).click();
  await canvas.getByRole('button',{name:'回到分岔点',exact:true}).click();await expect(sheet.getByRole('complementary',{name:'带着新线索再选',exact:true})).toContainText('先看到高分');await expect(sheet).not.toContainText('哪个局部变化');
  expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)).toBe(false);

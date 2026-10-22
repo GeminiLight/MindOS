@@ -1,6 +1,6 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowLeft, ArrowRight, GitBranch, Play, RotateCcw, ShieldCheck, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, GitBranch, Play, RotateCcw, Info, ShieldCheck, X } from 'lucide-react';
 import { createReplayState, restoreReplayState, transitionReplay, historicalReplayChoice, type BranchStory, type ReplayAction } from '@geminilight/mindos/knowledge/branch-replay';
 import { Button } from '@/components/ui/button';
 import { ReplayCanvas } from './ReplayCanvas';
@@ -61,9 +61,10 @@ export function ReplayExperience({story,locale}:{story:BranchStory;locale:'zh'|'
     setView('story');
   },[story,setView]);
   const choose=useCallback((id:string)=>{
+    if(pendingChoice)return;
     if(scene.prediction&&scene.choices.find(c=>c.id===id)?.outcome.kind==='recorded'&&!state.attempts.some(a=>a.sceneId===scene.id&&a.choiceId===id)){setPendingHistory(false);setPendingChoice(id);setView('story');return;}
     commitChoice(id);
-  },[scene,state.attempts,commitChoice]);
+  },[scene,state.attempts,commitChoice,pendingChoice]);
   const followHistory=()=>{
     const route=historicalReplayChoice(scene);if(!route)return;
     if(scene.prediction&&!state.attempts.some(a=>a.sceneId===scene.id&&a.choiceId===route.id&&a.visibleSteps>0)){
@@ -77,14 +78,13 @@ export function ReplayExperience({story,locale}:{story:BranchStory;locale:'zh'|'
   useEffect(()=>{
     const listener=(event:KeyboardEvent)=>{
       const target=event.target as HTMLElement;
-      if(pendingChoice||view!=='story'||event.altKey||event.metaKey||event.ctrlKey||target.closest('input,textarea,select,nav,[role=tab],[contenteditable=true],.replay-canvas-inspector'))return;
+      if(pendingChoice||view!=='story'||event.altKey||event.metaKey||event.ctrlKey||target.closest('input,textarea,select,nav,[role=tab],[contenteditable=true],.replay-canvas-inspector,.replay-moment-panel,.replay-prediction'))return;
       if(!target.closest('.replay-shell')&&target!==document.body&&target.id!=='main-content')return;
       if(state.phase==='choice'&&/^[1-5]$/.test(event.key)){const option=scene.choices[Number(event.key)-1];if(option){event.preventDefault();choose(option.id);}}
       if(event.key==='ArrowLeft'&&state.choiceId){event.preventDefault();dispatch({type:'rewind'});}
       if(event.key==='ArrowRight'&&choice&&(state.phase==='result'||choice.nextSceneId)){event.preventDefault();dispatch({type:'advance'});}
     };window.addEventListener('keydown',listener);return()=>window.removeEventListener('keydown',listener);
   },[view,pendingChoice,state.phase,state.choiceId,scene,choice,choose,dispatch]);
-  const revealAll=()=>setState(s=>{let next=s;while(choice&&next.visibleSteps<choice.outcome.steps.length)next=transitionReplay(story,next,{type:'advance'});return next;});
   const current=state.phase==='unobserved'?copy.unknown:story.source.runtime==='example'&&choice?practiceOutcome(choice.id,state.visibleSteps,labConditions,copy).title:lastStep?.title||copy.beforeChoice;
   const renderPractice=(choiceId:string,visibleSteps:number)=><ReplayRaceLab choiceId={choiceId} visibleSteps={visibleSteps} locale={locale} conditions={labConditions} onConditionsChange={setLabConditions}/>;
   return <div className="replay-shell">
@@ -97,25 +97,25 @@ export function ReplayExperience({story,locale}:{story:BranchStory;locale:'zh'|'
       }}>
         {tabs.map(tab=><Button id={`replay-tab-${tab}`} key={tab} variant="ghost" role="tab" tabIndex={view===tab?0:-1} aria-selected={view===tab} aria-controls="replay-view" className="replay-tab" onClick={()=>setView(tab)}>{tab==='story'?copy.replay:tab==='compare'?copy.compare:tab==='journey'?copy.decisionChain:copy.source}</Button>)}
       </nav>
-      <span className="replay-private" data-saving={saved}><ShieldCheck size={12}/>{saved?copy.private:copy.unsaved}</span>
+      <span className="replay-private" data-saving={saved} title={saved?copy.private:copy.unsaved}><ShieldCheck size={13}/>{!saved&&copy.unsaved}</span>
     </div>
     <header className="replay-heading">
-      <div><h1 className="text-2xl font-semibold leading-tight tracking-tight">{view==='source'?copy.source:story.title}</h1><p className="mt-2 text-xs leading-6 text-muted-foreground">{story.summary}</p></div>
+      <div><h1 className="text-2xl font-semibold leading-tight tracking-tight">{view==='source'?copy.source:story.title}</h1><span className="replay-compact-identity">{copy.compactIdentity}</span></div>
       <span className="replay-scene-badge"><GitBranch size={13}/>{copy.scene} {state.sceneIndex+1}<span> / {story.scenes.length}</span></span>
     </header>
-    {story.source.runtime!=='example'&&<p className="replay-identity-hint">{copy.identityHint}</p>}
+    <details className="replay-about"><summary><Info size={13}/>{copy.aboutReplay}</summary><div><p>{story.summary}</p><p>{copy.identityHint}</p><p>{story.source.runtime==='example'?copy.simulationNote:copy.recordedNote}</p><p>{copy.private}</p><p>{copy.keyboard}</p></div></details>
     {!notesSaved&&<p role="status" className="text-sm text-error">{copy.notesFailed}</p>}
     {progressNotice&&<div className="replay-resume-notice" role="status"><span>{copy[progressNotice]}</span><Button variant="ghost" size="icon-sm" aria-label={copy.dismissProgress} onClick={()=>setProgressNotice(null)}><X size={13}/></Button></div>}
-    <div id="replay-view" role="tabpanel" aria-labelledby={`replay-tab-${view}`}>
-      {pending&&<div data-prediction-draft hidden={view!=='story'}><ReplayPredictionGate key={`${scene.id}/${pending.id}`} scene={scene} choice={pending} copy={copy} historical={pendingHistory} onCancel={()=>setPendingChoice(null)} onContinue={value=>{if(value)write(scene.id,pending.id,value);setPendingChoice(null);if(pendingHistory)dispatch({type:'follow-history'});else commitChoice(pending.id);}}/></div>}
-      {view==='source'?<div className="replay-source-page"><OriginalRecord story={story} copy={copy}/></div>:view==='journey'?<ReplayJourneyReview story={story} state={state} copy={copy} onRevisit={revisit} judgments={judgments} onTransfer={selectTransfer}/>:view==='story'&&pending?null:<ReplayCanvas story={story} state={state} copy={copy} compare={view==='compare'} onChoose={choose}
+    <div id="replay-view" className="replay-view" role="tabpanel" aria-labelledby={`replay-tab-${view}`}>
+      {pending&&<div data-prediction-draft className="replay-prediction-draft" hidden={view!=='story'}><ReplayPredictionGate key={`${scene.id}/${pending.id}`} scene={scene} choice={pending} copy={copy} historical={pendingHistory} onCancel={()=>setPendingChoice(null)} onContinue={value=>{if(value)write(scene.id,pending.id,value);setPendingChoice(null);if(pendingHistory)dispatch({type:'follow-history'});else commitChoice(pending.id);}}/></div>}
+      {view==='source'?<div className="replay-source-page"><OriginalRecord story={story} copy={copy}/></div>:view==='journey'?<ReplayJourneyReview story={story} state={state} copy={copy} onRevisit={revisit} judgments={judgments} onTransfer={selectTransfer}/>:<ReplayCanvas story={story} state={state} copy={copy} compare={view==='compare'} pending={!!pending&&view==='story'} onChoose={choose}
         onResume={resume} onRevisit={revisit} judgment={choice?judgments.entries[judgmentKey(scene.id,choice.id)]:undefined} onJudgment={patch=>{if(choice)write(scene.id,choice.id,patch);}}
         practice={story.source.runtime==='example'?{...labConditions,render:renderPractice}:undefined}>
-        <div className="replay-dock-progress"><div className="replay-dock-title-row"><span className="replay-dock-label">{choice?`${state.historyFrom?copy.historicalRoute:copy.yourNow} · ${choice.label}`:copy.beforeChoice}</span>
+        <div className="replay-dock-progress"><div className="replay-dock-title-row"><span className="replay-dock-label">{choice?`${state.historyFrom?copy.historicalRoute:copy.yourNow} · ${choice.label}`:copy.canvasJourney}</span>
           {choice&&choice.outcome.steps.length>0&&<span className="replay-step-count">{copy.revealed} {state.visibleSteps} / {choice.outcome.steps.length}</span>}</div>
           <span className="replay-dock-caption">{view==='compare'?copy.compareHint:state.phase==='choice'?copy.keyboard:state.phase==='complete'?copy.completed:state.phase==='unobserved'?copy.unknown:current}</span>
         </div>
-        <div className="replay-dock-actions">
+        <div className="replay-dock-actions" inert={!!pending}>
           <Button variant="ghost" size="icon-sm" aria-label={copy.restart} onClick={()=>{dispatch({type:'restart'});setView('story');}}><RotateCcw size={15}/></Button>
           {view==='story'&&state.choiceId&&<>
             <Button variant={canTryAnother&&story.scenes.length===1?'amber':'outline'} onClick={()=>dispatch({type:'rewind'})}><ArrowLeft size={14}/>{canTryAnother?copy.tryAnother:copy.back}</Button>
@@ -127,7 +127,6 @@ export function ReplayExperience({story,locale}:{story:BranchStory;locale:'zh'|'
           {view==='compare'&&<Button variant="outline" onClick={()=>{dispatch({type:'rewind'});setView('story');}}><ArrowLeft size={14}/>{copy.back}</Button>}
         </div>
       </ReplayCanvas>}
-      {view!=='source'&&<div className="replay-bottomline"><p>{story.source.runtime==='example'?copy.simulationNote:copy.recordedNote}</p>{view==='story'&&!pending&&state.phase==='result'&&<Button variant="ghost" size="sm" onClick={revealAll}>{copy.reveal}<ArrowRight size={12}/></Button>}</div>}
       <span className="sr-only" role="status" aria-live="polite">{choice?`${choice.label} · ${current}`:''}</span>
     </div>
   </div>;

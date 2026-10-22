@@ -1,13 +1,14 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { BranchStory, ReplayArtifact, ReplayChoice, ReplayScene, ReplayState } from '@geminilight/mindos/knowledge/branch-replay';
 import { Button } from '@/components/ui/button';
 import type { ReplayCopy } from './replay-copy';
 import type { ReplayJudgment } from './replay-judgments';
 
 export function ReplayPredictionGate({scene,choice,copy,onContinue,onCancel,historical=false}:{scene:ReplayScene;choice:ReplayChoice;copy:ReplayCopy;onContinue:(value:ReplayJudgment|null)=>void;onCancel:()=>void;historical?:boolean}){
+ const panel=useRef<HTMLElement>(null);useEffect(()=>{panel.current?.focus({preventScroll:true});},[]);
  const [prediction,setPrediction]=useState('');const [reason,setReason]=useState('');const [confidence,setConfidence]=useState<ReplayJudgment['confidence']>('unsure');
- return <section className="replay-prediction" aria-label={copy.predictionTitle}>
+ return <section ref={panel} tabIndex={-1} onKeyDown={event=>{if(event.key==='Escape'){event.stopPropagation();onCancel();}}} className="replay-prediction" aria-label={copy.predictionTitle}>
   <p className="text-xs text-muted-foreground">{historical?copy.historicalRoute:copy.yourNow} · {choice.label}</p>
   <h2 className="mt-3 text-xl font-semibold">{copy.predictionTitle}</h2><p className="mt-2 text-sm leading-7 text-muted-foreground">{copy.predictionHint}</p>
   <fieldset className="mt-6"><legend className="mb-3 text-base font-medium">{scene.prediction?.question}</legend><div className="flex flex-wrap gap-2">{scene.prediction?.options.map(option=><Button key={option} variant={prediction===option?'secondary':'outline'} aria-pressed={prediction===option} onClick={()=>setPrediction(option)}>{option}</Button>)}</div></fieldset>
