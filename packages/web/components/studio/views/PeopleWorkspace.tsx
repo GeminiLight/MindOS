@@ -33,6 +33,7 @@ import { fieldClass, FolderCaption, ViewNotice } from './ViewPrimitives';
 import PersonEditor from './PersonEditor';
 import MeetingPanel from './MeetingPanel';
 import ManageDialog from './ManageDialog';
+import { filterPeopleFollowups } from '@/lib/views/work-presentation';
 
 function SourceFiles({
   rootId,
@@ -129,6 +130,11 @@ export default function PeopleWorkspace({
   const rootId = index.data?.rootId ?? '';
   const [mode, setMode] = useState('people');
   const [search, setSearch] = useState('');
+  const [pendingOnly, setPendingOnly] = useState(false);
+  useEffect(() => {
+    setSearch('');
+    setPendingOnly(false);
+  }, [rootId, viewId]);
   const [manage, setManage] = useState(false);
   const [meeting, setMeeting] = useState(false);
   const [editor, setEditor] = useState<
@@ -157,10 +163,11 @@ export default function PeopleWorkspace({
       }
     : undefined;
   const view = data?.view ?? index.data?.views.find((v) => v.id === viewId);
+  const filtered = filterPeopleFollowups(data?.people ?? [], search, pendingOnly);
   const personQuery = params.get('person');
   const summary = personQuery
     ? data?.people.find((p) => p.id === personQuery)
-    : data?.people[0];
+    : filtered[0];
   const readPerson = useCallback(
     (signal: AbortSignal) =>
       getViewPerson(rootId, viewId, summary!.id, summary!.path, signal),
@@ -237,12 +244,6 @@ export default function PeopleWorkspace({
     select(p.id);
     setNotice(c.saved);
   };
-  const filtered =
-    data?.people.filter((p) =>
-      `${p.name} ${p.background} ${p.focus}`
-        .toLocaleLowerCase()
-        .includes(search.toLocaleLowerCase()),
-    ) ?? [];
   return (
     <StudioShell contentMaxWidth="full">
       <div className="mx-auto w-full max-w-6xl pb-10">
@@ -407,6 +408,25 @@ export default function PeopleWorkspace({
                 <aside
                   className={`${personQuery ? 'hidden md:block' : ''} min-w-0 border-border md:border-r md:pr-4`}
                 >
+                  <div
+                    role="group"
+                    aria-label={locale === 'zh' ? '筛选人物' : 'Filter people'}
+                    className="mb-3 flex flex-wrap gap-1"
+                  >
+                    {[false, true].map(pending => (
+                      <Button
+                        key={String(pending)}
+                        variant={pendingOnly === pending ? 'secondary' : 'ghost'}
+                        size="sm"
+                        aria-pressed={pendingOnly === pending}
+                        onClick={() => { setPendingOnly(pending); select(); }}
+                      >
+                        {pending
+                          ? locale === 'zh' ? '待跟进' : 'Follow-ups'
+                          : locale === 'zh' ? '全部人物' : 'All people'}
+                      </Button>
+                    ))}
+                  </div>
                   <div className="relative mb-4">
                     <Search
                       size={14}
@@ -423,7 +443,7 @@ export default function PeopleWorkspace({
                   </div>
                   <div className="mb-2 flex items-center justify-between px-2 text-xs text-muted-foreground">
                     <span>{c.contacts}</span>
-                    <span className="font-mono">{data.people.length}</span>
+                    <span className="font-mono">{filtered.length}</span>
                   </div>
                   <nav aria-label={c.contacts} className="space-y-1">
                     {filtered.map((p) => (

@@ -29,3 +29,37 @@ export function withHiddenCompleted(spec: ViewSpec, hidden: boolean): ViewSpec {
     },
   };
 }
+
+export function localCalendarDay(date = new Date()): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+export function taskDueState(record: WorkRecord, today = localCalendarDay()) {
+  if (record.fields.status === "done") return "completed";
+  const date = record.fields.dueDate;
+  if (!date) return "unscheduled";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return "invalid";
+  const parsed = new Date(date + "T12:00:00Z");
+  if (
+    !Number.isFinite(parsed.valueOf()) ||
+    parsed.toISOString().slice(0, 10) !== date
+  )
+    return "invalid";
+  return date < today ? "overdue" : date === today ? "today" : "later";
+}
+export function filterPeopleFollowups<
+  T extends {
+    name: string;
+    background: string;
+    focus: string;
+    followup: { text: string; completed: boolean };
+  },
+>(people: T[], query: string, pending: boolean): T[] {
+  const text = query.trim().toLocaleLowerCase();
+  return people.filter(
+    (p) =>
+      (!pending || (!!p.followup.text.trim() && !p.followup.completed)) &&
+      `${p.name} ${p.background} ${p.focus} ${p.followup.text}`
+        .toLocaleLowerCase()
+        .includes(text),
+  );
+}

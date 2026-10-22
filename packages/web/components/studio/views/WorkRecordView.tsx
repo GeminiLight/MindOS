@@ -1,5 +1,6 @@
 "use client";
 import React from "react";
+import { taskDueState, localCalendarDay } from "@/lib/views/work-presentation";
 import Link from "next/link";
 import { Circle, CircleCheck, CircleDot, FileText, Inbox } from "lucide-react";
 import type { WorkRecord, ViewSpec } from "@geminilight/mindos/knowledge/views";
@@ -55,11 +56,17 @@ export default function WorkRecordView({
   spec,
   onEdit,
   locale,
+  onStatusChange,
+  statusBusy = false,
+  today = localCalendarDay(),
 }: {
   records: WorkRecord[];
   spec: ViewSpec;
   onEdit: (record: WorkRecord) => void;
   locale: string;
+  onStatusChange?: (record: WorkRecord, status: "todo" | "done") => void;
+  statusBusy?: boolean;
+  today?: string;
 }) {
   const zh = locale === "zh",
     hasSource = spec.actions.includes("source.open");
@@ -83,6 +90,33 @@ export default function WorkRecordView({
     );
   const title = (r: WorkRecord) => r.fields.title ?? r.fields.name ?? r.id;
   const identityKey = spec.fields.find((k) => k === "title" || k === "name");
+  const completion = (r: WorkRecord) =>
+    onStatusChange &&
+    r.fields.title !== undefined &&
+    spec.actions.includes("record.update") &&
+    spec.fields.includes("status") && (
+      <button
+        type="button"
+        role="checkbox"
+        aria-checked={r.fields.status === "done"}
+        aria-label={
+          (r.fields.status === "done"
+            ? zh
+              ? "重新打开："
+              : "Reopen: "
+            : zh
+              ? "标记完成："
+              : "Complete: ") + title(r)
+        }
+        disabled={statusBusy}
+        onClick={() =>
+          onStatusChange(r, r.fields.status === "done" ? "todo" : "done")
+        }
+        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-40"
+      >
+        <StatusMark value={r.fields.status === "done" ? "done" : "todo"} />
+      </button>
+    );
   const cell = (r: WorkRecord, key: string) => {
     const value = r.fields[key];
     if (key === "personRef" && r.personHref)
@@ -98,12 +132,34 @@ export default function WorkRecordView({
           {statusLabel(value, locale)}
         </span>
       );
-    if (key.toLowerCase().endsWith("date") && value)
+    if (key.toLowerCase().endsWith("date") && value) {
+      const due = key === "dueDate" ? taskDueState(r, today) : undefined;
       return (
-        <time dateTime={value} className="whitespace-nowrap tabular-nums">
-          {value}
-        </time>
+        <span className="inline-flex flex-wrap items-center gap-2">
+          <time dateTime={value} className="whitespace-nowrap tabular-nums">
+            {value}
+          </time>
+          {(due === "overdue" || due === "today") && (
+            <span
+              className={
+                "rounded px-1.5 py-0.5 text-xs " +
+                (due === "overdue"
+                  ? "bg-destructive/10 text-error"
+                  : "bg-[var(--amber-subtle)] text-[var(--amber-text)]")
+              }
+            >
+              {due === "overdue"
+                ? zh
+                  ? "已逾期"
+                  : "Overdue"
+                : zh
+                  ? "今天到期"
+                  : "Due today"}
+            </span>
+          )}
+        </span>
       );
+    }
     return value || <span className="text-muted-foreground">—</span>;
   };
   const open = (r: WorkRecord) =>
@@ -189,7 +245,14 @@ export default function WorkRecordView({
                       "max-w-sm whitespace-pre-wrap break-words px-5 py-4 leading-6"
                     }
                   >
-                    {k === identityKey ? open(r) : cell(r, k)}
+                    {k === identityKey ? (
+                      <div className="flex items-start gap-1">
+                        {completion(r)}
+                        {open(r)}
+                      </div>
+                    ) : (
+                      cell(r, k)
+                    )}
                   </td>
                 ))}
                 {!identityKey && spec.actions.includes("record.update") && (
@@ -210,7 +273,10 @@ export default function WorkRecordView({
         key={r.id}
         className="min-w-0 space-y-3 rounded-xl border border-border bg-background p-4 transition-shadow duration-150 hover:shadow-sm focus-within:shadow-sm"
       >
-        <h3 className="break-words text-sm leading-6">{open(r)}</h3>
+        <div className="flex items-start gap-1">
+          {completion(r)}
+          <h3 className="min-w-0 break-words text-sm leading-6">{open(r)}</h3>
+        </div>
         <dl className="space-y-2.5">
           {spec.fields
             .filter(

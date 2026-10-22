@@ -31,3 +31,20 @@ it("toggles completed tasks without discarding other Agent-defined filters", () 
   expect(withHiddenCompleted(hidden, false).filter!.all).toEqual([condition]);
   expect(spec.filter.all).toEqual([condition]);
 });
+
+it("classifies local due dates without treating completed, empty or invalid dates as overdue", async () => {
+  const { taskDueState, localCalendarDay, filterPeopleFollowups } = await import('@/lib/views/work-presentation');
+  expect(localCalendarDay(new Date(2026, 9, 22, 0, 5))).toBe('2026-10-22');
+  const task = (dueDate: string, status = 'todo') => ({fields:{dueDate,status}} as any);
+  expect(taskDueState(task('2026-10-21'),'2026-10-22')).toBe('overdue');
+  expect(taskDueState(task('2026-10-22'),'2026-10-22')).toBe('today');
+  expect(taskDueState(task('2026-10-23'),'2026-10-22')).toBe('later');
+  expect(taskDueState(task(''),'2026-10-22')).toBe('unscheduled');
+  expect(taskDueState(task('2026-02-30'),'2026-10-22')).toBe('invalid');
+  expect(taskDueState(task('2026-10-21','done'),'2026-10-22')).toBe('completed');
+  const people = [{name:'叶 🌱',background:'design',focus:'',followup:{text:'发方案',completed:false}},{name:'林',background:'',focus:'',followup:{text:'已联系',completed:true}}];
+  expect(filterPeopleFollowups(people, '🌱', true)).toEqual([people[0]]);
+  expect(filterPeopleFollowups(people, '', true)).toHaveLength(1);
+  expect(filterPeopleFollowups([], '', true)).toEqual([]);
+  expect(filterPeopleFollowups(people, 'unknown', false)).toEqual([]);
+});

@@ -182,3 +182,23 @@ it("keeps the edit action on the record name when a date is the first visible co
   expect(onEdit).toHaveBeenCalledWith(record);
   await act(async () => root.unmount());
 });
+
+it('offers completion only for editable task views and keeps pending controls disabled', async () => {
+  const { default: View } = await import('@/components/studio/views/WorkRecordView');
+  const host=document.createElement('div'), root=createRoot(host), change=vi.fn();
+  const record={id:'t1',fields:{title:'Review',status:'todo',dueDate:'2026-10-21'},source:{path:'TODO.csv'}} as any;
+  const props={records:[record],spec:{fields:['title','status','dueDate'],layout:'board',actions:['record.update']} as any,locale:'en',onEdit:vi.fn(),onStatusChange:change,today:'2026-10-22'};
+  await act(async()=>root.render(<View {...props}/>));
+  expect(host.textContent).toContain('Overdue');
+  const toggle=host.querySelector('button[role="checkbox"]') as HTMLButtonElement;
+  expect(toggle).not.toBeNull();
+  await act(async()=>toggle.click());
+  expect(change).toHaveBeenCalledWith(record,'done');
+  await act(async()=>root.render(<View {...props} statusBusy/>));
+  expect((host.querySelector('button[role="checkbox"]') as HTMLButtonElement).disabled).toBe(true);
+  await act(async()=>root.render(<View {...props} spec={{...props.spec,actions:[]}}/>));
+  expect(host.querySelector('button[role="checkbox"]')).toBeNull();
+  await act(async()=>root.render(<View {...props} spec={{...props.spec,fields:['title']}}/>));
+  expect(host.querySelector('button[role="checkbox"]')).toBeNull();
+  await act(async()=>root.unmount());
+});

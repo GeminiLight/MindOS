@@ -15,7 +15,12 @@ import PeopleWorkspace from "./PeopleWorkspace";
 import WorkRecordView, { statusLabel } from "./WorkRecordView";
 import { Search, Plus, ArrowLeft, Check } from "lucide-react";
 import { fieldClass, FolderCaption } from "./ViewPrimitives";
-import { filterWorkRecords } from "@/lib/views/work-presentation";
+import {
+  filterWorkRecords,
+  taskDueState,
+  localCalendarDay,
+} from "@/lib/views/work-presentation";
+import { useWorkQuickActions } from "@/lib/views/use-work-quick-actions";
 import WorkRecordEditor from "./WorkRecordEditor";
 import WorkViewDesigner from "./WorkViewDesigner";
 import WorkViewNavigation from "./WorkViewNavigation";
@@ -55,11 +60,37 @@ export default function WorkViewWorkspace({
     [error, setError] = useState(""),
     [lastOperation, setLastOperation] = useState<string>();
   const [search, setSearch] = useState(""),
-    [status, setStatus] = useState("all");
+    [status, setStatus] = useState("all"),
+    [due, setDue] = useState("all");
   const [notice, setNotice] = useState(""),
     [savingPreview, setSavingPreview] = useState(false);
+  const quick = useWorkQuickActions(
+    data,
+    result.refresh,
+    (operationId, action) => {
+      setLastOperation(operationId);
+      setError("");
+      setNotice(
+        action === "undo"
+          ? zh
+            ? "已撤回上次编辑。"
+            : "Last edit undone."
+          : action === "done"
+            ? zh
+              ? "任务已完成。"
+              : "Task completed."
+            : zh
+              ? "任务已重新打开。"
+              : "Task reopened.",
+      );
+    },
+  );
+  useEffect(() => {
+    if (!data?.view?.spec?.fields.includes("dueDate")) setDue("all");
+  }, [data?.view?.spec?.fields]);
   useEffect(() => {
     setSearch("");
+    setDue("all");
     setStatus("all");
     setLastOperation(undefined);
     setNotice("");
@@ -201,7 +232,13 @@ export default function WorkViewWorkspace({
       setSavingPreview(false);
     }
   };
-  const visible = filterWorkRecords(data.records, spec.fields, search, status);
+  const today = localCalendarDay();
+  const visible = filterWorkRecords(
+    data.records,
+    spec.fields,
+    search,
+    status,
+  ).filter((record) => due === "all" || taskDueState(record, today) === due);
   const people = data.collection.template === "people";
   return (
     <StudioShell contentMaxWidth="full">
@@ -268,31 +305,60 @@ export default function WorkViewWorkspace({
         {summary}
         <div className="space-y-4 border-y border-border py-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="relative w-full sm:w-64">
-              <Search
-                size={15}
-                aria-hidden
-                className="absolute left-3 top-3 text-muted-foreground"
-              />
-              <input
-                type="search"
-                aria-label={zh ? "搜索当前视图" : "Search this view"}
-                placeholder={
-                  people
-                    ? zh
-                      ? "搜索人物、背景或跟进…"
-                      : "Find people or follow-ups…"
-                    : zh
-                      ? "搜索任务…"
-                      : "Find a task…"
-                }
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className={fieldClass + " pl-9"}
-              />
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+              <div className="relative w-full sm:w-64">
+                <Search
+                  size={15}
+                  aria-hidden
+                  className="absolute left-3 top-3 text-muted-foreground"
+                />
+                <input
+                  type="search"
+                  aria-label={zh ? "搜索当前视图" : "Search this view"}
+                  placeholder={
+                    people
+                      ? zh
+                        ? "搜索人物、背景或跟进…"
+                        : "Find people or follow-ups…"
+                      : zh
+                        ? "搜索任务…"
+                        : "Find a task…"
+                  }
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className={fieldClass + " pl-9"}
+                />
+              </div>
+              {!people && spec.fields.includes("dueDate") && (
+                <label className="w-full sm:w-40">
+                  <span className="sr-only">
+                    {zh ? "到期时间" : "Due date"}
+                  </span>
+                  <select
+                    aria-label={zh ? "筛选到期时间" : "Filter due date"}
+                    value={due}
+                    onChange={(e) => setDue(e.target.value)}
+                    className={fieldClass}
+                  >
+                    {["all", "today", "overdue", "unscheduled"].map((value) => (
+                      <option key={value} value={value}>
+                        {
+                          {
+                            all: zh ? "所有日期" : "All dates",
+                            today: zh ? "今天到期" : "Due today",
+                            overdue: zh ? "已逾期" : "Overdue",
+                            unscheduled: zh ? "未安排日期" : "No date",
+                          }[value]
+                        }
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
             </div>
             {designer}
           </div>
+
           <div className="flex flex-wrap items-center justify-between gap-3">
             {!people && (
               <div
@@ -325,13 +391,14 @@ export default function WorkViewWorkspace({
             <p role="status" className="text-xs text-muted-foreground">
               {visible.length}
               {zh ? " 条记录" : " records"}
-              {(search || status !== "all") && (
+              {(search || status !== "all" || due !== "all") && (
                 <Button
                   variant="ghost"
                   className="ml-2"
                   onClick={() => {
                     setSearch("");
                     setStatus("all");
+                    setDue("all");
                   }}
                 >
                   {zh ? "清除筛选" : "Clear filters"}
@@ -357,11 +424,21 @@ export default function WorkViewWorkspace({
           >
             <Check size={15} className="text-success" aria-hidden />
             {notice}
+            {lastOperation && spec.actions.includes("record.update") && (
+              <Button
+                variant="ghost"
+                disabled={quick.busy}
+                onClick={() => void quick.undo(lastOperation)}
+              >
+                {zh ? "撤回上次编辑" : "Undo last edit"}
+              </Button>
+            )}
           </div>
         )}
-        {(error || result.error) && (
+        {(error || quick.error || result.error) && (
           <p role="alert" className="text-sm text-error">
             {error ||
+              quick.error ||
               (zh
                 ? "刷新失败，显示上次结果。"
                 : "Refresh failed; showing the previous result.")}
@@ -385,34 +462,22 @@ export default function WorkViewWorkspace({
               : spec
           }
           locale={locale}
+          today={today}
+          statusBusy={quick.busy || result.loading || !!editing}
+          onStatusChange={
+            draftId
+              ? undefined
+              : (record, status) => {
+                  setNotice("");
+                  setError("");
+                  void quick.changeStatus(record, status);
+                }
+          }
           onEdit={(record) => {
             if (!draftId && spec.actions.includes("record.update"))
               setEditing({ data, record });
           }}
         />
-        {lastOperation && (
-          <Button
-            variant="ghost"
-            onClick={async () => {
-              try {
-                await workRequest("mutate", {
-                  expectedRootId: data.rootId,
-                  collectionId: data.collection.id,
-                  operationId: crypto.randomUUID(),
-                  action: "operation.undo",
-                  input: { operationId: lastOperation },
-                });
-                setLastOperation(undefined);
-                setNotice(zh ? "已撤回上次编辑。" : "Last edit undone.");
-                result.refresh();
-              } catch (e) {
-                setError((e as Error).message);
-              }
-            }}
-          >
-            {zh ? "撤回上次编辑" : "Undo last edit"}
-          </Button>
-        )}
         {editing && (
           <WorkRecordEditor
             key={editing.data.rootId + editing.record?.id}
@@ -421,6 +486,7 @@ export default function WorkViewWorkspace({
             locale={locale}
             close={() => setEditing(undefined)}
             saved={(operationId) => {
+              quick.clearError();
               setLastOperation(editing.record ? operationId : undefined);
               setError("");
               setNotice(
