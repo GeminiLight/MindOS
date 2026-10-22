@@ -1,6 +1,6 @@
 # MindOS local views plugin
 
-One plugin connects Codex and Claude Code to the same local MindOS library. People remain Markdown; project tasks remain `TODO.csv`. The Agent creates declarative view definitions, and MindOS renders list/detail, table or board layouts. No generated code is executed.
+One plugin connects Codex and Claude Code to the same local MindOS library. People remain Markdown; project tasks remain `TODO.csv`. The Agent creates declarative view definitions, and MindOS renders list/detail, table or board layouts. Composable work pages also support isolated custom HTML/CSS and a bounded worker-script API; ordinary browser scripts and arbitrary React imports are not executed.
 
 ## Candidate status
 
@@ -51,6 +51,14 @@ A reachable incompatible server is reported, not replaced. Browser authenticatio
 - “Add an optional context text field to these project tasks. Show me the schema change before applying it.”
 
 The workflow is `describe → read → mutate / preview → save`. Reuse the exact operation ID and input after timeouts. Re-read after revision conflicts. UI changes and Agent changes use the same product API. Unknown/private people sections are excluded from structured reads and preserved when known fields change.
+
+## Composable pages
+
+With `describe.pages.specVersion: 1`, the same plugin can create and adjust multi-source work pages through `mindos_pages_read`, `mindos_pages_preview`, and `mindos_pages_save`. Task/person records remain in their original files. Preview does not add navigation; save makes a stable `/studio/pages/<pageId>` page. Layout restore retains the latest source data. External Agents author specifications using their own model; the page UI's optional AI adjustment uses the configured MindOS provider.
+
+Try: “Create a project page with open tasks on the left and related people on the right. Keep the people block locked while making the task block more compact.”
+
+See [page and custom web contract](../../wiki/refs/generative-pages-agent.md) for the schema, scope/version guards, and isolated worker interface.
 
 ## Limits
 

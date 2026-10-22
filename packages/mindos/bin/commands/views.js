@@ -7,7 +7,7 @@ export const meta = {
   group: "Knowledge",
   summary: "Shared people, project tasks and generated views",
   usage:
-    "mindos views <doctor|templates|list|describe|read|create|mutate|preview|save|operation|open> [id] --input <file|->",
+    "mindos views <doctor|templates|list|describe|read|create|mutate|preview|save|operation|open|page.list|page.read|page.preview|page.generate|page.save|page.restore|page.remove|page.open> [id] --input <file|->",
   flags: {
     "--input <file|->": "JSON input file or stdin",
     "--json": "JSON output (default)",
@@ -35,6 +35,18 @@ export function viewUrl(base, id) {
     origin.origin,
   ).href;
 }
+export function pageUrl(base, id) {
+  if (id && !/^page-[a-z0-9-]{8,80}$/.test(id))
+    throw Error("Invalid page identity");
+  const origin = new URL(base);
+  if (
+    !["http:", "https:"].includes(origin.protocol) ||
+    origin.username ||
+    origin.password
+  )
+    throw Error("Invalid MindOS origin");
+  return new URL("/studio/pages" + (id ? "/" + id : ""), origin.origin).href;
+}
 export async function run(args, flags = {}) {
   loadConfig();
   const op = args[0] ?? "list",
@@ -50,17 +62,20 @@ export async function run(args, flags = {}) {
     let input = {};
     if (flags.input) {
       const raw = readFileSync(flags.input === "-" ? 0 : flags.input, "utf8");
-      if (Buffer.byteLength(raw) > 80000) throw Error("Input exceeds 80 KB");
+      if (Buffer.byteLength(raw) > 160000) throw Error("Input exceeds 160 KB");
       input = JSON.parse(raw);
       if (!input || Array.isArray(input) || typeof input !== "object")
         throw Error("Expected JSON object");
     }
-    if (op === "open") {
+    if (op === "open" || op === "page.open") {
       const capabilities = await client.request("describe");
       if (capabilities.capabilityVersion !== 1)
         throw Error("Runtime does not support views capability 1");
-      const url = viewUrl(base, args[1]);
-      if (args[1])
+      const url =
+        op === "page.open" ? pageUrl(base, args[1]) : viewUrl(base, args[1]);
+      if (op === "page.open" && args[1])
+        await client.request("page.read", { pageId: args[1] });
+      if (op === "open" && args[1])
         await client.request(
           args[1].startsWith("d-") ? "preview" : "read",
           args[1].startsWith("d-") ? { draftId: args[1] } : { viewId: args[1] },
@@ -91,16 +106,26 @@ export async function run(args, flags = {}) {
         "preview",
         "save",
         "operation",
+        "page.list",
+        "page.read",
+        "page.data",
+        "page.preview",
+        "page.generate",
+        "page.save",
+        "page.restore",
+        "page.remove",
       ].includes(op)
     )
       throw Error("Unknown views command");
     if (args[1])
       input[
-        op === "operation"
-          ? "operationId"
-          : args[1].startsWith("v-")
-            ? "viewId"
-            : "collectionId"
+        op.startsWith("page.")
+          ? "pageId"
+          : op === "operation"
+            ? "operationId"
+            : args[1].startsWith("v-")
+              ? "viewId"
+              : "collectionId"
       ] = args[1];
     const result = await client.request(op, input);
     if (op === "doctor" && result.capabilityVersion !== 1)

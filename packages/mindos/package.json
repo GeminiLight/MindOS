@@ -291,6 +291,7 @@
     "@hono/node-server": "^1.19.14",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@sinclair/typebox": "^0.34.33",
+    "acorn": "^8.18.0",
     "chokidar": "^5.0.0",
     "diff": "^8.0.4",
     "hono": "^4.12.14",

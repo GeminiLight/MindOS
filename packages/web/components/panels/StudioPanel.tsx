@@ -76,7 +76,7 @@ function isStudioAutomationPath(pathname: string): boolean {
 }
 
 function isStudioAppsPath(pathname: string): boolean {
-  return pathname === '/studio/apps' || pathname.startsWith('/studio/apps/') || pathname === '/studio/views' || pathname.startsWith('/studio/views/');
+  return pathname === '/studio/apps' || pathname.startsWith('/studio/apps/') || pathname === '/studio/views' || pathname.startsWith('/studio/views/') || pathname === '/studio/pages' || pathname.startsWith('/studio/pages/');
 }
 
 function isStudioContextPath(pathname: string): boolean {

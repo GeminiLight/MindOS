@@ -38,7 +38,16 @@ export class ViewsClient {
         400,
       );
     const write =
-        ["create", "mutate", "save"].includes(op) ||
+        [
+          "create",
+          "mutate",
+          "save",
+          "page.preview",
+          "page.generate",
+          "page.save",
+          "page.restore",
+          "page.remove",
+        ].includes(op) ||
         (op === "preview" && !input.draftId),
       headers: Record<string, string> = { "Content-Type": "application/json" };
     if (this.options.token)
@@ -57,7 +66,7 @@ export class ViewsClient {
         method: write ? "POST" : "GET",
         headers,
         ...(write ? { body: JSON.stringify({ ...input, op }) } : {}),
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(op === "page.generate" ? 105000 : 15000),
         redirect: "error",
       });
       const body = (await response.json()) as Record<string, unknown>;

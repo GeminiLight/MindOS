@@ -500,6 +500,14 @@ describe('StudioContent', () => {
     expect(host.textContent).not.toContain('Recent Projects');
   });
 
+  it('keeps custom work pages in the Views sidebar section', async () => {
+    mockPathname = '/studio/pages/page-example';
+    host = document.createElement('div'); document.body.appendChild(host); root = createRoot(host);
+    await act(async () => { root!.render(<StudioPanel active />); });
+    expect(host.querySelector('a[href="/studio/views"]')?.getAttribute('aria-current')).toBe('page');
+    expect(host.querySelector('a[href="/studio/projects"]')?.getAttribute('aria-current')).toBeNull();
+  });
+
   it('selects the Automation sidebar route without treating it as a Project', async () => {
     mockPathname = '/studio/automation';
     host = document.createElement('div');

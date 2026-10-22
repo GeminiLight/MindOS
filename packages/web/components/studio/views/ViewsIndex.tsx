@@ -79,6 +79,10 @@ export default function ViewsIndex() {
             </div>
           )}
         </header>
+        <Link href="/studio/pages" className="mb-7 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-4 text-sm hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <span><span className="block font-medium">{zh ? "我的工作页面" : "My pages"}</span><span className="mt-1 block text-xs text-muted-foreground">{zh ? "把人物、任务和笔记放在一起，用 AI 按你的习惯调整。" : "Bring people, tasks and notes together, then shape the page with AI."}</span></span>
+          <ArrowRight size={16} aria-hidden />
+        </Link>
         <ViewNotice
           c={c}
           loading={!index.data && index.loading}

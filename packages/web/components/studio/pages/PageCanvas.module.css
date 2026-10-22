@@ -1,0 +1,6 @@
+/* A work page can sit beside an inspector and contain several columns. Native
+   views use viewport breakpoints, so size only their immediate record grid to
+   the space this block actually has. Tables retain their horizontal scrolling. */
+.records > :global(.grid) {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+}

@@ -1,3 +1,5 @@
+import { handlePageGenerate } from "./views-page-generate.js";
+import { handleWorkPagesGet, handleWorkPagesPost } from "./views-pages.js";
 import {
   WorkViewsService,
   inputObject,
@@ -32,6 +34,7 @@ export function handleWorkViewsGet(
       throw new ViewError("ROOT_CHANGED", "Library changed", 409);
     const op = query.get("op") ?? "list",
       id = query.get("collectionId") ?? "";
+    if (op.startsWith("page.")) return handleWorkPagesGet(query, services);
     if (op === "describe" || op === "doctor" || op === "templates")
       return json(s.describe(id || undefined), { headers });
     if (op === "list") return json(s.list(), { headers });
@@ -113,6 +116,10 @@ export async function handleWorkViewsPost(
         "Library changed; reconnect before saving",
         409,
       );
+    if (input.op === "page.generate")
+      return handlePageGenerate(input, services, signal);
+    if (typeof input.op === "string" && input.op.startsWith("page."))
+      return handleWorkPagesPost(input, services, signal);
     const s = workViews(services, requestHeaders, signal);
     let result: unknown;
     switch (input.op) {

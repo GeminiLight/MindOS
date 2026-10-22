@@ -13,3 +13,8 @@ export {
 export { watchViews } from "./watch.js";
 
 export type { RelatedWork } from "./relationships.js";
+
+export { WorkPagesService } from "./page-service.js";
+export { validatePageSpec, pageSpecSchema } from "./page-spec.js";
+export type { PageSpec, PageBlock } from "./page-spec.js";
+export type { SavedPage, PageVersion, PageBlockData } from "./page-service.js";

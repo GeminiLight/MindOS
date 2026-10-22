@@ -108,9 +108,11 @@ export function registerViewsTools(
         recordId: z.string().optional(),
         expectedRevision: z.string().optional(),
         expectedSchemaRevision: z.string().optional(),
-        input: z.record(z.string(), z.unknown()).describe(
-          "Follow describe.mutationInputs for the selected action/template. interaction.add: {text,date,source?}; followup.update: {text,date,completed:boolean}; task personRef is the string collectionId/personId, not an object. Read fields such as followup are not write keys.",
-        ),
+        input: z
+          .record(z.string(), z.unknown())
+          .describe(
+            "Follow describe.mutationInputs for the selected action/template. interaction.add: {text,date,source?}; followup.update: {text,date,completed:boolean}; task personRef is the string collectionId/personId, not an object. Read fields such as followup are not write keys.",
+          ),
       }),
     },
     call("mutate"),
@@ -146,5 +148,48 @@ export function registerViewsTools(
       }),
     },
     call("save"),
+  );
+  server.registerTool(
+    "mindos_pages_read",
+    {
+      description:
+        "List saved work pages, or read one page and its bounded live data. A page combines multiple sources without copying records. Read version before editing.",
+      inputSchema: z.object({
+        rootId: root.optional(),
+        pageId: z.string().optional(),
+      }),
+      annotations: { readOnlyHint: true },
+    },
+    (input) => call(input.pageId ? "page.read" : "page.list")(input),
+  );
+  server.registerTool(
+    "mindos_pages_preview",
+    {
+      description:
+        "Validate and preview a multi-source PageSpec v1 without saving or adding navigation. Read describe.pages first. Support tasks/people/notes/summary/html blocks, locked blocks and isolated custom web content. Never change locked blocks without user direction.",
+      inputSchema: z.object({
+        expectedRootId: root,
+        spec: z.record(z.string(), z.unknown()),
+      }),
+      annotations: { readOnlyHint: true },
+    },
+    call("page.preview"),
+  );
+  server.registerTool(
+    "mindos_pages_save",
+    {
+      description:
+        "Save a page specification, restore a saved page version, or remove the page entry while preserving all source records. Save requires expectedVersion=0 for a new page; edits/restores/removal require the current version. Preview before saving. Retry an identical operationId after an uncertain response.",
+      inputSchema: z.object({
+        expectedRootId: root,
+        operationId,
+        action: z.enum(["save", "restore", "remove"]).default("save"),
+        pageId: z.string().optional(),
+        expectedVersion: z.number().int().min(0),
+        restoreVersion: z.number().int().min(1).optional(),
+        spec: z.record(z.string(), z.unknown()).optional(),
+      }),
+    },
+    ({ action, ...input }) => call("page." + action)(input),
   );
 }

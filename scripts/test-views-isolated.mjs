@@ -29,6 +29,20 @@ const base = mkdtempSync(join(tmpdir(), "mindos-views-e2e-")),
   home = join(base, "home"),
   config = join(home, ".mindos/config.json");
 const token = randomUUID();
+const realAI = process.argv.includes("--real-ai");
+// Explicit opt-in only: reuse the configured provider with synthetic disposable data.
+// Secrets stay in a private temporary config and are removed by this runner.
+let ai;
+if (realAI) {
+  const current = JSON.parse(
+    readFileSync(join(process.env.HOME, ".mindos/config.json"), "utf8"),
+  );
+  ai = current.ai;
+  if (!ai?.providers?.length)
+    throw new Error(
+      "No configured AI provider is available for this opt-in test.",
+    );
+}
 mkdirSync(root, { recursive: true });
 mkdirSync(dirname(config), { recursive: true });
 const port = await new Promise((resolvePort, reject) => {
@@ -41,7 +55,13 @@ const port = await new Promise((resolvePort, reject) => {
 });
 writeFileSync(
   config,
-  JSON.stringify({ mindRoot: root, port, setupPending: false }),
+  JSON.stringify({
+    mindRoot: root,
+    port,
+    setupPending: false,
+    ...(ai ? { ai } : {}),
+  }),
+  { mode: 0o600 },
 );
 writeFileSync(
   join(base, "fixture.json"),
@@ -63,6 +83,7 @@ const env = {
   HOSTNAME: "127.0.0.1",
   MINDOS_URL: `http://127.0.0.1:${port}`,
   MINDOS_VIEWS_ISOLATED: "1",
+  MINDOS_VIEWS_REAL_AI: realAI ? "1" : "0",
   MINDOS_VIEWS_TEST_ROOT: root,
   MINDOS_VIEWS_TEST_CONFIG: config,
   MINDOS_VIEWS_FIXTURE_TOKEN: token,
@@ -84,7 +105,9 @@ const server = spawn(process.execPath, [runtime], {
 let child,
   stopping = false,
   serverError;
-server.once("error", (error) => { serverError = error; });
+server.once("error", (error) => {
+  serverError = error;
+});
 const run = (args) =>
   new Promise((resolveRun, reject) => {
     // Test tools reuse the host's installed browsers/package manager. MindOS
@@ -117,7 +140,11 @@ async function cleanup() {
   stopping = true;
   const owned = [child, server].filter(Boolean);
   for (const processChild of owned) signalOwnedProcess(processChild, "SIGTERM");
-  for (let i = 0; i < 30 && owned.some(p => p.exitCode === null && p.signalCode === null); i++)
+  for (
+    let i = 0;
+    i < 30 && owned.some((p) => p.exitCode === null && p.signalCode === null);
+    i++
+  )
     await delay(100);
   for (const processChild of owned) signalOwnedProcess(processChild, "SIGKILL");
   closeSync(log);
@@ -152,9 +179,9 @@ try {
   console.log(
     `Isolated Views fixture: ${env.MINDOS_URL} (removed after this run)`,
   );
-  const args = process.argv.slice(2).filter(arg => arg !== "--"),
+  const args = process.argv.slice(2).filter((arg) => arg !== "--"),
     mcp = args.includes("--mcp"),
-    specs = args.filter((a) => a !== "--mcp");
+    specs = args.filter((a) => a !== "--mcp" && a !== "--real-ai");
   if (specs.some((s) => !/^([a-z0-9-]+\.spec\.ts)$/.test(s)))
     throw new Error("Pass only test filenames, not server or root overrides.");
   await run([
@@ -172,6 +199,7 @@ try {
           "view-workspaces.spec.ts",
           "views-daily-actions.spec.ts",
           "views-person-project-links.spec.ts",
+          "generative-pages.spec.ts",
         ]),
     "--workers=1",
   ]);

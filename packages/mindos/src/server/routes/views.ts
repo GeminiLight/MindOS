@@ -19,7 +19,7 @@ export const viewRoutes = defineRoutes([
     auth: "required",
     handler: async ({ readJsonBody, services, headers, signal }) =>
       handleWorkViewsPost(
-        await readJsonBody(80_000),
+        await readJsonBody(160_000),
         services,
         headers,
         signal,

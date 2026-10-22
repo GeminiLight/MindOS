@@ -87,8 +87,11 @@ test("completes and undoes tasks without a modal, recovers from failed writes an
     (await read()).records.find((r: any) => r.fields.title === "跟进设计反馈")
       .fields.status,
   ).toBe("todo");
-  await complete.focus();
-  await page.keyboard.press("Space");
+  // A failed write refreshes the source and temporarily disables the action.
+  // Keyboard events do not auto-wait for enabled state like locator.click().
+  await expect(complete).toBeEnabled();
+  await complete.press("Space");
+  await expect.poll(() => writes).toBe(2);
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(
     page.getByRole("status").filter({ hasText: "任务已完成。" }),

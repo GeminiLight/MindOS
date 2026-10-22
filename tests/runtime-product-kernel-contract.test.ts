@@ -66,6 +66,8 @@ describe('MindOS runtime product kernel contract', () => {
       '@modelcontextprotocol/sdk',
       // kb-tools value-imports TypeBox at runtime (Wave 3, agent-core consolidation)
       '@sinclair/typebox',
+      // Parse generated page programs without evaluating them in the server.
+      'acorn',
       // bin/lib/sync.js (sync daemon) imports it dynamically; the platform-package
       // closure resolves dependencies from packages/mindos, so it stays declared here.
       'chokidar',

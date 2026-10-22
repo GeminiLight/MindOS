@@ -12,3 +12,11 @@ it("registers views and provides a JSON client with safe deep links", async () =
   );
   expect(() => module.viewUrl("http://localhost:4567", "../bad")).toThrow();
 });
+
+it("opens saved work pages with a safe page URL", async () => {
+  const module = await import(resolve("packages/mindos/bin/commands/views.js"));
+  expect(module.pageUrl("http://localhost:4567", "page-12345678")).toBe(
+    "http://localhost:4567/studio/pages/page-12345678",
+  );
+  expect(() => module.pageUrl("http://localhost:4567", "../bad")).toThrow();
+});

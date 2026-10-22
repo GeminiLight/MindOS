@@ -175,6 +175,9 @@ importers:
       '@sinclair/typebox':
         specifier: ^0.34.33
         version: 0.34.49
+      acorn:
+        specifier: ^8.18.0
+        version: 8.18.0
       chokidar:
         specifier: ^5.0.0
         version: 5.0.0

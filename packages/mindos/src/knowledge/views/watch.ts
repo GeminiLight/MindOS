@@ -11,15 +11,35 @@ export function watchViews(
   }) => void,
   interval = 1000,
 ) {
-  const path = checkedPath(root, ".mindos/views/index.json");
-  const fingerprint = () => {
-    try {
-      if (statSync(path).size > 1024 * 1024) return "oversized";
-      return documentRevision(readFileSync(path, "utf8"));
-    } catch {
-      return "unavailable";
-    }
-  };
+  const files = [
+    { path: checkedPath(root, ".mindos/views/index.json"), max: 1024 * 1024 },
+    {
+      path: checkedPath(root, ".mindos/views/pages.json"),
+      max: 16 * 1024 * 1024,
+    },
+  ];
+  const cached = new Map<string, { stamp: string; revision: string }>();
+  const fingerprint = () =>
+    files
+      .map(({ path, max }) => {
+        try {
+          const stat = statSync(path);
+          if (stat.size > max) return "oversized";
+          // Atomic replacements change inode; unchanged metadata avoids hashing large page histories every second.
+          const stamp = [stat.ino, stat.size, stat.mtimeMs, stat.ctimeMs].join(
+            ":",
+          );
+          const previous = cached.get(path);
+          if (previous?.stamp === stamp) return previous.revision;
+          const revision = documentRevision(readFileSync(path, "utf8"));
+          cached.set(path, { stamp, revision });
+          return revision;
+        } catch {
+          cached.delete(path);
+          return "unavailable";
+        }
+      })
+      .join(":");
   let last = fingerprint(),
     watcher: FSWatcher | undefined;
   const check = () => {

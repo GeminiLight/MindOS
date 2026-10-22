@@ -110,6 +110,15 @@ export class WorkViewsService {
   describe(id?: string) {
     return {
       capabilityVersion: 1,
+      pages: {
+        specVersion: 1,
+        operations: ["page.list", "page.read", "page.data", "page.preview", "page.save", "page.restore", "page.remove", "page.generate"],
+        blocks: ["tasks", "people", "notes", "summary", "html"],
+        schema: "{specVersion:1,title,description?,layout:{columns:1|2,density:comfortable|compact},blocks:[{id,title,kind,collectionId?,viewId?,fields?,filter?,html?,folder?,paths?,limit?,locked?,layout?}]}",
+        workflow: "Preview without saving; save with expectedVersion 0 for new pages or the current version for edits. Pages combine existing sources. Restoring layout never restores source data.",
+        customWeb: "Static HTML/CSS or isolated script type=mindos/page. Worker globals data,state,event,render(html,nextState?). No network or DOM. Ordinary scripts are blocked. task.complete and source.open use data-mindos-action and data-record-id; the host validates each action.",
+        limits: { blocks: 12, specBytes: 131072, htmlCharacters: 98304, history: 20 },
+      },
       mutationInputs,
       rootId: this.rootId,
       templates: [
