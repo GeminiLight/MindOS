@@ -1,0 +1,18 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "mindos",
+  "version": "0.1.0",
+  "description": "Shared local people, project tasks and generated work views.",
+  "author": {
+    "name": "GeminiLight"
+  },
+  "extensions": {
+    "com.openai": {
+      "onboardingSkill": "./skills/setup/SKILL.md",
+      "interface": {
+        "displayName": "MindOS",
+        "shortDescription": "Local context and shared work views"
+      }
+    }
+  }
+}

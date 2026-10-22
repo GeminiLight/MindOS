@@ -1,0 +1,13 @@
+{
+  "name": "mindos-local",
+  "owner": {
+    "name": "GeminiLight"
+  },
+  "plugins": [
+    {
+      "name": "mindos",
+      "source": "./mindos",
+      "description": "Shared local people, project tasks and generated work views."
+    }
+  ]
+}

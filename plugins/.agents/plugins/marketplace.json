@@ -1,0 +1,20 @@
+{
+  "name": "mindos-local",
+  "interface": {
+    "displayName": "MindOS Local"
+  },
+  "plugins": [
+    {
+      "name": "mindos",
+      "source": {
+        "source": "local",
+        "path": "./mindos"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

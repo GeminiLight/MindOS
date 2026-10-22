@@ -1,6 +1,6 @@
 # 本地数据、生成式视图与统一插件
 
-本轮通过 PR #368 集成，包含原人脉视图候选 PR #365；合并状态以 PR 为准。尚未发布 npm/桌面安装包。实际验证见 [交付记录](../reviews/review-generative-views-mvp-20261022.md)，设计依据见 [spec](../specs/spec-local-generative-views-plugin.md)。
+本轮已通过 PR #368 合入 main（3bdc8f3b），包含原人脉视图候选 PR #365。尚未发布 npm/桌面安装包。实际验证见 [交付记录](../reviews/review-generative-views-mvp-20261022.md)，设计依据见 [spec](../specs/spec-local-generative-views-plugin.md)。
 
 ## 记录与显示
 
