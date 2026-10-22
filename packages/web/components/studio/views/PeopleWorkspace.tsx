@@ -31,6 +31,7 @@ import { encodePath } from '@/lib/utils';
 import { StudioShell } from '../StudioShell';
 import { fieldClass, FolderCaption, ViewNotice } from './ViewPrimitives';
 import PersonEditor from './PersonEditor';
+import PersonTasks from './PersonTasks';
 import MeetingPanel from './MeetingPanel';
 import ManageDialog from './ManageDialog';
 import { filterPeopleFollowups } from '@/lib/views/work-presentation';
@@ -509,7 +510,8 @@ export default function PeopleWorkspace({
                         error={detail.error}
                         retry={detail.refresh}
                       />
-                      {person && !detail.loading && !detail.error && (
+                      {/* Keep the same person mounted during background refresh so task drafts stay open. */}
+                      {person && !detail.error && (
                         <>
                           <div className="flex flex-wrap items-start justify-between gap-3">
                             <div>
@@ -572,6 +574,13 @@ export default function PeopleWorkspace({
                               </p>
                             )}
                           </div>
+                          <PersonTasks
+                            key={rootId + viewId + person.id}
+                            rootId={rootId}
+                            collectionId={data.view.collectionId!}
+                            personId={person.id}
+                            locale={locale}
+                          />
                           <section className="mt-6">
                             <h3 className="text-xs font-semibold text-muted-foreground">
                               {c.background}

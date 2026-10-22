@@ -22,12 +22,14 @@ import WorkPersonField from "./WorkPersonField";
 export default function WorkRecordEditor({
   data,
   record,
+  initialPersonRef,
   locale,
   close,
   saved,
 }: {
   data: WorkViewData;
   record?: WorkRecord;
+  initialPersonRef?: string;
   locale: string;
   close: () => void;
   saved: (operationId: string) => void;
@@ -37,7 +39,8 @@ export default function WorkRecordEditor({
   const scope = {
     rootId: data.rootId,
     viewId: data.collection.id,
-    personId: record?.id ?? "new",
+    personId:
+      record?.id ?? (initialPersonRef ? "new:" + initialPersonRef : "new"),
     kind: "work-record",
   };
   const [restored] = useState(() => readViewDraft(scope));
@@ -51,7 +54,11 @@ export default function WorkRecordEditor({
         String(
           restored?.values[k] ??
             record?.fields[k] ??
-            (k === "status" ? "todo" : ""),
+            (k === "personRef"
+              ? (initialPersonRef ?? "")
+              : k === "status"
+                ? "todo"
+                : ""),
         ),
       ]),
     ),

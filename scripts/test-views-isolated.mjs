@@ -171,6 +171,7 @@ try {
           "studio-views.spec.ts",
           "view-workspaces.spec.ts",
           "views-daily-actions.spec.ts",
+          "views-person-project-links.spec.ts",
         ]),
     "--workers=1",
   ]);

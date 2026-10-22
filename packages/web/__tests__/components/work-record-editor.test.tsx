@@ -134,3 +134,44 @@ it("rejects whitespace-only titles before sending and keeps a failed save as a r
     })?.values.title,
   ).toBe("New title");
 });
+
+it("prefills a person only for its own creation context and keeps generic drafts separate", async () => {
+  const render = async (personRef: string) =>
+    act(async () =>
+      root.render(
+        <Editor
+          key={personRef}
+          data={data}
+          initialPersonRef={personRef}
+          locale="en"
+          close={vi.fn()}
+          saved={vi.fn()}
+        />,
+      ),
+    );
+  await render("people/one");
+  await change(host.querySelector('input[name="title"]')!, "For one");
+  await render("people/two");
+  expect(
+    host.querySelector<HTMLInputElement>('input[name="title"]')!.value,
+  ).toBe("");
+  await change(host.querySelector('input[name="title"]')!, "For two");
+  await submit();
+  expect(api.request).toHaveBeenLastCalledWith(
+    "mutate",
+    expect.objectContaining({
+      input: expect.objectContaining({
+        title: "For two",
+        personRef: "people/two",
+      }),
+    }),
+  );
+  await render("people/one");
+  expect(
+    host.querySelector<HTMLInputElement>('input[name="title"]')!.value,
+  ).toBe("For one");
+  await render("");
+  expect(
+    host.querySelector<HTMLInputElement>('input[name="title"]')!.value,
+  ).toBe("");
+});

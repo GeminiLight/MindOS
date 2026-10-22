@@ -128,3 +128,33 @@ it("uses the product write path and returns committed task changes to another cl
   ).toBe(400);
   expect(changed.length).toBeGreaterThanOrEqual(2);
 });
+
+it("guards the related-work read against wrong libraries and missing people", async () => {
+  const { app } = setup();
+  expect(
+    (
+      await app.fetch(
+        new Request(
+          "http://localhost/api/views/v2?op=related&rootId=wrong",
+        ),
+      )
+    ).status,
+  ).toBe(409);
+  expect(
+    (
+      await app.fetch(
+        new Request(
+          "http://localhost/api/views/v2?op=related&collectionId=c-missing123&personId=p-missing123",
+        ),
+      )
+    ).status,
+  ).toBe(404);
+  const locked = setup("secret");
+  expect(
+    (
+      await locked.app.fetch(
+        new Request("http://localhost/api/views/v2?op=related"),
+      )
+    ).status,
+  ).toBe(401);
+});

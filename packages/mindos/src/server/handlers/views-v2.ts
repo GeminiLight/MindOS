@@ -35,6 +35,8 @@ export function handleWorkViewsGet(
     if (op === "describe" || op === "doctor" || op === "templates")
       return json(s.describe(id || undefined), { headers });
     if (op === "list") return json(s.list(), { headers });
+    if (op === "related")
+      return json(s.related(id, query.get("personId") ?? ""), { headers });
     if (op === "read") {
       const data = query.get("viewId")
         ? s.view(query.get("viewId")!)

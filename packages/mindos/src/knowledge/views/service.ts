@@ -1,3 +1,4 @@
+import { taskPeople, relatedWork } from "./relationships.js";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -52,6 +53,7 @@ export type WorkRecord = {
   collectionId: string;
   id: string;
   personHref?: string;
+  personName?: string;
   schemaId: string;
   schemaRevision: string;
   source: { path: string; revision: string };
@@ -151,7 +153,16 @@ export class WorkViewsService {
         : {}),
     };
   }
-  read(id: string): WorkSnapshot {
+  related(collectionId: string, personId: string) {
+    return relatedWork(
+      this.rootId,
+      readRegistry(this.root),
+      (id) => this.read(id, false),
+      collectionId,
+      personId,
+    );
+  }
+  read(id: string, resolvePeople = true): WorkSnapshot {
     const collection = this.collection(id),
       base = { rootId: this.rootId, collection };
     if (collection.template === "tasks") {
@@ -159,9 +170,13 @@ export class WorkViewsService {
         raw = readDocument(this.root, path),
         table = parseTasks(raw),
         revision = documentRevision(raw);
-      const personViews = readRegistry(this.root).views.filter(
-        (v) => v.template === "people",
-      );
+      const people = resolvePeople
+        ? taskPeople(
+            this.root,
+            readRegistry(this.root),
+            table.rows.map((row) => row.personRef ?? ""),
+          )
+        : new Map();
       const fields: FieldTypes = {
         ...TASK_FIELDS,
         ...Object.fromEntries(
@@ -179,13 +194,7 @@ export class WorkViewsService {
           rootId: this.rootId,
           collectionId: id,
           id: row.id!,
-          personHref: (() => {
-            const [cid, pid] = (row.personRef ?? "").split("/");
-            const view = personViews.find((v) => v.collectionId === cid);
-            return view && pid
-              ? `/studio/views/${view.id}?person=${encodeURIComponent(pid)}`
-              : undefined;
-          })(),
+          ...people.get(row.personRef ?? ""),
           schemaId: "tasks@1",
           schemaRevision: table.schemaRevision,
           source: { path, revision },

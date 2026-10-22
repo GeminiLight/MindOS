@@ -11,3 +11,5 @@ export {
   ViewsClientError,
 } from "../../foundation/views-client.js";
 export { watchViews } from "./watch.js";
+
+export type { RelatedWork } from "./relationships.js";

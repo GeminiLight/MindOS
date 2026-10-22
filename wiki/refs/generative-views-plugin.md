@@ -103,3 +103,14 @@ pnpm test:views:isolated -- --mcp
 Runner 每次创建独立临时HOME、资料库和随机端口。浏览器/MCP在写入前验证所有权token、路径、配置和服务rootId，结束清理自己的进程和资料；测试截图与Playwright结果仍留在测试输出目录。不得再把供人体验的4587服务或长期资料库用于回归测试，单独设置 `MINDOS_VIEWS_ISOLATED=1` 已不足以运行写入测试。
 
 架构及验收依据：[工作页面与隔离 spec](../specs/spec-views-workspaces-and-test-isolation.md)。
+
+
+## 人物与项目待办联动
+
+默认人物详情中的「一起推进的事」按项目待办分组：点击任务可编辑，选择项目后添加任务会自动带入当前人物。人物页和项目页共用原 CSV，关闭表单保留该人物/项目上下文的草稿；Agent 在后台更新人物资料不会关掉正在填写的任务。任务页显示关联姓名，点击可进入可用的人物详情，失效关联保留引用供修复。
+
+关系沿用 `personRef = collectionId/personId`，同名人物不会合并。项目在这里指任务集合，尚未与 Studio 的独立 Project 实体合并。没有新增 schema 或第二份关系数据库，也没有额外创建视图。
+
+只读 HTTP 查询 `GET /api/views/v2?op=related&rootId=…&collectionId=…&personId=…` 返回按集合分组的 `RelatedWork`。每个集合采用最早登记的现存保存视图，遵守筛选、字段和动作；关联条件可以引用未显示的 personRef，返回字段仅限显示字段。标题隐藏的集合不展示。最多扫描30个任务集合、返回100条任务，缺失/损坏/截断会通过 `incomplete` 提示部分结果。任务读取按需解析最多20个人物集合的姓名，没有永久姓名缓存。保存视图是呈现配置，不是数据权限边界。
+
+页面复用文件变更、服务端视图事件和重新聚焦刷新，写入仍走原 mutation、root/revision/schema 与操作回执检查。插件继续使用既有 read/mutate/preview/save，不增加另一套写协议。验收见 [人物项目联动 spec](../specs/spec-views-person-project-links.md)。

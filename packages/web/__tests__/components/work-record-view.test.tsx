@@ -202,3 +202,44 @@ it('offers completion only for editable task views and keeps pending controls di
   expect(host.querySelector('button[role="checkbox"]')).toBeNull();
   await act(async()=>root.unmount());
 });
+
+it("shows the resolved person name and explains broken references without exposing internal IDs", async () => {
+  const { default: View } =
+    await import("@/components/studio/views/WorkRecordView");
+  const host = document.createElement("div"),
+    root = createRoot(host);
+  const record = {
+    id: "t",
+    fields: { title: "Task", personRef: "c-secret/p-secret" },
+    personName: "林悦",
+    personHref: "/studio/views/v-person?person=p",
+    source: { path: "Tasks/TODO.csv" },
+  } as any;
+  const spec = {
+    fields: ["title", "personRef"],
+    layout: "table",
+    actions: [],
+  } as any;
+  await act(async () =>
+    root.render(
+      <View records={[record]} spec={spec} onEdit={() => {}} locale="zh" />,
+    ),
+  );
+  expect(host.textContent).toContain("林悦");
+  expect(host.textContent).not.toContain("c-secret");
+  await act(async () =>
+    root.render(
+      <View
+        records={[
+          { ...record, personName: undefined, personHref: undefined },
+        ]}
+        spec={spec}
+        onEdit={() => {}}
+        locale="zh"
+      />,
+    ),
+  );
+  expect(host.textContent).toContain("关联人物暂不可用");
+  expect(host.textContent).not.toContain("c-secret");
+  await act(async () => root.unmount());
+});

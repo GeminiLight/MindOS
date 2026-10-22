@@ -119,12 +119,22 @@ export default function WorkRecordView({
     );
   const cell = (r: WorkRecord, key: string) => {
     const value = r.fields[key];
-    if (key === "personRef" && r.personHref)
-      return (
-        <Link href={r.personHref} className={action}>
-          {zh ? "打开相关人物" : "Open person"}
-        </Link>
+    if (key === "personRef") {
+      if (!value) return <span className="text-muted-foreground">—</span>;
+      return r.personName ? (
+        r.personHref ? (
+          <Link href={r.personHref} className={action}>
+            {r.personName}
+          </Link>
+        ) : (
+          <span>{r.personName}</span>
+        )
+      ) : (
+        <span className="text-muted-foreground">
+          {zh ? "关联人物暂不可用" : "Linked person unavailable"}
+        </span>
       );
+    }
     if ((key === "status" || key === "followupState") && value)
       return (
         <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium">
