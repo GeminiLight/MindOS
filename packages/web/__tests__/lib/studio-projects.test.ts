@@ -14,6 +14,11 @@ import {
 } from '@/lib/studio-projects';
 
 describe('studio projects', () => {
+  it('does not alias two projects with the same name created in different browser profiles',()=>{
+    const first=createStudioProject({title:'同名项目'});localStorage.clear();
+    const second=createStudioProject({title:'同名项目'});
+    expect(first.id).not.toBe(second.id);
+  });
   beforeEach(() => {
     localStorage.clear();
   });
@@ -34,14 +39,14 @@ describe('studio projects', () => {
     });
 
     expect(project).toMatchObject({
-      id: 'growth-room',
+      id: expect.stringMatching(/^project-[a-f0-9-]{36}$/),
       title: 'Growth Room',
       goal: 'Train launch review habits',
       space: 'Product Strategy',
       kits: ['Review Kit'],
       workArea: 'Session drafts',
     });
-    expect(readStudioProjects()[0]?.id).toBe('growth-room');
+    expect(readStudioProjects()[0]?.id).toBe(project.id);
   });
 
   it('stores typed Project defaults for WorkDir, Spaces, and AI Kit inheritance', () => {
@@ -88,12 +93,12 @@ describe('studio projects', () => {
     });
 
     expect(project).toMatchObject({
-      id: 'mindos-dev',
+      id: expect.stringMatching(/^project-[a-f0-9-]{36}$/),
       title: 'mindos-dev',
       goal: '',
       workArea: 'mindos-dev',
     });
-    expect(readStudioProjects()[0]?.id).toBe('mindos-dev');
+    expect(readStudioProjects()[0]?.id).toBe(project.id);
   });
 
   it('keeps project routes segment-local and url encoded', () => {
@@ -126,7 +131,7 @@ describe('studio projects', () => {
     expect(fs.existsSync(path.join(process.cwd(), 'app/studio/projects/[projectId]/page.tsx'))).toBe(false);
   });
 
-  it('suffixes duplicate ids against actual saved projects, not invisible examples', () => {
+  it('keeps same-name projects distinct while preserving their actual goals', () => {
     const first = createStudioProject({
       title: 'Launch Practice',
       goal: 'A different launch practice',
@@ -142,8 +147,8 @@ describe('studio projects', () => {
       workArea: '',
     });
 
-    expect(first.id).toBe('launch-practice');
-    expect(second.id).toBe('launch-practice-2');
+    expect(first.id).toMatch(/^project-[a-f0-9-]{36}$/);
+    expect(second.id).not.toBe(first.id);
     expect(findStudioProject(readStudioProjects(), second.id)?.goal).toBe('Another launch practice');
   });
 
@@ -167,4 +172,9 @@ describe('studio projects', () => {
     localStorage.setItem('mindos:studio-projects', JSON.stringify([adopted]));
     expect(readStudioProjects()).toEqual([adopted]);
   });
+});
+it('persists browser defaults for a durable project first opened in another profile without changing its identity',()=>{
+ localStorage.clear();const durable={...STUDIO_PROJECTS[0]!,id:'project-cross-profile',sessions:[],reviewItems:[],lessons:[]};
+ const updated=updateStudioProjectDefaults(durable.id,{spaces:[],assistants:[]},durable);
+ expect(updated?.id).toBe(durable.id);expect(readStudioProjects().find(p=>p.id===durable.id)?.assistants).toEqual([]);
 });

@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import {useProjectDirectory} from '@/lib/views/use-project-directory';
 import {
   ArrowRight,
   BarChart3,
@@ -675,7 +676,8 @@ export default function StudioContent({
   const push = useSmoothRouterPush();
   const { locale } = useLocale();
   const copy = locale === 'zh' ? COPY.zh : COPY.en;
-  const [projects, setProjects] = useState<StudioProject[]>(() => readStudioProjects());
+  const [localProjects, setProjects] = useState<StudioProject[]>(() => readStudioProjects());
+  const {projects}=useProjectDirectory(localProjects);
   const [isCreating, setIsCreating] = useState(false);
   const [view, setView] = useState<StudioOverviewView>('list');
   const [query, setQuery] = useState('');

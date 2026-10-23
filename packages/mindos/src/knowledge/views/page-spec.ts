@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ViewError } from "./types.js";
 import { viewSpecSchema } from "./view-spec.js";
+import { projectIdentity } from "./project-identity.js";
 
 export const MAX_PAGE_BYTES = 128 * 1024;
 const text = (max: number) => z.string().trim().min(1).max(max);
@@ -73,6 +74,8 @@ export const pageBlockSchema = z
 export const pageSpecSchema = z
   .strictObject({
     specVersion: z.literal(1),
+    projectId: projectIdentity.optional(),
+    projectSources: z.array(collectionId).max(8).optional(),
     title: text(100),
     description: z.string().max(500).optional(),
     layout: z.strictObject({

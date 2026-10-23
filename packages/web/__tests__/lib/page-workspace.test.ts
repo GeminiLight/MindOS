@@ -9,6 +9,11 @@ import {
 } from "@/lib/views/page-workspace";
 afterEach(() => localStorage.clear());
 describe("page workspace", () => {
+  it('names the changed region and explains filter and layout edits',()=>{
+    const before={...blankPage('zh'),blocks:[{id:'tasks',title:'下一步',kind:'tasks' as const,collectionId:'c-one',layout:'table' as const}]};
+    const after={...before,blocks:[{...before.blocks[0],layout:'board' as const,filter:{all:[{field:'status',op:'neq' as const,value:'done'}]}}]};
+    const changes=pageChanges(before,after,'zh').join(' ');expect(changes).toContain('下一步');expect(changes).toContain('筛选');expect(changes).toContain('布局');
+  });
   it("moves only the requested block and preserves its source binding", () => {
     const spec = {
       ...blankPage("en"),

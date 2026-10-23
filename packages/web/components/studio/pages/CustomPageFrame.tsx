@@ -5,7 +5,11 @@ import { Button } from "@/components/ui/button";
 import { useLocale } from "@/lib/stores/locale-store";
 import { encodePath } from "@/lib/utils";
 import { createPageDocument, pagePublicData } from "@/lib/views/page-sandbox";
-import { workRequest, type WorkViewData } from "@/lib/views/work-api";
+import {
+  workRequest,
+  projectMutationScope,
+  type WorkViewData,
+} from "@/lib/views/work-api";
 import { useViewOperationScope } from "@/lib/views/hooks";
 
 export default function CustomPageFrame({
@@ -48,6 +52,7 @@ export default function CustomPageFrame({
     path?: string;
     collectionId: string;
     viewId?: string;
+    projectKey: string;
   }>();
   readOnlyRef.current = readOnly;
   const content = JSON.stringify(pagePublicData(data));
@@ -130,7 +135,12 @@ export default function CustomPageFrame({
     if (!ready || !session.current || sentContent.current === content) return;
     // An opaque-origin frame requires '*'; the receiver validates host/source/token.
     frame.current?.contentWindow?.postMessage(
-      { channel: "mindos-page", nonce: session.current, type: "data", data: JSON.parse(content) },
+      {
+        channel: "mindos-page",
+        nonce: session.current,
+        type: "data",
+        data: JSON.parse(content),
+      },
       "*",
     );
     sentContent.current = content;
@@ -138,16 +148,24 @@ export default function CustomPageFrame({
   useEffect(() => {
     if (!request) return;
     const spec = snapshot?.spec ?? snapshot?.view?.spec;
-    const record = snapshot?.records.find((item) => item.id === request.recordId);
+    const record = snapshot?.records.find(
+      (item) => item.id === request.recordId,
+    );
     if (
-      !record || !spec ||
+      !record ||
+      !spec ||
       snapshot?.collection.id !== request.collectionId ||
       snapshot?.view?.id !== request.viewId ||
+      JSON.stringify(snapshot?.projectScope ?? null) !== request.projectKey ||
       (request.action === "task.complete" &&
-        (snapshot?.collection.template !== "tasks" || !spec.actions.includes("record.update") || !spec.fields.includes("status"))) ||
+        (snapshot?.collection.template !== "tasks" ||
+          !spec.actions.includes("record.update") ||
+          !spec.fields.includes("status"))) ||
       (request.action === "source.open" &&
-        (!spec.actions.includes("source.open") || record.source?.path !== request.path))
-    ) setRequest(undefined);
+        (!spec.actions.includes("source.open") ||
+          record.source?.path !== request.path))
+    )
+      setRequest(undefined);
   }, [snapshot, request]);
   useEffect(() => {
     function receive(event: MessageEvent) {
@@ -167,7 +185,11 @@ export default function CustomPageFrame({
         spec = snapshot?.spec ?? snapshot?.view?.spec;
       if (!record || !spec) return;
       const name = record.fields.title ?? record.fields.name ?? title;
-      const binding = { collectionId: snapshot!.collection.id, viewId: snapshot?.view?.id };
+      const binding = {
+        collectionId: snapshot!.collection.id,
+        viewId: snapshot?.view?.id,
+        projectKey: JSON.stringify(snapshot?.projectScope ?? null),
+      };
       if (
         m.action === "task.complete" &&
         snapshot?.collection.template === "tasks" &&
@@ -197,6 +219,7 @@ export default function CustomPageFrame({
       !snapshot ||
       request.collectionId !== snapshot.collection.id ||
       request.viewId !== snapshot.view?.id ||
+      JSON.stringify(snapshot.projectScope ?? null) !== request.projectKey ||
       busy ||
       submitting.current ||
       readOnlyRef.current ||
@@ -228,6 +251,7 @@ export default function CustomPageFrame({
       if (
         current?.collection.id !== snapshot.collection.id ||
         current?.view?.id !== snapshot.view?.id ||
+        JSON.stringify(current?.projectScope ?? null) !== request.projectKey ||
         !current.records.some((item) => item.id === recordId) ||
         !currentSpec?.actions.includes("record.update") ||
         !currentSpec.fields.includes("status") ||
@@ -249,6 +273,7 @@ export default function CustomPageFrame({
         return;
       }
       await workRequest("mutate", {
+        ...projectMutationScope(snapshot),
         expectedRootId: rootId,
         collectionId: fresh.collection.id,
         recordId,

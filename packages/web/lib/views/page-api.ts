@@ -36,7 +36,7 @@ export async function pageRequest<T>(
   input: Record<string, unknown> = {},
   signal?: AbortSignal,
 ): Promise<T> {
-  const write = !["page.list", "page.read", "page.data", "list"].includes(op),
+  const write = !["page.list", "page.read", "page.data", "list",'read','project.list','project.read'].includes(op),
     url = new URL("/api/views/v2", window.location.origin);
   if (!write) {
     url.searchParams.set("op", op);
@@ -71,7 +71,7 @@ export async function pageRequest<T>(
       body.code ?? body.error ?? "REQUEST_FAILED",
       response.status,
     );
-  if (["page.save", "page.restore", "page.remove"].includes(op)) {
+  if (["page.save", "page.restore", "page.remove",'project.save','project.interact','project.page'].includes(op)) {
     notifyFilesChanged(body.changedPaths);
     window.dispatchEvent(new Event("mindos:views-updated"));
   }

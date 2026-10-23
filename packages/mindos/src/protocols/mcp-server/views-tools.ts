@@ -37,6 +37,48 @@ export function registerViewsTools(
     operationId = z.string().uuid(),
     collectionId = z.string();
   server.registerTool(
+    "mindos_projects_read",
+    {
+      description:
+        "List durable Studio project relationships, or read one project, linked people and bounded project communication. Read version before changes; names are not identities.",
+      inputSchema: z.object({
+        rootId: root.optional(),
+        projectId: z.string().optional(),
+      }),
+      annotations: { readOnlyHint: true },
+    },
+    (input) => call(input.projectId ? "project.read" : "project.list")(input),
+  );
+  server.registerTool(
+    "mindos_projects_write",
+    {
+      description:
+        "Save explicitly authorized project relationships, open its one stable work page, or record communication in a linked person original Markdown. Save requires project:{id,title,goal,taskCollectionIds,personRefs}, expectedVersion and operationId. Conversation requires projectId, personRef, text, date, expectedVersion and original person revisions. Never infer links from matching names.",
+      inputSchema: z.object({
+        action: z.enum(["save", "open-page", "conversation"]),
+        expectedRootId: root,
+        projectId: z.string().optional(),
+        project: z.record(z.string(), z.unknown()).optional(),
+        expectedVersion: z.number().int().min(0).optional(),
+        operationId: operationId.optional(),
+        personRef: z.string().optional(),
+        text: z.string().optional(),
+        date: z.string().optional(),
+        source: z.string().optional(),
+        expectedRevision: z.string().optional(),
+        expectedSchemaRevision: z.string().optional(),
+      }),
+    },
+    ({ action, ...input }) =>
+      call(
+        action === "save"
+          ? "project.save"
+          : action === "open-page"
+            ? "project.page"
+            : "project.interact",
+      )(input),
+  );
+  server.registerTool(
     "mindos_views_describe",
     {
       description:
@@ -97,6 +139,8 @@ export function registerViewsTools(
         expectedRootId: root,
         operationId,
         collectionId,
+        projectId: z.string().optional(),
+        expectedProjectVersion: z.number().int().min(1).optional(),
         action: z.enum([
           "record.create",
           "record.update",

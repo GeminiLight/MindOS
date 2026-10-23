@@ -68,6 +68,32 @@ test("connects a person and multiple project task pages without copying records"
     .addCookies([
       { name: "locale", value: "zh", url: process.env.MINDOS_URL! },
     ]);
+  // Simulate a healthy connection that silently loses messages. Business reads/writes remain real.
+  await page.addInitScript(() => {
+    class SilentEvents extends EventTarget {
+      readyState = 1;
+      onopen: ((event: Event) => void) | null = null;
+      onerror: ((event: Event) => void) | null = null;
+      constructor(_url: string) {
+        super();
+        queueMicrotask(() => {
+          this.onopen?.(new Event("open"));
+          this.dispatchEvent(
+            new MessageEvent("ready", {
+              data: JSON.stringify({
+                type: "ready",
+                lastEventId: 0,
+                resync: false,
+              }),
+              lastEventId: "0",
+            }),
+          );
+        });
+      }
+      close() {}
+    }
+    window.EventSource = SilentEvents as unknown as typeof EventSource;
+  });
   await page.goto(people.viewUrl + "?person=" + person.id);
   const panel = page.getByRole("region", { name: "相关项目待办" });
   await expect(

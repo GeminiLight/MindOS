@@ -18,3 +18,6 @@ export { WorkPagesService } from "./page-service.js";
 export { validatePageSpec, pageSpecSchema } from "./page-spec.js";
 export type { PageSpec, PageBlock } from "./page-spec.js";
 export type { SavedPage, PageVersion, PageBlockData } from "./page-service.js";
+export { WorkProjectsService } from './project-service.js';
+export type { ProjectSnapshot } from './project-service.js';
+export type { WorkProject, ProjectDefinition } from './project-store.js';

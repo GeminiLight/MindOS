@@ -44,6 +44,13 @@ import {
 } from "./operations.js";
 import { withFileMutation } from "./file-lock.js";
 import {
+  findProject,
+  readProjects,
+  assertProjectPath,
+  PROJECTS_PATH,
+  type WorkProject,
+} from "./project-store.js";
+import {
   saveWorkView,
   previewWorkView,
   readWorkPreview,
@@ -60,6 +67,7 @@ export type WorkRecord = {
   fields: Record<string, string>;
 };
 export type WorkSnapshot = {
+  projectScope?: { id: string; version: number };
   rootId: string;
   collection: CollectionDefinition;
   schemaRevision: string;
@@ -110,14 +118,43 @@ export class WorkViewsService {
   describe(id?: string) {
     return {
       capabilityVersion: 1,
+      projects: {
+        operations: [
+          "project.list",
+          "project.read",
+          "project.save",
+          "project.page",
+          "project.interact",
+        ],
+        schema: "{id,title,goal,taskCollectionIds:[],personRefs:[]}",
+        workflow:
+          "Read project version, explicitly link existing sources, save with expectedRootId/expectedVersion/operationId. Each task collection has one project owner. project.page opens the same stable work page; project.interact writes to the linked person original Markdown with projectId. Never infer relationships from names.",
+      },
       pages: {
         specVersion: 1,
-        operations: ["page.list", "page.read", "page.data", "page.preview", "page.save", "page.restore", "page.remove", "page.generate"],
+        operations: [
+          "page.list",
+          "page.read",
+          "page.data",
+          "page.preview",
+          "page.save",
+          "page.restore",
+          "page.remove",
+          "page.generate",
+        ],
         blocks: ["tasks", "people", "notes", "summary", "html"],
-        schema: "{specVersion:1,title,description?,layout:{columns:1|2,density:comfortable|compact},blocks:[{id,title,kind,collectionId?,viewId?,fields?,filter?,html?,folder?,paths?,limit?,locked?,layout?}]}",
-        workflow: "Preview without saving; save with expectedVersion 0 for new pages or the current version for edits. Pages combine existing sources. Restoring layout never restores source data.",
-        customWeb: "Static HTML/CSS or isolated script type=mindos/page. Worker globals data,state,event,render(html,nextState?). No network or DOM. Ordinary scripts are blocked. task.complete and source.open use data-mindos-action and data-record-id; the host validates each action.",
-        limits: { blocks: 12, specBytes: 131072, htmlCharacters: 98304, history: 20 },
+        schema:
+          "{specVersion:1,title,description?,layout:{columns:1|2,density:comfortable|compact},blocks:[{id,title,kind,collectionId?,viewId?,fields?,filter?,html?,folder?,paths?,limit?,locked?,layout?}]}",
+        workflow:
+          "Preview without saving; save with expectedVersion 0 for new pages or the current version for edits. Pages combine existing sources. Restoring layout never restores source data.",
+        customWeb:
+          "Static HTML/CSS or isolated script type=mindos/page. Worker globals data,state,event,render(html,nextState?). No network or DOM. Ordinary scripts are blocked. task.complete and source.open use data-mindos-action and data-record-id; the host validates each action.",
+        limits: {
+          blocks: 12,
+          specBytes: 131072,
+          htmlCharacters: 98304,
+          history: 20,
+        },
       },
       mutationInputs,
       rootId: this.rootId,
@@ -163,13 +200,23 @@ export class WorkViewsService {
     };
   }
   related(collectionId: string, personId: string) {
-    return relatedWork(
+    let projects: WorkProject[] = [],
+      unavailable = false;
+    try {
+      projects = readProjects(this.root).projects;
+    } catch {
+      unavailable = true;
+    }
+    const result = relatedWork(
       this.rootId,
       readRegistry(this.root),
       (id) => this.read(id, false),
       collectionId,
       personId,
+      projects,
     );
+    result.incomplete ||= unavailable;
+    return result;
   }
   read(id: string, resolvePeople = true): WorkSnapshot {
     const collection = this.collection(id),
@@ -397,6 +444,36 @@ export class WorkViewsService {
     );
   }
   async mutate(value: unknown) {
+    const request = inputObject(value);
+    if (request.projectId === undefined) return this.mutateRecord(value);
+    if (request.expectedRootId !== this.rootId)
+      throw new ViewError("ROOT_CHANGED", "The library changed", 409);
+    assertProjectPath(this.root);
+    return withFileMutation(this.root, PROJECTS_PATH, async () => {
+      const project = findProject(this.root, request.projectId);
+      if (request.expectedProjectVersion !== project.version)
+        throw new ViewError(
+          "PROJECT_CHANGED",
+          "Project relationships changed. Refresh before applying this action.",
+          409,
+        );
+      const collection = this.collection(String(request.collectionId));
+      const linked =
+        collection.template === "tasks"
+          ? project.taskCollectionIds.includes(collection.id)
+          : project.personRefs.includes(
+              collection.id + "/" + String(request.recordId),
+            );
+      if (!linked)
+        throw new ViewError(
+          "PROJECT_SOURCE_UNLINKED",
+          "This record is no longer linked to the project",
+          409,
+        );
+      return this.mutateRecord(value);
+    });
+  }
+  private async mutateRecord(value: unknown) {
     const request = inputObject(value),
       collectionId = String(request.collectionId ?? ""),
       c = this.collection(collectionId),
@@ -549,14 +626,26 @@ export class WorkViewsService {
           )
             throw new ViewError("INVALID_RECORD", "Unknown person field");
           changed = patchFields(raw, input);
-        } else if (action === "interaction.add")
+        } else if (action === "interaction.add") {
+          if (input.projectId !== undefined) {
+            const project = findProject(this.root, input.projectId);
+            if (!project.personRefs.includes(collectionId + "/" + person.id))
+              throw new ViewError(
+                "PROJECT_PERSON_MISSING",
+                "This person is not linked to the selected project",
+                409,
+              );
+          }
           changed = appendInteraction(raw, {
             id: operationId,
             text: String(input.text ?? ""),
             date: String(input.date ?? ""),
             source: String(input.source ?? ""),
+            ...(input.projectId !== undefined
+              ? { projectId: input.projectId as string }
+              : {}),
           });
-        else if (action === "followup.update")
+        } else if (action === "followup.update")
           changed = patchFollowup(raw, {
             text: String(input.text ?? ""),
             date: String(input.date ?? ""),

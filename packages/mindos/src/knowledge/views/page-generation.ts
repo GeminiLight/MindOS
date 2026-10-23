@@ -139,7 +139,12 @@ export async function generatePage(
           if (found >= 0) blocks.splice(found, 1);
           blocks.splice(Math.min(index, blocks.length), 0, block);
         });
-        candidate = { ...proposed, blocks };
+        candidate = {
+          ...proposed,
+          projectId: original.projectId,
+          projectSources: original.projectSources,
+          blocks,
+        };
       }
       candidate = validatePageSpec(candidate);
       const ids = new Set([

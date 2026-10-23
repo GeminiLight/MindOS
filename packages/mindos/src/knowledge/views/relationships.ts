@@ -9,6 +9,7 @@ import {
   type ViewSpec,
 } from "./view-spec.js";
 import { validateId } from "./markdown.js";
+import type { WorkProject } from "./project-store.js";
 type Registry = {
   collections: CollectionDefinition[];
   views: ViewDefinition[];
@@ -22,6 +23,8 @@ export type RelatedWork = {
     viewId: string;
     name: string;
     folder: string;
+    projectId?: string;
+    projectTitle?: string;
     canCreate: boolean;
     canEdit: boolean;
     records: Array<{ id: string; fields: Record<string, string> }>;
@@ -99,6 +102,7 @@ export function relatedWork(
   read: (id: string) => WorkSnapshot,
   collectionId: string,
   personId: string,
+  projects: WorkProject[] = [],
 ): RelatedWork {
   validateId(personId);
   const person = read(collectionId);
@@ -139,6 +143,10 @@ export function relatedWork(
         viewId: view.id,
         name: view.name,
         folder: c.folder,
+        ...(() => {
+          const p = projects.find((p) => p.taskCollectionIds.includes(c.id));
+          return p ? { projectId: p.id, projectTitle: p.title } : {};
+        })(),
         canCreate: spec.actions.includes("record.create"),
         canEdit: spec.actions.includes("record.update"),
         records: records.map((r) => ({

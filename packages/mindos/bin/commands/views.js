@@ -7,7 +7,7 @@ export const meta = {
   group: "Knowledge",
   summary: "Shared people, project tasks and generated views",
   usage:
-    "mindos views <doctor|templates|list|describe|read|create|mutate|preview|save|operation|open|page.list|page.read|page.preview|page.generate|page.save|page.restore|page.remove|page.open> [id] --input <file|->",
+    "mindos views <doctor|templates|list|describe|read|create|mutate|preview|save|operation|open|page.*|project.list|project.read|project.save|project.page|project.interact> [id] --input <file|->",
   flags: {
     "--input <file|->": "JSON input file or stdin",
     "--json": "JSON output (default)",
@@ -114,10 +114,12 @@ export async function run(args, flags = {}) {
         "page.save",
         "page.restore",
         "page.remove",
+        'project.list','project.read','project.save','project.page','project.interact',
       ].includes(op)
     )
       throw Error("Unknown views command");
-    if (args[1])
+    if(args[1]&&op.startsWith('project.')) input.projectId=args[1];
+    else if (args[1])
       input[
         op.startsWith("page.")
           ? "pageId"

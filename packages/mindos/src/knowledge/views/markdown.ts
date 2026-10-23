@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { basename } from "node:path";
+import { projectIdentity } from "./project-identity.js";
 import {
   ViewError,
   type PersonDocument,
@@ -139,13 +140,20 @@ function readInteractions(body: string): PersonInteraction[] {
     const marker = block.match(
       /^<!-- mindos-interaction:([a-f0-9-]+):([a-f0-9]{64}) -->\n?/,
     );
-    const without = marker ? block.slice(marker[0].length) : block;
+    let without = marker ? block.slice(marker[0].length) : block;
+    const project = without.match(/^<!-- mindos-project:([^\n]+) -->\n?/);
+    const projectId =
+      project && projectIdentity.safeParse(project[1]).success
+        ? project[1]
+        : undefined;
+    if (projectId) without = without.slice(project![0].length);
     const source = without.match(/^来源：[\s]*([^\n]*)\n?/);
     entries.push({
       id:
         marker?.[1] || "legacy-" + documentRevision(h[0] + block).slice(0, 24),
       date: h[1]!,
       source: source?.[1] || "",
+      ...(projectId ? { projectId } : {}),
       text: plain((source ? without.slice(source[0].length) : without).trim()),
     });
   }
@@ -250,13 +258,26 @@ export function appendInteraction(
   const id = validateOperationId(entry?.id);
   const text = validateText(entry?.text, "Interaction", 8000, true);
   const source = validateText(entry?.source ?? "", "Source", 1000, false, true);
+  if (
+    entry.projectId !== undefined &&
+    !projectIdentity.safeParse(entry.projectId).success
+  )
+    throw new ViewError(
+      "INVALID_PROJECT",
+      "Choose a valid interaction project",
+    );
   if (typeof entry.date !== "string" || !validDate(entry.date))
     throw new ViewError(
       "INVALID_INPUT",
       "A valid interaction date is required",
     );
   const hash = documentRevision(
-    JSON.stringify({ date: entry.date, text, source }),
+    JSON.stringify({
+      date: entry.date,
+      text,
+      source,
+      ...(entry.projectId ? { projectId: entry.projectId } : {}),
+    }),
   );
   const raw = normalize(content);
   const receipt = raw.match(
@@ -272,7 +293,7 @@ export function appendInteraction(
     return content;
   }
   const old = section(raw, aliases.interactions)?.body || "";
-  const block = `### ${entry.date} · 互动\n<!-- mindos-interaction:${id}:${hash} -->\n${source ? "来源：" + source + "\n" : ""}${escapePlain(text)}`;
+  const block = `### ${entry.date} · 互动\n<!-- mindos-interaction:${id}:${hash} -->\n${entry.projectId ? "<!-- mindos-project:" + entry.projectId + " -->\n" : ""}${source ? "来源：" + source + "\n" : ""}${escapePlain(text)}`;
   return restoreEol(
     content,
     setSection(

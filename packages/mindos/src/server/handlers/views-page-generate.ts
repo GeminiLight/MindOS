@@ -12,6 +12,7 @@ import type { MindosHttpServices } from "../services.js";
 import { json } from "../response.js";
 import { viewsError } from "./views.js";
 import { createPageModel } from "./views-page-model.js";
+import { findProject } from "../../knowledge/views/project-store.js";
 const active = new Map<string, number>();
 export async function handlePageGenerate(
   body: unknown,
@@ -39,27 +40,39 @@ export async function handlePageGenerate(
     active.set(rootId, (active.get(rootId) ?? 0) + 1);
     acquired = true;
     const registry = readRegistry(services.mindRoot);
-    const sources = registry.collections.slice(0, 50).map((c) => ({
-      collectionId: c.id,
-      name:
-        registry.views.find((v) => v.collectionId === c.id)?.name ?? c.folder,
-      template: c.template,
-      folder: c.folder,
-      fields: {
-        ...(c.template === "people" ? PEOPLE_FIELDS : TASK_FIELDS),
-        ...Object.fromEntries(
-          registry.views
-            .filter((v) => v.collectionId === c.id)
-            .flatMap((v) => v.spec?.fields ?? [])
-            .filter((k) => k.startsWith("x_"))
-            .map((k) => [k, "text"]),
-        ),
-      },
-      views: registry.views
-        .filter((v) => v.collectionId === c.id)
-        .slice(0, 10)
-        .map((v) => ({ id: v.id, name: v.name })),
-    }));
+    const pageInput = inputObject(input.spec);
+    const project = pageInput.projectId
+      ? findProject(services.mindRoot, pageInput.projectId)
+      : undefined;
+    const sources = registry.collections
+      .filter(
+        (c) =>
+          !project ||
+          project.taskCollectionIds.includes(c.id) ||
+          project.personRefs.some((ref) => ref.startsWith(c.id + "/")),
+      )
+      .slice(0, 50)
+      .map((c) => ({
+        collectionId: c.id,
+        name:
+          registry.views.find((v) => v.collectionId === c.id)?.name ?? c.folder,
+        template: c.template,
+        folder: c.folder,
+        fields: {
+          ...(c.template === "people" ? PEOPLE_FIELDS : TASK_FIELDS),
+          ...Object.fromEntries(
+            registry.views
+              .filter((v) => v.collectionId === c.id)
+              .flatMap((v) => v.spec?.fields ?? [])
+              .filter((k) => k.startsWith("x_"))
+              .map((k) => [k, "text"]),
+          ),
+        },
+        views: registry.views
+          .filter((v) => v.collectionId === c.id)
+          .slice(0, 10)
+          .map((v) => ({ id: v.id, name: v.name })),
+      }));
     const timer = AbortSignal.timeout(90000);
     const combined = signal ? AbortSignal.any([signal, timer]) : timer;
     let result;

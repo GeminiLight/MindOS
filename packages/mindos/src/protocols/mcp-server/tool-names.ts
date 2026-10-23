@@ -8,6 +8,8 @@
  */
 
 export const MINDOS_MCP_TOOL_NAMES = [
+  'mindos_projects_read',
+  'mindos_projects_write',
   'mindos_views_describe',
   'mindos_views_read',
   'mindos_views_create',

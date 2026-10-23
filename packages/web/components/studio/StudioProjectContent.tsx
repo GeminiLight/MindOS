@@ -1,6 +1,8 @@
 'use client';
 
 import Link from 'next/link';
+import ProjectWorkPanel from './projects/ProjectWorkPanel';
+import {useProjectDirectory} from '@/lib/views/use-project-directory';
 import {
   ArrowLeft,
   ArrowRight,
@@ -219,11 +221,11 @@ function ProjectContextOverview({
   );
 
   const updateSpaces = (nextSpaces: typeof spaces) => {
-    updateStudioProjectDefaults(project.id, { spaces: normalizeSpaces(nextSpaces) });
+    updateStudioProjectDefaults(project.id, { spaces: normalizeSpaces(nextSpaces) },project);
     onProjectsChanged();
   };
   const updateAssistants = (nextAssistants: typeof assistants) => {
-    updateStudioProjectDefaults(project.id, { assistants: normalizeAssistants(nextAssistants) });
+    updateStudioProjectDefaults(project.id, { assistants: normalizeAssistants(nextAssistants) },project);
     onProjectsChanged();
   };
   const getLatestProject = () => findStudioProject(readStudioProjects(), project.id) ?? project;
@@ -467,7 +469,9 @@ export default function StudioProjectContent({
   const push = useSmoothRouterPush();
   const { locale } = useLocale();
   const copy = locale === 'zh' ? COPY.zh : COPY.en;
-  const [projects, setProjects] = useState<StudioProject[]>(() => readStudioProjects());
+  const [localProjects, setProjects] = useState<StudioProject[]>(() => readStudioProjects());
+  const directory=useProjectDirectory(localProjects);
+  const projects=directory.projects;
   const [isCreating, setIsCreating] = useState(false);
   const [sessionSearch, setSessionSearch] = useState('');
   const [agentFilter, setAgentFilter] = useState('all');
@@ -579,7 +583,7 @@ export default function StudioProjectContent({
   if (!project || !localized) {
     return (
       <StudioShell>
-        <MissingProject copy={copy} />
+        {directory.loading?<p role="status" className="py-12 text-sm text-muted-foreground">{locale==='zh'?'正在打开项目…':'Opening project…'}</p>:<MissingProject copy={copy} />}
         <StudioNewProjectDialog
           open={isCreating}
           onClose={() => setIsCreating(false)}
@@ -620,6 +624,8 @@ export default function StudioProjectContent({
           workspaceSpaces={workspaceSpaces}
           onProjectsChanged={() => setProjects(readStudioProjects())}
         />
+
+        <ProjectWorkPanel key={project.id} projectId={project.id} initialProject={{title:localized.title,goal:localized.goal}} />
 
         <section className="overflow-hidden rounded-xl border border-border/60 bg-card/45" aria-labelledby="studio-project-sessions">
           <div className="border-b border-border/60 px-4 py-4">

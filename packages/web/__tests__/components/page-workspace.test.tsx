@@ -32,7 +32,7 @@ vi.mock("@/lib/files-changed", () => ({
   subscribeFilesChanged: () => () => {},
 }));
 vi.mock("@/components/studio/pages/PageCanvas", () => ({
-  default: ({ spec }: any) => <section data-canvas>{spec.title}</section>,
+  default: ({ spec,onAdjust }: any) => <section data-canvas>{spec.title}{onAdjust&&<button onClick={()=>onAdjust(spec.blocks[0].id)}>Refine region</button>}</section>,
 }));
 vi.mock("@/components/studio/pages/PageInspector", () => ({
   default: ({ spec, change }: any) => (
@@ -114,6 +114,9 @@ async function generate() {
       .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })),
   );
 }
+it('opens the selected region directly in AI, focuses its prompt and sends only that selection',async()=>{
+ await render();await click('Refine region');expect(document.activeElement).toBe(host.querySelector('textarea'));expect(host.textContent).toContain('Adjusting: Tasks');await prompt('Use a table');await generate();expect(mocks.request).toHaveBeenCalledWith('page.generate',expect.objectContaining({selectedBlockId:'one'}),expect.any(AbortSignal));
+});
 it("keeps local edits during source refresh and saves against the original page version", async () => {
   await render();
   await click("Customize");

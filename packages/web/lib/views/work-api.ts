@@ -9,6 +9,14 @@ export type WorkViewData = WorkSnapshot & {
   draftId?: string;
   spec?: ViewSpec;
 };
+export function projectMutationScope(data: Pick<WorkSnapshot, "projectScope">) {
+  return data.projectScope
+    ? {
+        projectId: data.projectScope.id,
+        expectedProjectVersion: data.projectScope.version,
+      }
+    : {};
+}
 export async function workRequest<T = Record<string, unknown>>(
   op: string,
   input: Record<string, unknown> = {},

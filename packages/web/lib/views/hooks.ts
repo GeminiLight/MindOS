@@ -1,14 +1,14 @@
-'use client';
+"use client";
 import {
   useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
   useState,
-} from 'react';
-import { subscribeServerEvents } from '@/lib/server-events';
-import { subscribeFilesChanged } from '@/lib/files-changed';
-import { getViewsIndex, VIEWS_UPDATED, ViewsApiError } from './api';
+} from "react";
+import { subscribeServerEvents } from "@/lib/server-events";
+import { subscribeFilesChanged } from "@/lib/files-changed";
+import { getViewsIndex, VIEWS_UPDATED, ViewsApiError } from "./api";
 
 /** A new request always supersedes the previous one, including focus and file events. */
 export function useViewResource<T>(
@@ -38,7 +38,7 @@ export function useViewResource<T>(
           setState((previous) => ({
             data: previous.data,
             error:
-              error instanceof ViewsApiError ? error.code : 'NETWORK_ERROR',
+              error instanceof ViewsApiError ? error.code : "NETWORK_ERROR",
             loading: false,
           }));
       });
@@ -57,21 +57,21 @@ export function useViewsIndex(active = true) {
       timer = setTimeout(result.refresh, 100);
     };
     const stop = subscribeFilesChanged(refresh);
-    const stopViews = subscribeServerEvents('views.changed', refresh);
+    const stopViews = subscribeServerEvents("views.changed", refresh);
     window.addEventListener(VIEWS_UPDATED, refresh);
-    window.addEventListener('focus', refresh);
+    window.addEventListener("focus", refresh);
     return () => {
       clearTimeout(timer);
       stop();
       stopViews();
       window.removeEventListener(VIEWS_UPDATED, refresh);
-      window.removeEventListener('focus', refresh);
+      window.removeEventListener("focus", refresh);
     };
   }, [active, result.refresh]);
   return result;
 }
 export function viewHref(v: { id: string; lastPersonId?: string }) {
-  return `/studio/views/${encodeURIComponent(v.id)}${v.lastPersonId ? `?person=${encodeURIComponent(v.lastPersonId)}` : ''}`;
+  return `/studio/views/${encodeURIComponent(v.id)}${v.lastPersonId ? `?person=${encodeURIComponent(v.lastPersonId)}` : ""}`;
 }
 
 /** Bind an open operation to its original library; reject late UI callbacks after a switch/unmount. */
@@ -95,4 +95,46 @@ export function useViewOperationScope(rootId: string) {
     isMounted,
     isCurrent,
   };
+}
+
+/** Events provide immediate updates; bounded visible reads heal silently lost messages.
+ * Keep the last successful data and let each resource own its draft/version state. */
+export function useViewLiveUpdates(
+  refresh: () => void,
+  loading: boolean,
+  active = true,
+  pollMs = 2000,
+) {
+  const busy = useRef(loading);
+  useLayoutEffect(() => {
+    busy.current = loading;
+  }, [loading]);
+  useEffect(() => {
+    if (!active) return;
+    const update = () => {
+      if (!busy.current) {
+        busy.current = true;
+        refresh();
+      }
+    };
+    const stops = [
+      subscribeFilesChanged(update),
+      subscribeServerEvents("views.changed", update),
+      subscribeServerEvents("ready", update),
+    ];
+    window.addEventListener(VIEWS_UPDATED, update);
+    window.addEventListener("focus", update);
+    const timer =
+      pollMs > 0
+        ? setInterval(() => {
+            if (document.visibilityState === "visible") update();
+          }, pollMs)
+        : undefined;
+    return () => {
+      stops.forEach((stop) => stop());
+      if (timer) clearInterval(timer);
+      window.removeEventListener(VIEWS_UPDATED, update);
+      window.removeEventListener("focus", update);
+    };
+  }, [refresh, active, pollMs]);
 }

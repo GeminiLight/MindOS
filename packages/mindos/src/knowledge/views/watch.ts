@@ -12,6 +12,7 @@ export function watchViews(
   interval = 1000,
 ) {
   const files = [
+    { path: checkedPath(root, '.mindos/views/projects.json'), max: 1024 * 1024 },
     { path: checkedPath(root, ".mindos/views/index.json"), max: 1024 * 1024 },
     {
       path: checkedPath(root, ".mindos/views/pages.json"),

@@ -526,8 +526,9 @@ function applyProjectDefaultsUpdate(project: StudioProject, updates: StudioProje
 export function updateStudioProjectDefaults(
   projectId: string,
   updates: StudioProjectDefaultsUpdate,
+  fallbackProject?:StudioProject,
 ): StudioProject | undefined {
-  const currentProject = findStudioProject(readStudioProjects(), projectId);
+  const currentProject = findStudioProject(readStudioProjects(), projectId)??(fallbackProject?.id===projectId?fallbackProject:undefined);
   if (!currentProject) return undefined;
 
   const updatedProject = applyProjectDefaultsUpdate(currentProject, updates);
@@ -550,6 +551,8 @@ export function getLastOpenedStudioProject(
 
 export function createStudioProject(draft: StudioProjectDraft): StudioProject {
   const project = buildStudioProjectFromDraft(draft, readStudioProjects());
+  // A name is presentation, not identity. Separate browser profiles must not alias projects.
+  project.id='project-'+crypto.randomUUID();
   writeCustomProjects([project, ...readCustomProjects()]);
   markStudioProjectOpened(project.id);
   if (typeof window !== 'undefined') {

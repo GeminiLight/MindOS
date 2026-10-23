@@ -1,6 +1,7 @@
 'use client';
 import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 import Link from 'next/link';
+import {useProjectDirectory} from '@/lib/views/use-project-directory';
 import { type ReactNode, useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -21,12 +22,10 @@ import {
   getView,
   getViewPerson,
   getViewRaw,
-  VIEWS_UPDATED,
   type PersonDocument,
 } from '@/lib/views/api';
-import { useViewResource, useViewsIndex } from '@/lib/views/hooks';
+import { useViewResource, useViewsIndex, useViewLiveUpdates } from '@/lib/views/hooks';
 import { type ViewsCopy, viewsCopy } from '@/lib/views/copy';
-import { subscribeFilesChanged } from '@/lib/files-changed';
 import { encodePath } from '@/lib/utils';
 import { StudioShell } from '../StudioShell';
 import { fieldClass, FolderCaption, ViewNotice } from './ViewPrimitives';
@@ -124,6 +123,7 @@ export default function PeopleWorkspace({
 }) {
   const { locale } = useLocale();
   const c = viewsCopy(locale);
+  const projectDirectory=useProjectDirectory();
   const router = useRouter();
   const push = useSmoothRouterPush();
   const params = useSearchParams();
@@ -184,23 +184,7 @@ export default function PeopleWorkspace({
     detail.data.rootId === rootId
       ? detail.data.person
       : undefined;
-  useEffect(() => {
-    if (!rootId) return;
-    let timer: ReturnType<typeof setTimeout>;
-    const refresh = () => {
-      clearTimeout(timer);
-      timer = setTimeout(collection.refresh, 100);
-    };
-    const stop = subscribeFilesChanged(refresh);
-    window.addEventListener(VIEWS_UPDATED, refresh);
-    window.addEventListener('focus', refresh);
-    return () => {
-      clearTimeout(timer);
-      stop();
-      window.removeEventListener(VIEWS_UPDATED, refresh);
-      window.removeEventListener('focus', refresh);
-    };
-  }, [rootId, collection.refresh]);
+  useViewLiveUpdates(collection.refresh,collection.loading,!!rootId,1000);
   useEffect(() => {
     setMeeting(false);
     setEditor(undefined);
@@ -620,6 +604,7 @@ export default function PeopleWorkspace({
                                     <time className="font-mono text-xs text-muted-foreground">
                                       {i.date}
                                     </time>
+                                    {i.projectId&&<Link href={'/studio/'+encodeURIComponent(i.projectId)} aria-label={locale==='zh'?'查看所属项目':'Open related project'} className="ml-3 rounded-md px-2 py-1 text-xs underline underline-offset-4 focus-visible:ring-2 focus-visible:ring-ring">{projectDirectory.projects.find(p=>p.id===i.projectId)?.title??(locale==='zh'?'所属项目':'Project')}</Link>}
                                     <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-7">
                                       {i.text}
                                     </p>

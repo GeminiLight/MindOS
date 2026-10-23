@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import {useProjectDirectory} from '@/lib/views/use-project-directory';
 import { usePathname } from 'next/navigation';
 import {
   CalendarClock,
@@ -165,7 +166,8 @@ export default function StudioPanel({ active }: StudioPanelProps) {
   const contextActive = isStudioContextPath(pathname);
   const currentProjectId = getProjectIdFromPath(pathname);
   const projectsActive = isStudioProjectsPath(pathname) || currentProjectId !== null;
-  const [projects, setProjects] = useState<StudioProject[]>(() => readStudioProjects());
+  const [localProjects, setProjects] = useState<StudioProject[]>(() => readStudioProjects());
+  const {projects}=useProjectDirectory(localProjects,active);
 
   useEffect(() => {
     const syncProjects = () => setProjects(readStudioProjects());

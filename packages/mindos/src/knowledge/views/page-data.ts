@@ -6,6 +6,7 @@ import { taskPeople } from "./relationships.js";
 import type { PageSpec, PageBlock } from "./page-spec.js";
 import { checkedPath, safeFolder, readDocument } from "./paths.js";
 import { ViewError, type ViewDefinition } from "./types.js";
+import { findProject } from "./project-store.js";
 import {
   defaultSpec,
   projectView,
@@ -99,6 +100,9 @@ export function renderPageData(
 ): PageBlockData[] {
   // Share collection reads among blocks; generated pages must not cause N+1 scans.
   const snapshots = new Map<string, WorkSnapshot>();
+  const project = spec.projectId
+    ? findProject(root, spec.projectId)
+    : undefined;
   let index: ReturnType<WorkViewsService["list"]> | undefined;
   const result: PageBlockData[] = spec.blocks.map((block) => {
     try {
@@ -148,6 +152,10 @@ export function renderPageData(
       const display = validateViewSpec(
         {
           ...base,
+          actions:
+            project && snapshot.collection.template === "people"
+              ? base.actions.filter((action) => action !== "record.create")
+              : base.actions,
           fields,
           layout,
           groupBy: layout === "board" ? (base.groupBy ?? "status") : undefined,
@@ -155,7 +163,24 @@ export function renderPageData(
         },
         snapshot.fields,
       );
-      const sourceRecords = projectView(base, snapshot.records);
+      if (
+        project &&
+        !(snapshot.collection.template === "tasks"
+          ? project.taskCollectionIds.includes(id)
+          : project.personRefs.some((ref) => ref.startsWith(id + "/")))
+      )
+        throw new ViewError(
+          "PROJECT_SOURCE_UNLINKED",
+          "This source is no longer linked to the project",
+          409,
+        );
+      const records =
+        project && snapshot.collection.template === "people"
+          ? snapshot.records.filter((record) =>
+              project.personRefs.includes(id + "/" + record.id),
+            )
+          : snapshot.records;
+      const sourceRecords = projectView(base, records);
       const filtered = projectView(display, sourceRecords);
       const limit = block.limit ?? 50;
       const effectiveView = view ? { ...view, spec: display } : undefined;
@@ -165,6 +190,9 @@ export function renderPageData(
           snapshot.limited || snapshot.skipped > 0 || filtered.length > limit,
         data: {
           ...snapshot,
+          ...(project
+            ? { projectScope: { id: project.id, version: project.version } }
+            : {}),
           records: filtered.slice(0, limit),
           spec: display,
           ...(effectiveView ? { view: effectiveView } : {}),

@@ -52,3 +52,16 @@ Set `kind:"html"` with an `html` string and optional collection binding. Static 
 Controls with `id` emit local worker events. `data-mindos-action="task.complete"` or `"source.open"` plus `data-record-id="<real-id>"` request host-validated actions. Never fabricate record IDs or bypass the host API. Use supplied CSS variables and responsive layouts. A custom page cannot access credentials or arbitrary files.
 
 The external Agent can author and preview the PageSpec without another model account. The page UI's own AI adjustment and optional `mindos views page.generate --input request.json` use the user's configured MindOS provider, return an unsaved candidate, and require a usable configuration. Do not claim unsupported or failed generation succeeded.
+
+
+## Durable Studio project work
+
+Require `describe.projects` before using project operations. Discover existing project identities through `mindos_projects_read({})`; read one with `{projectId}`. New Studio projects use stable UUID identities. Existing legacy Studio slugs remain supported. A name match never authorizes merging identities or relationships.
+
+- Save explicitly intended relationships with `mindos_projects_write({action:"save",expectedRootId,operationId,expectedVersion,project:{id,title,goal,taskCollectionIds,personRefs}})`. Use version 0 only for a new project. Each task collection has one project owner; people may participate in multiple projects. Link at most four task collections and forty people from at most four people collections.
+- `action:"open-page"` with `{projectId,expectedRootId}` opens or creates that project's stable default work page and reconciles changed sources while retaining presentation. Return `/studio/pages/<returned page.id>`. Opening repeatedly does not create duplicates. Removing the default page lets a subsequent explicit open create a new default identity; the retired page is never resurrected.
+- PageSpec may contain `projectId` and `projectSources`. Preserve both during layout/AI edits. The current project relationships determine data scope; changing page HTML cannot broaden it. Keep selected and locked regions stable. Project source changes and layout history are separate from source business data.
+- Record project communication with `action:"conversation"`, `projectId`, `personRef`, `text`, calendar `date`, `expectedVersion` (project), `expectedRevision` and `expectedSchemaRevision` (person), `expectedRootId`, and `operationId`. Read revisions first. The server writes the original person's Markdown and adds a project marker; do not maintain another transcript file or tag private interactions automatically. Reuse the identical operation ID after an uncertain response, then read back.
+- CLI equivalents: `mindos views project.list`, `project.read <projectId>`, `project.save --input request.json`, `project.page <projectId> --input request.json`, `project.interact <projectId> --input request.json`.
+
+Project name, goal and relationships are in the current library. Existing WorkDir/Space/AI defaults remain browser configuration; do not claim those defaults have migrated or silently replace them. Project timelines are bounded and show only currently linked people; unlinking never deletes their original records.

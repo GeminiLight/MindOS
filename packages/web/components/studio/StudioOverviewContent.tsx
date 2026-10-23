@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import {useProjectDirectory} from '@/lib/views/use-project-directory';
 import {
   ArrowRight,
   Blocks,
@@ -146,7 +147,8 @@ function StudioContinueOverview({
 export default function StudioOverviewContent() {
   const { locale } = useLocale();
   const copy = locale === 'zh' ? COPY.zh : COPY.en;
-  const [projects, setProjects] = useState<StudioProject[]>(() => readStudioProjects());
+  const [localProjects, setProjects] = useState<StudioProject[]>(() => readStudioProjects());
+  const {projects}=useProjectDirectory(localProjects);
   const [lastOpenedProjectId, setLastOpenedProjectId] = useState<string | null>(null);
   const chatSessions = useSessions();
 

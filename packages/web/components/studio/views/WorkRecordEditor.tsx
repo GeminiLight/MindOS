@@ -10,7 +10,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { workRequest, type WorkViewData } from "@/lib/views/work-api";
+import { workRequest, projectMutationScope, type WorkViewData } from "@/lib/views/work-api";
 import {
   readViewDraft,
   writeViewDraft,
@@ -106,6 +106,7 @@ export default function WorkRecordEditor({
     setError("");
     try {
       await workRequest("mutate", {
+        ...projectMutationScope(data),
         expectedRootId: data.rootId,
         collectionId: data.collection.id,
         recordId: record?.id,

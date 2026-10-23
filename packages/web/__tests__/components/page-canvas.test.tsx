@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import PageCanvas from "@/components/studio/pages/PageCanvas";
 const api = vi.hoisted(() => ({ request: vi.fn() }));
-vi.mock("@/lib/views/work-api", () => ({ workRequest: api.request }));
+vi.mock("@/lib/views/work-api", async () => ({...await vi.importActual("@/lib/views/work-api"), workRequest: api.request }));
 vi.mock("next/link", () => ({
   default: ({ children, ...p }: any) => <a {...p}>{children}</a>,
 }));

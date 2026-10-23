@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import Frame from "@/components/studio/pages/CustomPageFrame";
 const api = vi.hoisted(() => ({ request: vi.fn() }));
-vi.mock("@/lib/views/work-api", () => ({ workRequest: api.request }));
+vi.mock("@/lib/views/work-api", async () => ({...await vi.importActual("@/lib/views/work-api"), workRequest: api.request }));
 vi.mock("@/lib/stores/locale-store", () => ({
   useLocale: () => ({ locale: "en" }),
 }));
@@ -261,4 +261,9 @@ it("dismisses confirmation when a new binding reuses the same record ID without 
   expect(host.querySelector("iframe")!.srcdoc).toBe(original);
   expect(host.textContent).not.toContain("Mark “Task” complete");
   expect(api.request).not.toHaveBeenCalled();
+});
+it('revokes a pending task confirmation when project relationships advance without resetting its page',async()=>{
+ await render(false,{...snapshot,projectScope:{id:'launch',version:1}});const frame=host.querySelector('iframe')!,original=frame.srcdoc;
+ await message();expect(host.textContent).toContain('Mark “Task” complete');
+ await render(false,{...snapshot,projectScope:{id:'launch',version:2}});expect(frame.srcdoc).toBe(original);expect(host.textContent).not.toContain('Mark “Task” complete');expect(api.request).not.toHaveBeenCalled();
 });

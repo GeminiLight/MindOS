@@ -7,7 +7,7 @@ import StudioOverviewContent from '@/components/studio/StudioOverviewContent';
 import StudioAppsContent from '@/components/studio/StudioAppsContent';
 import StudioAutomationContent from '@/components/studio/StudioAutomationContent';
 import StudioPanel from '@/components/panels/StudioPanel';
-import { STUDIO_PROJECTS } from '@/lib/studio-projects';
+import { STUDIO_PROJECTS,readStudioProjects } from '@/lib/studio-projects';
 
 const push = vi.fn();
 let mockPathname = '/studio';
@@ -689,7 +689,7 @@ describe('StudioContent', () => {
       form!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     });
 
-    expect(push).toHaveBeenCalledWith('/studio/growth-room');
+    expect(push).toHaveBeenCalledWith('/studio/'+readStudioProjects()[0]!.id);
   });
 
   it('allows an optional goal and falls back to the WorkDir folder when the Project name is blank', async () => {
@@ -721,7 +721,7 @@ describe('StudioContent', () => {
     });
 
     expect(host.textContent).not.toContain('Name and goal are required.');
-    expect(push).toHaveBeenCalledWith('/studio/mindos-dev');
+    expect(push).toHaveBeenCalledWith('/studio/'+readStudioProjects()[0]!.id);
   });
 
   it('uses WorkDir input and searchable chip pickers for Project setup', async () => {

@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vitest";
 import { useWorkQuickActions } from "@/lib/views/use-work-quick-actions";
 const request = vi.hoisted(() => vi.fn());
-vi.mock("@/lib/views/work-api", () => ({ workRequest: request }));
+vi.mock("@/lib/views/work-api", async () => ({...await vi.importActual("@/lib/views/work-api"), workRequest: request }));
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 it("serializes writes, preserves retry identity and ignores late results after a library switch", async () => {
   request.mockReset();

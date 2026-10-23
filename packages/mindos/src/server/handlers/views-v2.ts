@@ -1,4 +1,8 @@
 import { handlePageGenerate } from "./views-page-generate.js";
+import {
+  handleWorkProjectsGet,
+  handleWorkProjectsPost,
+} from "./views-projects.js";
 import { handleWorkPagesGet, handleWorkPagesPost } from "./views-pages.js";
 import {
   WorkViewsService,
@@ -35,6 +39,8 @@ export function handleWorkViewsGet(
     const op = query.get("op") ?? "list",
       id = query.get("collectionId") ?? "";
     if (op.startsWith("page.")) return handleWorkPagesGet(query, services);
+    if (op.startsWith("project."))
+      return handleWorkProjectsGet(query, services);
     if (op === "describe" || op === "doctor" || op === "templates")
       return json(s.describe(id || undefined), { headers });
     if (op === "list") return json(s.list(), { headers });
@@ -120,6 +126,8 @@ export async function handleWorkViewsPost(
       return handlePageGenerate(input, services, signal);
     if (typeof input.op === "string" && input.op.startsWith("page."))
       return handleWorkPagesPost(input, services, signal);
+    if (typeof input.op === "string" && input.op.startsWith("project."))
+      return handleWorkProjectsPost(input, services, requestHeaders, signal);
     const s = workViews(services, requestHeaders, signal);
     let result: unknown;
     switch (input.op) {

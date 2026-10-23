@@ -1,13 +1,23 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { ArrowUpRight, FileText, LockKeyhole, Plus } from "lucide-react";
+import {
+  ArrowUpRight,
+  FileText,
+  LockKeyhole,
+  Plus,
+  Sparkles,
+} from "lucide-react";
 import type {
   PageSpec,
   PageBlockData,
   WorkRecord,
 } from "@geminilight/mindos/knowledge/views";
-import { workRequest, type WorkViewData } from "@/lib/views/work-api";
+import {
+  workRequest,
+  projectMutationScope,
+  type WorkViewData,
+} from "@/lib/views/work-api";
 import type { PageSources } from "@/lib/views/page-api";
 import { encodePath } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -23,6 +33,7 @@ export default function PageCanvas({
   locale,
   selectedId,
   onSelect,
+  onAdjust,
   refresh,
   preview = false,
 }: {
@@ -33,6 +44,7 @@ export default function PageCanvas({
   locale: string;
   selectedId?: string;
   onSelect?: (id: string) => void;
+  onAdjust?: (id: string) => void;
   refresh: () => void;
   preview?: boolean;
 }) {
@@ -95,6 +107,7 @@ export default function PageCanvas({
       setEditing({
         data: {
           ...latest,
+          projectScope: data.projectScope,
           spec: data.spec,
           view: data.view ? { ...data.view, spec: data.spec } : undefined,
         },
@@ -138,6 +151,7 @@ export default function PageCanvas({
           );
       }
       await workRequest("mutate", {
+        ...projectMutationScope(data),
         expectedRootId: rootId,
         collectionId: data.collection.id,
         recordId: record.id,
@@ -211,6 +225,21 @@ export default function PageCanvas({
                   )}
                 </div>
                 <div className="flex shrink-0 gap-1">
+                  {onAdjust && !block.locked && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-label={
+                        (zh ? "用 AI 调整：" : "Adjust with AI: ") + block.title
+                      }
+                      onClick={() => onAdjust(block.id)}
+                    >
+                      <Sparkles size={14} aria-hidden />
+                      <span className="hidden sm:inline">
+                        {zh ? "用 AI 改这里" : "Refine"}
+                      </span>
+                    </Button>
+                  )}
                   {onSelect && (
                     <Button
                       variant={selectedId === block.id ? "outline" : "ghost"}

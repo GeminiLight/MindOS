@@ -200,6 +200,7 @@ try {
           "views-daily-actions.spec.ts",
           "views-person-project-links.spec.ts",
           "generative-pages.spec.ts",
+          "project-work-pages.spec.ts",
         ]),
     "--workers=1",
   ]);

@@ -153,6 +153,30 @@ export function pageChanges(
         ? `调整 ${changed} 个模块`
         : `${changed} block${changed > 1 ? "s" : ""} adjusted`,
     );
+  for (const block of after.blocks) {
+    const old = before.blocks.find((b) => b.id === block.id);
+    if (!old) continue;
+    const details: string[] = [];
+    if (old.kind !== block.kind) details.push(zh ? "模块类型" : "type");
+    if (
+      old.collectionId !== block.collectionId ||
+      old.viewId !== block.viewId ||
+      JSON.stringify(old.paths) !== JSON.stringify(block.paths) ||
+      old.folder !== block.folder
+    )
+      details.push(zh ? "资料来源" : "sources");
+    if (JSON.stringify(old.fields) !== JSON.stringify(block.fields))
+      details.push(zh ? "显示字段" : "visible fields");
+    if (JSON.stringify(old.filter) !== JSON.stringify(block.filter))
+      details.push(zh ? "筛选条件" : "filters");
+    if (old.layout !== block.layout) details.push(zh ? "布局" : "layout");
+    if (old.html !== block.html)
+      details.push(zh ? "网页内容与样式" : "web content and styles");
+    if (old.limit !== block.limit)
+      details.push(zh ? "显示数量" : "record limit");
+    if (details.length)
+      changes.push(`${block.title}：${details.join(zh ? "、" : ", ")}`);
+  }
   if (
     !added &&
     !removed &&

@@ -132,6 +132,80 @@ it.skipIf(process.env.MINDOS_VIEWS_ISOLATED !== "1")(
           },
         ],
       };
+      const projectId = "project-" + randomUUID();
+      const contacts = await call(reopened, "mindos_views_create", {
+        expectedRootId: info.rootId,
+        operationId: randomUUID(),
+        template: "people",
+        name: "Project collaborators",
+        folder: "MCP-People-" + randomUUID(),
+        mode: "new",
+      });
+      const peopleSnapshot = await call(claude, "mindos_views_read", {
+        collectionId: contacts.collection.id,
+      });
+      await call(claude, "mindos_views_mutate", {
+        expectedRootId: info.rootId,
+        operationId: randomUUID(),
+        collectionId: contacts.collection.id,
+        action: "record.create",
+        expectedSchemaRevision: peopleSnapshot.schemaRevision,
+        input: { name: "MCP colleague" },
+      });
+      const personSnapshot = await call(reopened, "mindos_views_read", {
+        collectionId: contacts.collection.id,
+      });
+      const person = personSnapshot.records[0],
+        personRef = contacts.collection.id + "/" + person.id;
+      const projectSave = {
+        action: "save",
+        expectedRootId: info.rootId,
+        expectedVersion: 0,
+        operationId: randomUUID(),
+        project: {
+          id: projectId,
+          title: "Shared Studio project",
+          goal: "Continue across clients",
+          taskCollectionIds: [c.collection.id],
+          personRefs: [personRef],
+        },
+      };
+      await call(reopened, "mindos_projects_write", projectSave);
+      expect(
+        (await call(claude, "mindos_projects_read", { projectId })).project
+          .title,
+      ).toBe("Shared Studio project");
+      const communication = {
+        action: "conversation",
+        expectedRootId: info.rootId,
+        projectId,
+        personRef,
+        expectedVersion: 1,
+        expectedRevision: person.source.revision,
+        expectedSchemaRevision: personSnapshot.schemaRevision,
+        operationId: randomUUID(),
+        text: "Confirmed across agent clients",
+        date: "2026-10-23",
+      };
+      await call(claude, "mindos_projects_write", communication);
+      await call(reopened, "mindos_projects_write", communication);
+      expect(
+        (await call(reopened, "mindos_projects_read", { projectId })).activity,
+      ).toHaveLength(1);
+      const projectPage = await call(claude, "mindos_projects_write", {
+        action: "open-page",
+        expectedRootId: info.rootId,
+        projectId,
+      });
+      expect(
+        (
+          await call(reopened, "mindos_projects_write", {
+            action: "open-page",
+            expectedRootId: info.rootId,
+            projectId,
+          })
+        ).page.id,
+      ).toBe(projectPage.page.id);
       const pagePreview = await call(reopened, "mindos_pages_preview", {
         expectedRootId: info.rootId,
         spec: pageSpec,

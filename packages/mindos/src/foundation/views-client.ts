@@ -47,6 +47,7 @@ export class ViewsClient {
           "page.save",
           "page.restore",
           "page.remove",
+          'project.save','project.interact','project.page',
         ].includes(op) ||
         (op === "preview" && !input.draftId),
       headers: Record<string, string> = { "Content-Type": "application/json" };

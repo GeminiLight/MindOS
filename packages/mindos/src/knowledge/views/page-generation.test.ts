@@ -299,3 +299,24 @@ it("preserves existing, locked and unselected programs without revalidating or r
   expect(result.spec.blocks.slice(0, 2)).toEqual(original.blocks.slice(0, 2));
   expect(selectedModel).toHaveBeenCalledTimes(1);
 });
+it("keeps project identity and source provenance when the model proposes different metadata", async () => {
+  const original = {
+    ...spec,
+    projectId: "产品发布",
+    projectSources: ["c-source123"],
+  };
+  const result = await generatePage(
+    { prompt: "Make it compact", spec: original },
+    [],
+    model({
+      spec: {
+        ...spec,
+        projectId: "other",
+        projectSources: ["c-other123"],
+        layout: { columns: 1, density: "compact" },
+      },
+    }),
+  );
+  expect(result.spec.projectId).toBe("产品发布");
+  expect(result.spec.projectSources).toEqual(original.projectSources);
+});

@@ -10,6 +10,7 @@ import { STUDIO_PROJECTS } from '@/lib/studio-projects';
 vi.mock('@/lib/stores/locale-store', () => ({
   useLocale: () => ({ locale: 'en' as const }),
 }));
+vi.mock('@/lib/views/page-api',async()=>({...await vi.importActual('@/lib/views/page-api'),pageRequest:async(op:string)=>{if(op==='project.list')return {rootId:'root-test',projects:[]};throw new Error('No project data in this fixture');}}));
 
 const mockPush = vi.fn();
 

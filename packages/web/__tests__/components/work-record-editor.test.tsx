@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import Editor from "@/components/studio/views/WorkRecordEditor";
 import { readViewDraft } from "@/lib/views/drafts";
 const api = vi.hoisted(() => ({ request: vi.fn() }));
-vi.mock("@/lib/views/work-api", () => ({ workRequest: api.request }));
+vi.mock("@/lib/views/work-api", async () => ({...await vi.importActual("@/lib/views/work-api"), workRequest: api.request }));
 vi.mock("@/components/ui/dialog", () => ({
   Dialog: ({ children }: any) => <div>{children}</div>,
   DialogContent: ({ children }: any) => <div role="dialog">{children}</div>,

@@ -159,6 +159,16 @@ export class WorkPagesService {
         );
       const index = registry.pages.findIndex((page) => page.id === targetId),
         current = index >= 0 ? registry.pages[index] : undefined;
+      if (
+        kind === "save" &&
+        current?.spec.projectId &&
+        spec?.projectId !== current.spec.projectId
+      )
+        throw new ViewError(
+          "PROJECT_BINDING_CHANGED",
+          "A project page must keep its project identity. Create a separate page for another purpose.",
+          409,
+        );
       if (pageId && !current)
         throw new ViewError("PAGE_MISSING", "This page no longer exists", 404);
       this.expected(input, current?.version ?? 0);
@@ -193,6 +203,12 @@ export class WorkPagesService {
               "This layout version is no longer available",
               404,
             );
+          if (current?.spec.projectId)
+            nextSpec = {
+              ...nextSpec,
+              projectId: current.spec.projectId,
+              projectSources: current.spec.projectSources,
+            };
         }
         if (current && current.version >= Number.MAX_SAFE_INTEGER - 1)
           throw new ViewError(

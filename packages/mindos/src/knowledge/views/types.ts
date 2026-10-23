@@ -32,6 +32,7 @@ export type PersonInteraction = {
   date: string;
   text: string;
   source: string;
+  projectId?: string;
 };
 export type PersonSummary = PersonFields & {
   id: string;

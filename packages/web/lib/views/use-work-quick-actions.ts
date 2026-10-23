@@ -1,7 +1,7 @@
 "use client";
 import { useLayoutEffect, useRef, useState } from "react";
 import type { WorkRecord } from "@geminilight/mindos/knowledge/views";
-import { workRequest, type WorkViewData } from "./work-api";
+import { workRequest, projectMutationScope, type WorkViewData } from "./work-api";
 /** Keep fast actions on the same revision/idempotency boundary as full editing. */
 export function useWorkQuickActions(
   data: WorkViewData | undefined,
@@ -43,6 +43,7 @@ export function useWorkQuickActions(
       token = active.current;
     if (!snapshot || !token || inflight.current || !snapshot.view) return;
     const request = {
+      ...projectMutationScope(snapshot),
       expectedRootId: snapshot.rootId,
       collectionId: snapshot.collection.id,
       ...input,

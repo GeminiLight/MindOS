@@ -14,7 +14,11 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import type { PageSpec, SavedPage } from "@geminilight/mindos/knowledge/views";
+import type {
+  PageSpec,
+  SavedPage,
+  WorkProject,
+} from "@geminilight/mindos/knowledge/views";
 import { useLocale } from "@/lib/stores/locale-store";
 import { useViewResource } from "@/lib/views/hooks";
 import { subscribeFilesChanged } from "@/lib/files-changed";
@@ -38,6 +42,7 @@ import { Button } from "@/components/ui/button";
 import { fieldClass } from "../views/ViewPrimitives";
 import PageInspector from "./PageInspector";
 import PageCanvas from "./PageCanvas";
+import ProjectWorkPanel from "../projects/ProjectWorkPanel";
 
 type Bootstrap = { sources: PageSources; document?: PageRead };
 export default function PageWorkspace({ pageId }: { pageId: string }) {
@@ -56,6 +61,25 @@ export default function PageWorkspace({ pageId }: { pageId: string }) {
             );
       if (document && document.rootId !== sources.rootId)
         throw new Error("Library changed");
+      if (document?.page.spec.projectId) {
+        const directory = await pageRequest<{ projects: WorkProject[] }>(
+          "project.list",
+          { rootId: sources.rootId },
+          signal,
+        );
+        const project = directory.projects.find(
+          (p) => p.id === document.page.spec.projectId,
+        );
+        if (!project) throw new Error("Project relationships are unavailable");
+        const ids = new Set([
+          ...project.taskCollectionIds,
+          ...project.personRefs.map((ref) => ref.split("/")[0]),
+        ]);
+        sources.collections = sources.collections.filter((c) => ids.has(c.id));
+        sources.views = sources.views.filter(
+          (v) => v.collectionId !== undefined && ids.has(v.collectionId),
+        );
+      }
       return { sources, document };
     },
     [pageId],
@@ -146,6 +170,10 @@ function PageSession({
   const [settings, setSettings] = useState(pageId === "new"),
     [selectedId, setSelectedId] = useState("");
   const [aiExpanded, setAiExpanded] = useState(pageId === "new");
+  const promptField = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (aiExpanded) promptField.current?.focus();
+  }, [aiExpanded, selectedId]);
   const [prompt, setPrompt] = useState(""),
     [generating, setGenerating] = useState(false),
     [saving, setSaving] = useState(false);
@@ -470,6 +498,17 @@ function PageSession({
           </Button>
         </div>
       </header>
+      {spec.projectId && (
+        <div className="mb-6">
+          <ProjectWorkPanel
+            key={rootId + spec.projectId}
+            projectId={spec.projectId}
+            rootId={rootId}
+            onPage
+            readOnly={!!preview || generating || saving}
+          />
+        </div>
+      )}
       {aiExpanded || generating || preview ? (
         <section
           aria-label={zh ? "用 AI 调整页面" : "Adjust with AI"}
@@ -520,6 +559,7 @@ function PageSession({
               {zh ? "描述页面调整" : "Describe your change"}
             </label>
             <textarea
+              ref={promptField}
               id="page-prompt"
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
@@ -533,6 +573,55 @@ function PageSession({
               }
               className={fieldClass + " resize-y bg-background"}
             />
+            {selected && !generating && !preview && (
+              <div
+                className="mt-2 flex flex-wrap gap-2"
+                aria-label={zh ? "局部调整建议" : "Suggestions for this region"}
+              >
+                {(selected.kind === "tasks"
+                  ? zh
+                    ? ["只展示未完成任务", "改成状态看板", "布局紧凑一些"]
+                    : [
+                        "Show only open tasks",
+                        "Use a status board",
+                        "Make this more compact",
+                      ]
+                  : selected.kind === "people"
+                    ? zh
+                      ? [
+                          "突出人物背景与下一步",
+                          "改成简洁表格",
+                          "减少装饰，突出内容",
+                        ]
+                      : [
+                          "Highlight context and next steps",
+                          "Use a simple table",
+                          "Simplify the presentation",
+                        ]
+                    : zh
+                      ? ["让信息更清晰", "布局紧凑一些", "保留内容，优化排版"]
+                      : [
+                          "Clarify the hierarchy",
+                          "Make this more compact",
+                          "Refine typography, keep content",
+                        ]
+                ).map((value) => (
+                  <Button
+                    key={value}
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    disabled={saving || selected.locked}
+                    onClick={() => {
+                      setPrompt(value);
+                      promptField.current?.focus();
+                    }}
+                  >
+                    {value}
+                  </Button>
+                ))}
+              </div>
+            )}
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
               <p className="text-xs leading-5 text-muted-foreground">
                 {generating
@@ -802,6 +891,15 @@ function PageSession({
             blocks={visibleData?.blocks ?? []}
             locale={locale}
             selectedId={selectedId}
+            onAdjust={
+              generating || saving || preview
+                ? undefined
+                : (id) => {
+                    setSelectedId(id);
+                    setSettings(false);
+                    setAiExpanded(true);
+                  }
+            }
             onSelect={
               generating || saving || preview
                 ? undefined

@@ -7,9 +7,7 @@ import type {
   WorkRecord,
 } from "@geminilight/mindos/knowledge/views";
 import { workRequest, type WorkViewData } from "@/lib/views/work-api";
-import { useViewResource } from "@/lib/views/hooks";
-import { subscribeServerEvents } from "@/lib/server-events";
-import { subscribeFilesChanged } from "@/lib/files-changed";
+import { useViewResource,useViewLiveUpdates } from "@/lib/views/hooks";
 import { Button } from "@/components/ui/button";
 import { fieldClass } from "./ViewPrimitives";
 import WorkRecordEditor from "./WorkRecordEditor";
@@ -54,24 +52,7 @@ export default function PersonTasks({
   }>();
   const pending = useRef<AbortController | undefined>(undefined);
   useEffect(() => () => pending.current?.abort(), []);
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout>;
-    const refresh = () => {
-      clearTimeout(timer);
-      timer = setTimeout(result.refresh, 100);
-    };
-    const stop = subscribeFilesChanged(refresh);
-    const stopViews = subscribeServerEvents("views.changed", refresh);
-    const stopReady = subscribeServerEvents("ready", refresh);
-    window.addEventListener("focus", refresh);
-    return () => {
-      clearTimeout(timer);
-      stop();
-      stopViews();
-      stopReady();
-      window.removeEventListener("focus", refresh);
-    };
-  }, [result.refresh]);
+  useViewLiveUpdates(result.refresh,result.loading,true,1000);
   const available = data?.groups.filter((g) => g.canCreate) ?? [];
   const selected = available.some((g) => g.viewId === target)
     ? target
@@ -232,6 +213,7 @@ export default function PersonTasks({
               <span className="truncate">{g.name}</span>
               <ArrowUpRight size={13} aria-hidden />
             </Link>
+            {g.projectId&&<Link href={'/studio/'+encodeURIComponent(g.projectId)} className="ml-3 inline-flex items-center text-xs underline underline-offset-4 focus-visible:ring-2 focus-visible:ring-ring">{g.projectTitle}</Link>}
             <ul className="mt-2 divide-y divide-border">
               {g.visible.map((r) => (
                 <li
