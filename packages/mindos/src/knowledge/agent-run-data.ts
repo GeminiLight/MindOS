@@ -32,6 +32,7 @@ export type KnowledgeAgentRunStatus =
 /** The subset of the agent run ledger record that knowledge modules consume. */
 export interface KnowledgeAgentRunSnapshot {
   id: string;
+  chatSessionId?: string;
   runtimeId: string;
   status: KnowledgeAgentRunStatus;
   startedAt: number;
@@ -46,6 +47,7 @@ export interface KnowledgeAgentRunCapsuleView {
   id: string;
   runId: string;
   chatSessionId?: string;
+  status?: KnowledgeAgentRunStatus;
   request: {
     messages: Array<Record<string, unknown>>;
     runtime: { name: string };

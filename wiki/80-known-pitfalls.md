@@ -19,6 +19,7 @@
 | 构建 / Desktop / Sync / 依赖 | [03-build-desktop-sync-deps.md](known-pitfalls/03-build-desktop-sync-deps.md) | `构建 / 部署` / `Desktop / Tauri` / `变更质量 checklist（通用）` / `云同步 (Sync)` / `依赖版本` / `架构 & 设计模式` / `Electron / 桌面端` / `Ask AI / @ Mention` / `构建优化 / Bundle Size` |
 | UI / 性能 / 安全硬化 | [04-ui-performance-security.md](known-pitfalls/04-ui-performance-security.md) | `UI / 前端交互` / `Agent 重试 / Retry` / `性能 / Performance` |
 | 发布 / CI / 平台打包 | [05-release-ci-platform-packaging.md](known-pitfalls/05-release-ci-platform-packaging.md) | `npm 发布流程安全加固（长期方案）` / `Desktop / Electron` / `性能优化` / `CI / Release` |
+| Echo / 人机共演化 | [06-echo-coevolution.md](known-pitfalls/06-echo-coevolution.md) | 只读画布交互、手机可见边界、任务标准覆盖、撤销与证据、隔离验证 |
 
 ## 维护规则
 

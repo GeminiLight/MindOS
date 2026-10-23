@@ -72,6 +72,7 @@ export default function ReplayPageClient({initialStory=null}:{initialStory?:Bran
   <div className="flex flex-wrap items-center justify-between gap-3">
    <div className="flex items-center gap-2 text-xs text-muted-foreground"><Link href="/echo/overview" className="hover:text-foreground">{locale==='zh'?'回响':'Echo'}</Link>{locale==='zh'&&<><span>/</span><span>Echo</span></>}</div>
    <div className="flex items-center gap-2"><span className="hidden text-xs text-muted-foreground sm:inline">{story?.source.project||'MindOS'}</span><span className="hidden rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground sm:inline">{story?.source.runtime==='example'?copy.example:story?.source.runtime==='claude'?'Claude Code':story?.source.runtime==='codex'?'Codex':copy.curated}</span>
+    {activeStory?.source.runtime !== 'example' && activeStory && <Button render={<Link href={`/echo/workspace?sourceStory=${encodeURIComponent(activeStory.id)}`}/>} variant="ghost" size="sm" className="min-h-9 text-xs">{locale === 'zh' ? '带进下一次任务' : 'Use in the next task'}<ArrowRight size={13}/></Button>}
     <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={()=>select(requestRaceExample(locale))}>{copy.example}<ArrowRight size={12}/></Button>
     <Button variant="outline" size="sm" className="min-h-9" onClick={()=>setPicker(true)}><FileClock size={14}/>{copy.newStory}<ChevronDown size={13}/></Button>
    </div>

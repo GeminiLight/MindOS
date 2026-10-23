@@ -129,12 +129,13 @@ describe('titlebar geometry contract (no content may slide under the fixed row)'
     }
   });
 
-  it('floating changes banner clears and layers above the fixed titlebar row', () => {
+  it('changes review stays in flow on mobile and floats below the titlebar on desktop', () => {
     const src = readFileSync(path.join(webRoot, 'components/changes/ChangesBanner.tsx'), 'utf-8');
 
     expect(src).toContain('data-changes-banner-kind={hasAgentReview ?');
     expect(src).toContain('const containerClass = hasAgentReview');
-    expect(src).toContain('top-[calc(var(--app-titlebar-h)+60px)]');
+    expect(src).toContain('relative z-app-popover mx-3 mb-2');
+    expect(src).toContain('md:fixed md:right-6');
     expect(src).toContain('md:top-[calc(var(--app-titlebar-h)+12px)]');
     expect(src).toContain('bottom-4 right-3 z-app-popover');
     expect(src).toContain('md:bottom-6 md:right-6');

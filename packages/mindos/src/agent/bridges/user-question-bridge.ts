@@ -176,6 +176,11 @@ export function hasAskUserQuestionBridge(): boolean {
   return Boolean(bridgeContext.getStore());
 }
 
+/** Host-only identity for routing the same human question from another surface. */
+export function getCurrentAskUserQuestionBridgeRunId(): string | undefined {
+  return bridgeContext.getStore()?.runId;
+}
+
 export async function askUserQuestionViaBridge(input: {
   toolCallId: string;
   params: unknown;

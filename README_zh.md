@@ -104,6 +104,7 @@ MindOS 现在围绕几个稳定的产品模块展开，而不是一组零散安�
 | **MCP + Skills 桥接** | 一条命令安装或修复 MCP 配置与随包发布的 MindOS Skill，再用 `mindos doctor agents` 验证 Agent 实际可用状态。 |
 | **原生 Agent Runtime** | 支持可恢复会话、取消、重连/重新附着，以及在 runtime 暴露能力时记录可审查的输出历史。 |
 | **工作流与审计面** | YAML 工作流、Agent Inspector、run ledger、反向链接、知识图谱与导入进度，让人类审查保留在流程里。 |
+| **回响共演化画布** | 将 Claude/Codex 历史带入任务画布，支持判断、参与方式、确认标准、分歧验证、经验迁移与协作试验。MindOS 后续运行可携带这些约定，并带回有出处的输出供核对。 |
 | **跨平台交付** | 可通过桌面端 Release 或 `npm install -g @geminilight/mindos@latest` 安装；npm 包内置 CLI 与预构建本地 Web runtime。 |
 
 ## 🧠 人机共享心智

@@ -99,6 +99,7 @@ import {
   type ContextSignatureTarget,
 } from './turn-context';
 import { capsuleRuntimeBinding, type AgentTurnCapsuleSeed } from './turn-capsule';
+import { resolveCoevolutionTurnContext } from '@/lib/agent/coevolution-context';
 
 // generateSkillsXml is in lib/agent/skills-xml.ts (not inline: Next.js route export constraints)
 
@@ -529,6 +530,22 @@ export async function runAgentTurnRequestBody(
   const promptFileContext = fileContextForPrompt(loadedFileContext, includeFileContext);
   const fileContextMetadata = fileContextRunMetadata(fileContextSignature, includeFileContext, loadedFileContext);
 
+  let coevolutionContext = '';
+  let coevolutionRecallExclusions: string[] = [];
+  try {
+    const collaboration = await resolveCoevolutionTurnContext({
+      mindRoot,
+      chatSessionId,
+      prompt: lastUserContent,
+      interactiveTools: runtimeLane.kind === 'mindos-pi' && permissionPolicy.toolScope.kbWrite !== 'none' && permissionPolicy.toolScope.askUserQuestion,
+    });
+    coevolutionContext = collaboration.context;
+    coevolutionRecallExclusions = collaboration.excludePaths;
+    if (collaboration.receipt) Object.assign(fileContextMetadata, { coevolutionReceipt: collaboration.receipt });
+  } catch (error) {
+    return apiError(ErrorCodes.CONFLICT, error instanceof Error ? error.message : 'Could not load this task’s collaboration settings. Reopen the workspace and retry.', 409);
+  }
+
   if (runtimeLane.kind !== 'mindos-pi') {
     const recall = await recallMindosTurnKnowledgeWithReceipt({
       mindRoot,
@@ -538,6 +555,7 @@ export async function runAgentTurnRequestBody(
       attachedFiles,
       sessionSpaces: sessionContext.resolvedSelection.spaces,
       activeRecall: agentConfig.activeRecall,
+      excludePaths: coevolutionRecallExclusions,
       fileContext: promptFileContext,
     });
     const externalPromptBase = await buildMindosContextPrompt({
@@ -546,6 +564,7 @@ export async function runAgentTurnRequestBody(
       fileContext: promptFileContext,
       uploadedParts,
       recalledKnowledge: recall.items,
+      coevolutionContext,
       selectedSkills,
       includeSessionContext,
       sessionWorkDir: sessionContext.resolvedWorkDir,
@@ -708,6 +727,7 @@ export async function runAgentTurnRequestBody(
     attachedFiles,
     sessionSpaces: sessionContext.resolvedSelection.spaces,
     activeRecall: agentConfig.activeRecall,
+    excludePaths: coevolutionRecallExclusions,
     fileContext: promptFileContext,
   });
   const systemPromptBase = buildMindosSystemPrompt({
@@ -724,6 +744,7 @@ export async function runAgentTurnRequestBody(
     fileContext: promptFileContext,
     uploadedParts,
     recalledKnowledge: recall.items,
+    coevolutionContext,
     agentInitialization,
     selectedSkills,
     includeSessionContext,

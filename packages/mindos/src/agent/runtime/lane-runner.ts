@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { finalizeCoevolutionObservations } from '../tool/coevolution-tools.js';
 import type { MindOSSSEvent } from '../turn/index.js';
 import { resolveMindosAgentTimeoutMs } from '../turn/retry.js';
 import {
@@ -609,6 +610,7 @@ async function runLaneTurnWithRun(
       },
     });
     finalizeCapsule('completed');
+    await finalizeCoevolutionObservations(input.capsule.mindRoot, run.id);
     await closeSession(true);
   } catch (error) {
     const terminalStatus = classifyLaneTerminalStatus(error, runSignal);

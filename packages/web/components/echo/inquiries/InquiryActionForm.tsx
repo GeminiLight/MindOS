@@ -20,6 +20,7 @@ export function InquiryActionForm({
   busy,
   submit,
   close,
+  reviewPlan = false,
 }: {
   kind: InquiryFormKind;
   q: Inquiry;
@@ -30,6 +31,7 @@ export function InquiryActionForm({
   busy: boolean;
   submit: (v: Record<string, unknown>) => void;
   close: () => void;
+  reviewPlan?: boolean;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
   useEffect(() => {
@@ -156,7 +158,17 @@ export function InquiryActionForm({
         {kind === 'plan' ? (
           <>
             <p className={note}>{p.planHint}</p>
-            <InquiryFields
+            {reviewPlan ? <>
+              <p className="text-sm leading-6">{values.task}</p>
+              <div className="space-y-2 border-l-2 border-border pl-3 text-sm leading-6">
+                <p>A · {values.supportsA}</p><p>B · {values.supportsB}</p>
+                <p className={note}>{values.inconclusive}</p>
+              </div>
+              <p className={note}>{values.scope} · {values.budget}</p>
+              <details open={!values.supportsA || !values.supportsB}><summary className="cursor-pointer py-2 text-sm">{p.editPlan}</summary>
+                <InquiryFields names={['task', 'supportsA', 'supportsB', 'inconclusive', 'scope', 'budget']} value={values} onChange={change} p={p} />
+              </details>
+            </> : <InquiryFields
               names={[
                 'task',
                 'supportsA',
@@ -168,7 +180,7 @@ export function InquiryActionForm({
               value={values}
               onChange={change}
               p={p}
-            />
+            />}
             {linkedMethods.length ? (
               <label className="block space-y-2 text-sm font-medium">
                 <span>{p.methodLinkId}</span>
@@ -195,6 +207,7 @@ export function InquiryActionForm({
         {kind === 'observe' ? (
           <>
             <p className={note}>{p.observationHint}</p>
+            {candidates[0] && <Button type="button" variant="outline" onClick={() => change({...values,kind:'run',runId:candidates[0].runId,quote:candidates[0].output.slice(0,1200)})}>{p.useOutput}</Button>}
             {select('kind', p.kind, [
               { value: 'manual', label: p.manual },
               { value: 'run', label: p.actual },

@@ -7,8 +7,11 @@ export const short = z.string().trim().min(1).max(1600);
 export const requestId = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9-]{0,99}$/);
 const ref = (kind: string) =>
   z.string().regex(new RegExp('^' + kind + '-[1-9][0-9]{0,2}$'));
-export const sourceSchema = z
+const conversationSourceSchema = z
   .object({
+    kind: z.enum(['session', 'replay']).optional(),
+    storyId: z.string().min(1).max(200).optional(),
+    runtime: z.string().min(1).max(100).optional(),
     sessionId: z.string().min(1).max(200),
     messageIndex: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
     messageHash: digest,
@@ -17,6 +20,14 @@ export const sourceSchema = z
     questionHash: digest,
   })
   .strict();
+export const sourceSchema = z.union([
+  conversationSourceSchema,
+  z.object({
+    kind: z.literal('task'), taskId: z.string().regex(/^coevolution-[a-f0-9]{24}$/),
+    title: z.string().min(1).max(200), quote: z.string().trim().min(1).max(1000),
+    question: text, questionHash: digest,
+  }).strict(),
+]);
 export const draftSchema = z
   .object({
     question: z.string().max(4000),

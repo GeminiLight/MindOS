@@ -1,5 +1,6 @@
 'use client';
 import { focusIfAvailable } from '@/lib/focus-if-available';
+import { TASK_DRAFT_EVENT, takeTaskDraft } from '@/lib/chat-task-draft';
 
 import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
@@ -1026,6 +1027,17 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     prevOpenRequestIdRef.current = openRequestId;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, currentFile, openRequestId]);
+
+  useEffect(() => {
+    const receive = () => {
+      if (!visible || isLoading || !initialSessionId || session.activeSessionId !== initialSessionId) return;
+      const text = takeTaskDraft(initialSessionId);
+      if (text) offerComposerPrompt(text);
+    };
+    receive();
+    window.addEventListener(TASK_DRAFT_EVENT, receive);
+    return () => window.removeEventListener(TASK_DRAFT_EVENT, receive);
+  }, [visible, isLoading, initialSessionId, session.activeSessionId, offerComposerPrompt]);
 
   useEffect(() => {
     if (!visible || !contextRequest) return;

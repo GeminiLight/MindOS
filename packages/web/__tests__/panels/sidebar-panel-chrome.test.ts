@@ -42,7 +42,7 @@ describe('primary sidebar panel chrome', () => {
     const hubSource = read('components/panels/AgentsPanelHubNav.tsx');
     const panelSource = read('components/panels/AgentsPanel.tsx');
 
-    expect(hubSource).toContain('<PanelPrimaryNav aria-label={ariaLabel}>');
+    expect(hubSource).toMatch(/<PanelPrimaryNav\b[^>]*aria-label=\{ariaLabel\}[^>]*>/);
     expect(hubSource).not.toContain('PANEL_NAV_SECTION_CLASS');
     expect(panelSource.indexOf('{hub}')).toBeLessThan(panelSource.indexOf('sidebar-scroll-area'));
   });

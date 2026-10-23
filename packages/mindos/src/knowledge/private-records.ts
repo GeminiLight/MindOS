@@ -27,7 +27,7 @@ function directory(root: string) {
   return dir;
 }
 function file(root: string, name: string) {
-  if (!/^(transfer|methodcheck|study|cohort|inquiry|comparison)-[a-f0-9]{24}\.json$/.test(name))
+  if (!/^(transfer|methodcheck|study|cohort|inquiry|comparison|coevolution)-[a-f0-9]{24}\.json$/.test(name))
     throw new LearningError('invalid', 'Invalid private record id.');
   return resolveExistingSafe(directory(root), name);
 }

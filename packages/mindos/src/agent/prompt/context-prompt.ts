@@ -44,6 +44,8 @@ export type BuildMindosContextPromptInput = {
   fileContext?: MindosAgentFileContext;
   uploadedParts?: string[];
   recalledKnowledge?: MindosAgentRecalledKnowledgeItem[];
+  /** Host-verified, currently active collaboration settings for this task. */
+  coevolutionContext?: string;
   agentInitialization?: MindosAgentInitializationContext;
   selectedSkills?: MindosSelectedSkill[];
   includeSessionContext?: boolean;
@@ -92,6 +94,10 @@ export async function buildMindosTurnContext(
     title: 'Now',
     content: formatMindosAgentTimeContext(services, { includeUnix: true }).replace(/^## Now\n\n?/, ''),
   });
+
+  if (input.coevolutionContext?.trim()) {
+    contextSections.push({ title: 'Collaboration for this task', content: input.coevolutionContext.trim() });
+  }
 
   appendSessionContext(contextSections, input);
   appendInitializationContext(contextSections, input);
@@ -154,7 +160,8 @@ export function compactMindosPromptForTokenBudget(prompt: string, options: Compa
     const trimmedSection = section.trim();
     const isCore = preserved.length === 0
       || trimmedSection === '## MindOS Turn Context'
-      || trimmedSection.startsWith('## Now\n');
+      || trimmedSection.startsWith('## Now\n')
+      || trimmedSection.startsWith('## Collaboration for this task\n');
 
     if (isCore || isAttachment) {
       preserved.push(section);

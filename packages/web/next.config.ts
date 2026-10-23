@@ -9,6 +9,8 @@ const projectDir = path.resolve(__dirname);
 const inNodeModules = projectDir.includes('node_modules');
 
 const nextConfig: NextConfig = {
+  // Keep a local preview independent from an already-running production build.
+  distDir: process.env.MINDOS_NEXT_DIST_DIR || '.next',
   devIndicators: false,
   transpilePackages: [
     'github-slugger',

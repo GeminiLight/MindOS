@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
-import { Footprints, GitBranch, LayoutDashboard, Sprout } from 'lucide-react';
+import { Footprints, GitBranch, LayoutDashboard, Sprout, Waypoints } from 'lucide-react';
 import PanelHeader from './PanelHeader';
 import { PanelPrimaryNav, PanelNavRow } from './PanelNavRow';
 import { useLocale } from '@/lib/stores/locale-store';
@@ -30,6 +30,7 @@ export default function EchoPanel({ active }: EchoPanelProps) {
     <div className={`flex flex-col h-full ${active ? '' : 'hidden'}`}>
       <PanelHeader title={e.title} />
       <PanelPrimaryNav aria-label={e.title}>
+        <PanelNavRow href="/echo/workspace" icon={<Waypoints size={14}/>} title={locale === 'zh' ? '一起工作' : 'Work together'} active={pathname === '/echo/workspace' || pathname.startsWith('/echo/workspace/')} activeVariant="rail" />
         <PanelNavRow href="/echo/replay" icon={<GitBranch size={14}/>} title={locale === 'zh' ? '分支剧情' : 'Story replay'} active={pathname === '/echo/replay'} activeVariant="rail" />
         {ECHO_PRIMARY_SEGMENT_ORDER.map((segment) => {
           const row = rowBySegment[segment];

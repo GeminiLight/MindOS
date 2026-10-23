@@ -273,11 +273,12 @@ export function updateInquiry(
               decision.id,
             sessions: [
               {
-                id: q.source.sessionId,
+                id: q.source.kind === 'task' ? `workspace:${q.source.taskId}` : q.source.sessionId,
+                ...(q.source.kind === 'task' ? { title: `User-authored task: ${q.source.title}` } : {}),
                 messageRefs: [
                   {
-                    messageIndex: q.source.messageIndex,
-                    role: 'assistant',
+                    messageIndex: q.source.kind === 'task' ? 0 : q.source.messageIndex,
+                    role: q.source.kind === 'task' ? 'user' : 'assistant',
                     quote: q.source.quote,
                   },
                 ],

@@ -104,6 +104,7 @@ MindOS is now organized around a few stable product modules instead of one-off s
 | **MCP + Skills Bridge** | One command installs or repairs both MCP config and the packaged MindOS Skill, then `mindos doctor agents` verifies real agent readiness. |
 | **Native Agent Runtime** | Run agents with resumable sessions, cancellation, reconnect/reattach support, and reviewable output history where the runtime exposes it. |
 | **Workflow & Audit Surfaces** | YAML workflows, Agent Inspector, run ledgers, backlinks, graph views, and importer progress help keep human review in the loop. |
+| **Echo Coevolution Workspace** | Bring Claude/Codex history into a task canvas: decisions, participation modes, confirmed standards, disagreement tests, experience transfer, and collaboration trials. MindOS runs can use these agreements and return attributable outputs for review. |
 | **Cross-platform Delivery** | Install through Desktop releases or `npm install -g @geminilight/mindos@latest`; the npm package includes the CLI and prebuilt local Web runtime. |
 
 ## 🧠 Human-AI Shared Mind

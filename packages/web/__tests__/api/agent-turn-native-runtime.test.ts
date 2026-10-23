@@ -293,6 +293,52 @@ describe('/api/agent/sessions/:sessionId/turns native runtime routing', () => {
     }
   });
 
+  it.each([
+    ['mindos', false], ['mindos', true], ['codex', false], ['codex', true],
+  ] as const)('honors workspace recall exclusions in the %s prompt while preserving explicit attachments (%s)', async (runtime, explicitlyAttached) => {
+    const workspace = await import('@/lib/agent/coevolution-context');
+    const retrieval = await import('@/lib/agent/active-recall');
+    const contextSpy = vi.spyOn(workspace, 'resolveCoevolutionTurnContext').mockResolvedValue({
+      context: 'CURRENT ADJUSTED STANDARD: first check the evidence.',
+      excludePaths: ['methods/old.md'],
+    });
+    const recallSpy = vi.spyOn(retrieval, 'performActiveRecallWithReceipt').mockImplementation(async (_root, _query, options) => ({
+      items: options?.excludePaths?.includes('methods/old.md') ? [] : [{ path: 'methods/old.md', content: 'ORIGINAL STANDARD: act without checking.', score: 1 }],
+      metadata: { retrievalSelectedAssetIds: [], retrievalOutcome: 'empty' },
+    }) as never);
+    seedFile('methods/old.md', 'EXPLICITLY ATTACHED ORIGINAL: compare this with the adjustment.');
+    invalidateCache();
+    mockResolveCommandPath.mockImplementation(async (command: string) => command === 'codex' ? '/usr/local/bin/codex' : null);
+    mockCheckNativeRuntimeHealth.mockResolvedValue({ status: 'available' });
+    mockDetectLocalAcpAgents.mockResolvedValue({ installed: [{ id: 'codex-acp', name: 'Codex', binaryPath: '/usr/local/bin/codex', status: 'available' }], notInstalled: [] });
+    mockCreateMindosAgentRuntime.mockImplementation(async (options: Record<string, any>) => {
+      capturedMindosRuntimeOptions = options;
+      return {
+        systemPrompt: options.systemPrompt,
+        session: { subscribe: vi.fn(), prompt: vi.fn(), steer: vi.fn(), abort: vi.fn() },
+        agentRunContextResource: {}, llmHistoryMessages: [], lastUserContent: 'Continue my task',
+        fallbackTools: [], apiKey: 'test-key', modelName: 'test-model', provider: 'anthropic', baseUrl: '',
+      };
+    });
+    try {
+      const response = await POST(agentTurnRequest({
+        messages: [{ role: 'user', content: 'Continue my task' }],
+        selectedRuntime: runtime === 'codex' ? { id: 'codex', name: 'Codex', kind: 'codex', binaryPath: '/usr/local/bin/codex' } : { id: 'mindos', name: 'MindOS', kind: 'mindos' },
+        attachedFiles: explicitlyAttached ? ['methods/old.md'] : [],
+        permissionMode: 'read',
+      }));
+      expect(response.status).toBe(200);
+      await response.text();
+      expect(recallSpy).toHaveBeenCalledWith(expect.any(String), expect.any(String), expect.objectContaining({ excludePaths: ['methods/old.md'] }), expect.any(Object));
+      const prompt = runtime === 'codex' ? capturedNativeOptions?.prompt : capturedMindosRuntimeOptions?.turnPrompt;
+      expect(prompt).toContain('CURRENT ADJUSTED STANDARD');
+      expect(prompt).not.toContain('ORIGINAL STANDARD: act without checking.');
+      expect(prompt?.includes('EXPLICITLY ATTACHED ORIGINAL')).toBe(explicitlyAttached);
+    } finally {
+      contextSpy.mockRestore(); recallSpy.mockRestore();
+    }
+  }, 15_000);
+
   it('rejects removed mode field before runtime routing', async () => {
     const res = await POST(agentTurnRequest({
       messages: [{ role: 'user', content: 'Organize these captures' }],

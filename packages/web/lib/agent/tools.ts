@@ -22,6 +22,7 @@ import {
   type MindosKbFileTreeNode,
   type MindosKbToolsHost,
 } from '@geminilight/mindos/agent/tool/kb-tools';
+import { createCoevolutionTools } from '@geminilight/mindos/agent/tool';
 import type { MindosAgentPermissionPolicy } from '@geminilight/mindos/agent/mindos-pi/permission';
 
 export {
@@ -92,11 +93,15 @@ const host: MindosKbToolsHost = {
 };
 
 const toolkit = createMindosKbToolkit(host);
+const coevolutionTools = createCoevolutionTools({ getMindRoot });
 
 export const knowledgeBaseTools: MindosAgentTool[] = toolkit.knowledgeBaseTools;
 
 export function getToolsForMindosAgentPolicy(policy: MindosAgentPermissionPolicy): MindosAgentTool[] {
-  return toolkit.getToolsForPolicy(policy);
+  const tools = toolkit.getToolsForPolicy(policy);
+  return policy.toolScope.kbWrite !== 'none' && policy.toolScope.askUserQuestion
+    ? [...tools, ...coevolutionTools]
+    : tools;
 }
 
 /** Bounded knowledge-write tool set - skips destructive moves/deletes and delegation tools. */

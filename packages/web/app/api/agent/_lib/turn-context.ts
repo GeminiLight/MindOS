@@ -55,6 +55,8 @@ export async function recallMindosTurnKnowledge(input: {
   lastUserContent: string;
   currentFile?: string;
   attachedFiles?: string[];
+  /** Task-specific exclusions apply only to automatic recall, never explicit file context. */
+  excludePaths?: string[];
   sessionSpaces: Array<{ path: string }>;
   activeRecall?: {
     enabled?: boolean;
@@ -83,6 +85,7 @@ async function recallAutomaticKnowledgeWithReceipt(input: {
   lastUserContent: string;
   currentFile?: string;
   attachedFiles?: string[];
+  excludePaths?: string[];
   sessionSpaces: Array<{ path: string }>;
   activeRecall?: {
     enabled?: boolean;
@@ -92,15 +95,17 @@ async function recallAutomaticKnowledgeWithReceipt(input: {
   };
 }): Promise<Pick<ActiveRecallWithReceiptResult, 'items' | 'metadata'>> {
   const activeRecall = input.activeRecall ?? {};
+  const excludePaths = [...new Set([
+    ...(input.currentFile ? [input.currentFile] : []),
+    ...(input.attachedFiles ?? []),
+    ...(input.excludePaths ?? []),
+  ])];
   if (activeRecall.enabled === false) {
     const skipped = await performActiveRecallWithReceipt(input.mindRoot, input.lastUserContent, {
       maxTokens: activeRecall.maxTokens,
       maxFiles: activeRecall.maxFiles,
       minScore: activeRecall.minScore,
-      excludePaths: [
-        ...(input.currentFile ? [input.currentFile] : []),
-        ...(Array.isArray(input.attachedFiles) ? input.attachedFiles : []),
-      ],
+      excludePaths,
       preferredPaths: input.sessionSpaces.map((space) => space.path),
     }, {
       ...(input.chatSessionId ? { chatSessionId: input.chatSessionId } : {}),
@@ -115,10 +120,7 @@ async function recallAutomaticKnowledgeWithReceipt(input: {
       maxTokens: activeRecall.maxTokens,
       maxFiles: activeRecall.maxFiles,
       minScore: activeRecall.minScore,
-      excludePaths: [
-        ...(input.currentFile ? [input.currentFile] : []),
-        ...(Array.isArray(input.attachedFiles) ? input.attachedFiles : []),
-      ],
+      excludePaths,
       preferredPaths: input.sessionSpaces.map((space) => space.path),
     }, {
       ...(input.chatSessionId ? { chatSessionId: input.chatSessionId } : {}),

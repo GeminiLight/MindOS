@@ -2,6 +2,8 @@
 **/dist/
 **/.turbo/
 packages/web/.next
+packages/web/.next-echo-dev
+packages/web/.next-coevolution-prod
 .next
 _standalone/
 packages/mindos/_standalone/
@@ -110,3 +112,6 @@ packages/mindos/bin/lib/generated/
 
 # Shared distributable plugin wiring; contains no credentials.
 !plugins/mindos/.mcp.json
+
+# Isolated local coevolution preview builds
+.next-coevolution-*/

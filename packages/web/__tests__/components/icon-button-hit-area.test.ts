@@ -174,13 +174,16 @@ describe('icon button hit areas', () => {
     expect(runtimeSource).toContain('hit-target-box group/runtime');
     expect(runtimeSource).toContain('data-hit-active={open ? \'true\' : undefined}');
     expect(saveSource).toContain('hit-target-box relative z-10 h-9 w-9');
-    expect(contentSource).toContain('hit-target-box p-2 text-muted-foreground');
-    expect(composerSource).toContain('hit-target-box inline-flex h-8 w-8');
-    expect(composerSource).toContain('hit-target-box relative inline-flex h-8 w-8');
+    expect(contentSource).toMatch(/hit-target-box inline-flex min-h-11 min-w-11[^\"']*p-2 text-muted-foreground/);
+    expect(composerSource).toContain('hit-target-box inline-flex h-11 w-11');
+    expect(composerSource).toContain('md:h-8 md:w-8');
+    expect(composerSource).toContain('hit-target-box relative inline-flex h-11 w-11');
     expect(contentSource).toContain('hit-target-box flex w-full items-center gap-2.5 px-3 py-2');
     expect(modeSource).toContain('AskOptionCapsule');
-    expect(optionCapsuleSource).toContain('hit-target-box relative z-10 inline-flex min-h-6');
-    expect(providerSource).toContain('hit-target-box relative z-10 inline-flex min-h-6');
+    expect(optionCapsuleSource).toContain('hit-target-box relative z-10 inline-flex min-h-11');
+    expect(optionCapsuleSource).toContain('md:min-h-6');
+    expect(providerSource).toContain('hit-target-box relative z-10 inline-flex min-h-11');
+    expect(providerSource).toContain('md:min-h-6');
   });
 
   it('keeps wiki home quick links and space cards on rectangular hit targets', () => {
@@ -191,13 +194,13 @@ describe('icon button hit areas', () => {
     const syncSource = readSource('components/SyncStatusBar.tsx');
 
     expect(source).toContain('hit-target-box flex-1 flex items-center gap-3');
-    expect(source).toContain('hit-target-box inline-flex items-center gap-2 px-4 py-2.5');
-    expect(source).toContain('hit-target-box inline-flex items-center gap-2 px-3.5 py-2');
+    expect(source).toMatch(/hit-target-box inline-flex min-h-11[^\"']*items-center gap-2[^\"']*px-4 py-2\.5/);
+    expect(source).toContain('hit-target-box inline-flex min-h-11 min-w-0 flex-1 items-center gap-2 px-3 py-2');
     expect(source).toContain('hit-target-box border-transparent hover:-translate-y-0.5');
     expect(inboxSource).toContain('hit-target-box flex items-center gap-1.5 text-xs font-medium text-muted-foreground px-2 py-1');
     expect(inboxSource).toContain('hit-target-box flex items-center gap-1.5 text-xs font-medium text-[var(--amber)] px-2.5 py-1');
     expect(inboxSource).toContain('hit-target-box group flex items-center gap-3');
-    expect(changesSource).toContain('hit-target-box inline-flex items-center px-2.5 py-1');
+    expect(changesSource).toContain('hit-target-box inline-flex min-h-11 min-w-11 items-center justify-center');
     expect(fabSource).toContain('hit-target-box');
     expect(syncSource).toContain('hit-target-box flex min-h-7');
   });

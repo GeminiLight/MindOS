@@ -24,7 +24,7 @@ function readJson<T>(relativePath: string): T {
 function listFiles(dir: string): string[] {
   const out: string[] = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (ignoredDirs.has(entry.name)) continue;
+    if (ignoredDirs.has(entry.name) || entry.name.startsWith('.next-')) continue;
     const abs = join(dir, entry.name);
     if (entry.isDirectory()) {
       out.push(...listFiles(abs));

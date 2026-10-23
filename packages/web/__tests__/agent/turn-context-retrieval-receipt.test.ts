@@ -20,6 +20,22 @@ describe('turn context retrieval receipt', () => {
     recallMock.mockReset();
   });
 
+  it.each([true, false])('merges task exclusions only into automatic recall, preserving explicit attachments (enabled=%s)', async enabled => {
+    recallMock.mockResolvedValue({ items: [], metadata: { retrievalSelectedAssetIds: [], retrievalOutcome: enabled ? 'empty' : 'skipped' } });
+    const attachedFiles = ['methods/rejected.md', 'explicit.md'];
+    const input = {
+      mindRoot: '/mock/mind', lastUserContent: 'Use my current task standard',
+      currentFile: 'current.md', attachedFiles, sessionSpaces: [],
+      excludePaths: ['methods/adjusted.md', 'methods/rejected.md'],
+      activeRecall: { enabled },
+    };
+    await recallMindosTurnKnowledgeWithReceipt(input);
+    expect(recallMock).toHaveBeenCalledWith('/mock/mind', input.lastUserContent, expect.objectContaining({
+      excludePaths: ['current.md', 'methods/rejected.md', 'explicit.md', 'methods/adjusted.md'],
+    }), expect.any(Object));
+    expect(input.attachedFiles).toEqual(['methods/rejected.md', 'explicit.md']);
+  });
+
   it('returns recalled items and run metadata linked to the chat session receipt', async () => {
     recallMock.mockResolvedValue({
       items: [{ path: 'notes/a.md', content: 'A', score: 3 }],
