@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useId, useRef, useState } from "react";
 import type { WorkRecord } from "@geminilight/mindos/knowledge/views";
 import {
   Dialog,
@@ -18,6 +18,8 @@ import {
 } from "@/lib/views/drafts";
 import { Field, fieldClass, useDialogReturnFocus } from "./ViewPrimitives";
 import { fieldLabel, statusLabel } from "./WorkRecordView";
+import { useViewOperationScope } from "@/lib/views/hooks";
+import { Loader2 } from "lucide-react";
 import WorkPersonField from "./WorkPersonField";
 export default function WorkRecordEditor({
   data,
@@ -70,7 +72,16 @@ export default function WorkRecordEditor({
   const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const returnFocus = useDialogReturnFocus();
+  const operationScope = useViewOperationScope(data.rootId);
+  const guard = useRef(false);
+  const errorId = useId();
+  const [invalid, setInvalid] = useState(false);
   const update = (key: string, value: string) => {
+    if (guard.current || !operationScope.isCurrent()) return;
+    if (invalid && key === (people ? "name" : "title")) {
+      setInvalid(false);
+      setError("");
+    }
     const next = { ...values, [key]: value };
     setValues(next);
     if (
@@ -89,8 +100,9 @@ export default function WorkRecordEditor({
       );
   };
   const submit = async () => {
-    if (busy) return;
+    if (guard.current || !operationScope.isCurrent()) return;
     if (!values[people ? "name" : "title"]?.trim()) {
+      setInvalid(true);
       setError(
         people
           ? zh
@@ -102,6 +114,7 @@ export default function WorkRecordEditor({
       );
       return;
     }
+    guard.current = true;
     setBusy(true);
     setError("");
     try {
@@ -116,13 +129,15 @@ export default function WorkRecordEditor({
         expectedSchemaRevision: restored?.schemaRevision ?? data.schemaRevision,
         input: values,
       });
+      if (!operationScope.isCurrent()) return;
       clearViewDraft(scope);
       saved(operationId);
       close();
     } catch (e) {
-      setError((e as Error).message);
+      if (operationScope.isCurrent()) setError(e instanceof Error ? e.message : (zh ? "保存失败，请重试。" : "Save failed. Please retry."));
     } finally {
-      setBusy(false);
+      guard.current = false;
+      if (operationScope.isMounted()) setBusy(false);
     }
   };
   const renderField = (key: string) => (
@@ -159,6 +174,7 @@ export default function WorkRecordEditor({
             value={values[key]}
             onChange={(value) => update(key, value)}
             zh={zh}
+            disabled={busy || operationScope.changed}
           />
         ) : ["name", "title", "dueDate", "sourcePath"].includes(key) ? (
           <input
@@ -169,6 +185,8 @@ export default function WorkRecordEditor({
             value={values[key]}
             disabled={busy}
             required={["name", "title"].includes(key)}
+            aria-invalid={invalid && key === (people ? "name" : "title") || undefined}
+            aria-describedby={invalid && key === (people ? "name" : "title") ? errorId : undefined}
             maxLength={key === "title" ? 200 : key === "name" ? 80 : 8000}
             autoFocus={key === "name" || key === "title"}
             placeholder={
@@ -199,11 +217,12 @@ export default function WorkRecordEditor({
     <Dialog
       open
       onOpenChange={(open) => {
-        if (!open && !busy) close();
+        if (!open && !guard.current) close();
       }}
     >
       <DialogContent
         finalFocus={returnFocus}
+        showCloseButton={!busy}
         className="max-h-[90dvh] overflow-y-auto"
       >
         <DialogHeader>
@@ -235,9 +254,10 @@ export default function WorkRecordEditor({
             e.preventDefault();
             void submit();
           }}
+          aria-busy={busy}
           className="space-y-5"
         >
-          <fieldset disabled={busy} className="space-y-5">
+          <fieldset disabled={busy || operationScope.changed} className="space-y-5">
             {people ? (
               keys.map(renderField)
             ) : (
@@ -273,12 +293,15 @@ export default function WorkRecordEditor({
           )}
           {error && (
             <p
+              id={errorId}
               role="alert"
-              className="rounded-lg bg-error/5 p-3 text-sm text-error"
+              className="break-words rounded-lg bg-error/5 p-3 text-sm text-error"
             >
               {error}
             </p>
           )}
+          {operationScope.changed && <p role="alert" className="text-sm text-error">{zh ? "资料库已切换，请重新打开编辑。" : "Library changed. Reopen this editor."}</p>}
+          <p role="status" className="min-h-5 text-xs text-muted-foreground">{busy ? (zh ? "正在保存，请稍候…" : "Saving, please wait…") : zh ? "关闭后可继续编辑草稿。" : "You can close and resume this draft."}</p>
           <DialogFooter>
             <Button
               type="button"
@@ -288,7 +311,8 @@ export default function WorkRecordEditor({
             >
               {zh ? "保留草稿并关闭" : "Keep draft and close"}
             </Button>
-            <Button type="submit" variant="amber" disabled={busy}>
+            <Button type="submit" variant="amber" disabled={busy || operationScope.changed}>
+              {busy && <Loader2 size={14} className="animate-spin" aria-hidden />}
               {busy ? (zh ? "保存中…" : "Saving…") : zh ? "保存" : "Save"}
             </Button>
           </DialogFooter>

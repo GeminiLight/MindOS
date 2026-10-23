@@ -59,7 +59,9 @@ for (const { theme, width, locale, path, surface } of [
     expect(focused.shadow).toBe('none');
     // Pointer placement should not draw an amber frame around the whole
     // composer. Keyboard entry still needs a visible focus cue.
-    expect(focused.cardBorder).toBe('rgba(0, 0, 0, 0)');
+    // Wait for the existing border-color transition from initial programmatic
+    // autofocus to pointer placement; the settled appearance must be unframed.
+    await expect.poll(() => input.evaluate(element => getComputedStyle(element.closest('.ask-composer-card')!).borderTopColor)).toBe('rgba(0, 0, 0, 0)');
     await page.screenshot({ path: `/tmp/mindos-composer-pointer-${surface}-${theme}-${locale}-${width}.png`, animations: 'disabled' });
 
     await page.keyboard.press('Shift+Tab');

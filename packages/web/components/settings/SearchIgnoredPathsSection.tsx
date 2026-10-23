@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Check, Loader2, RotateCcw, Save, SearchX } from 'lucide-react';
 import type { KnowledgeTabProps } from './types';
 import { SettingCard } from './Primitives';
@@ -43,6 +43,8 @@ export function SearchIgnoredPathsSection({ data, setData, t }: KnowledgeTabProp
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
+  const guard = useRef(false);
+  const feedbackId = useId();
 
   useEffect(() => {
     if (dirty) return;
@@ -52,6 +54,8 @@ export function SearchIgnoredPathsSection({ data, setData, t }: KnowledgeTabProp
   const parsedRules = useMemo(() => parseDraft(draft), [draft]);
 
   async function save() {
+    if (guard.current || !dirty) return;
+    guard.current = true;
     setSaving(true);
     setError('');
     setSaved(false);
@@ -66,6 +70,7 @@ export function SearchIgnoredPathsSection({ data, setData, t }: KnowledgeTabProp
     } catch (err) {
       setError(err instanceof Error ? err.message : ((k.searchIgnoredSaveFailed as string) ?? 'Failed to save ignored paths'));
     } finally {
+      guard.current = false;
       setSaving(false);
     }
   }
@@ -76,7 +81,7 @@ export function SearchIgnoredPathsSection({ data, setData, t }: KnowledgeTabProp
       title={(k.searchIgnoredTitle as string) ?? 'Search Ignored Paths'}
       description={(k.searchIgnoredDesc as string) ?? 'Exclude noisy local folders from file tree, search, semantic index, and agent context.'}
     >
-      <div className="space-y-3">
+      <div className="space-y-3" aria-busy={saving}>
         <div className="flex flex-wrap gap-1.5">
           {DEFAULT_PREVIEW_RULES.map((rule) => (
             <span
@@ -100,6 +105,8 @@ export function SearchIgnoredPathsSection({ data, setData, t }: KnowledgeTabProp
           <textarea
             id="search-ignored-paths"
             value={draft}
+            disabled={saving}
+            aria-describedby={feedbackId}
             onChange={(event) => {
               setDraft(event.target.value);
               setDirty(true);
@@ -109,15 +116,15 @@ export function SearchIgnoredPathsSection({ data, setData, t }: KnowledgeTabProp
             spellCheck={false}
             rows={5}
             placeholder={(k.searchIgnoredPlaceholder as string) ?? 'Archive/\nPrivate Notes/\n*.tmp'}
-            className="min-h-[8.5rem] w-full resize-y rounded-lg border border-border bg-background px-3 py-2 font-mono text-xs leading-5 text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring"
+            className="min-h-[8.5rem] w-full resize-y rounded-lg border border-border bg-background px-3 py-2 font-mono text-xs leading-5 text-foreground outline-none placeholder:text-muted-foreground transition-colors duration-150 enabled:hover:border-foreground/25 disabled:cursor-not-allowed disabled:opacity-50"
           />
         </div>
 
-        <div className="flex items-center justify-between gap-3">
-          <p className="min-h-4 text-xs text-muted-foreground">
-            {error || (saved ? ((k.searchIgnoredSaved as string) ?? 'Saved to .mindosignore') : ((k.searchIgnoredHint as string) ?? 'Saved to .mindosignore in your knowledge base.'))}
+        <div className="flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-center">
+          <p id={feedbackId} role={error ? "alert" : "status"} className={`min-h-4 min-w-0 break-words text-xs ${error ? "text-error" : "text-muted-foreground"}`}>
+            {saving ? `${t.settings.save}…` : error || (saved ? ((k.searchIgnoredSaved as string) ?? 'Saved to .mindosignore') : ((k.searchIgnoredHint as string) ?? 'Saved to .mindosignore in your knowledge base.'))}
           </p>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 items-center justify-end gap-2">
             <button
               type="button"
               onClick={() => {
@@ -127,7 +134,7 @@ export function SearchIgnoredPathsSection({ data, setData, t }: KnowledgeTabProp
                 setError('');
               }}
               disabled={!dirty || saving}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors duration-150 enabled:hover:bg-muted/60 enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <RotateCcw size={12} />
               {(k.searchIgnoredReset as string) ?? 'Reset'}

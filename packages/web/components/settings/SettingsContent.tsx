@@ -284,8 +284,9 @@ export default function SettingsContent({
   const renderInlineSaveStatus = (size: 'compact' | 'full' = 'full') => {
     const icon = size === 'compact' ? 11 : 12;
     return (
-      <div className="flex min-h-5 flex-wrap items-center gap-1.5 text-xs" role="status" aria-live="polite">
-        {saving && <><Loader2 size={icon} className="animate-spin text-muted-foreground" />{size === 'full' && <span className="text-muted-foreground">{t.settings.save}...</span>}</>}
+      <div className="flex min-h-5 min-w-0 flex-wrap items-center gap-1.5 text-xs" data-settings-save-state={saving ? "saving" : draft.status === "pending" ? "pending" : status} role={status === "error" && !saving ? "alert" : "status"} aria-live={status === "error" && !saving ? "assertive" : "polite"}>
+        {saving && <><Loader2 size={icon} className="animate-spin text-muted-foreground" /><span className={size === "compact" ? "sr-only" : "text-muted-foreground"}>{locale === "zh" ? "正在保存…" : "Saving…"}</span></>}
+        {!saving && draft.status === "pending" && <span className="text-muted-foreground">{locale === "zh" ? "等待保存…" : "Waiting to save…"}</span>}
         {!saving && status === 'saved' && <><CheckCircle2 size={icon} className="text-success" /><span className="text-success">{t.settings.saved}</span></>}
         {!saving && status === 'error' && <>
           <AlertCircle size={icon} className="text-destructive" />

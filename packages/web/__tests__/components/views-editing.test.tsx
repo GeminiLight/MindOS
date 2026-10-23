@@ -62,3 +62,14 @@ describe('meeting preparation carries only checked available records',()=>{
   await click(c.openDraft);expect(mocked.chat).toHaveBeenCalledWith('选定材料','user',null,{newSession:true});
  });
 });
+it('connects person validation to the invalid name and clears it after correction', async () => {
+ await act(async()=>root.render(<PersonEditor rootId={rootId} viewId={viewId} kind="new" c={c} close={vi.fn()} saved={vi.fn()}/>));
+ const name=input(c.name);
+ await act(async()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(name,'   ');name.dispatchEvent(new Event('input',{bubbles:true}));});
+ await click(c.savePerson);
+ expect(name.getAttribute('aria-invalid')).toBe('true');
+ expect(document.getElementById(name.getAttribute('aria-describedby')!)?.textContent).toBeTruthy();
+ await act(async()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(name,'林悦');name.dispatchEvent(new Event('input',{bubbles:true}));});
+ expect(name.getAttribute('aria-invalid')).not.toBe('true');
+ expect(mocked.mutate).not.toHaveBeenCalled();
+});

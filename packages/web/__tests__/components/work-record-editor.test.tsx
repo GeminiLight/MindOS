@@ -175,3 +175,52 @@ it("prefills a person only for its own creation context and keeps generic drafts
     host.querySelector<HTMLInputElement>('input[name="title"]')!.value,
   ).toBe("");
 });
+
+it('blocks synchronous duplicate submissions, announces saving and allows retry after failure', async () => {
+  let reject!: (error: Error) => void;
+  const pending = new Promise((_, fail) => { reject = fail; });
+  const close = vi.fn(), saved = vi.fn();
+  await act(async () => root.render(<Editor data={data} record={record} locale="en" close={close} saved={saved} />));
+  api.request.mockReturnValueOnce(pending);
+  await act(async () => {
+    const form = host.querySelector('form')!;
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  });
+  expect(api.request.mock.calls.filter(([op]) => op === 'mutate')).toHaveLength(1);
+  expect(host.querySelector('form')!.getAttribute('aria-busy')).toBe('true');
+  expect(host.querySelector('[role=status]')?.textContent).toContain('Saving');
+  await act(async () => { reject(new Error('Offline')); });
+  expect(host.querySelector('[role=alert]')?.textContent).toContain('Offline');
+  expect(close).not.toHaveBeenCalled();
+  await submit();
+  expect(saved).toHaveBeenCalledTimes(1);
+  expect(close).toHaveBeenCalledTimes(1);
+});
+it('identifies invalid required fields and clears validation once corrected', async () => {
+  await act(async () => root.render(<Editor data={data} record={record} locale="en" close={vi.fn()} saved={vi.fn()} />));
+  const input = host.querySelector<HTMLInputElement>('input[name=title]')!;
+  await change(input, '   ');
+  await submit();
+  expect(input.getAttribute('aria-invalid')).toBe('true');
+  expect(document.getElementById(input.getAttribute('aria-describedby')!)?.textContent).toContain('task title');
+  await change(input, 'Fixed');
+  expect(input.getAttribute('aria-invalid')).not.toBe('true');
+});
+it('ignores a late save after the library changes and prevents further writes', async () => {
+  let resolve!: (value: unknown) => void;
+  const pending = new Promise(done => { resolve = done; });
+  const close = vi.fn(), saved = vi.fn();
+  await act(async () => root.render(<Editor data={data} record={record} locale="en" close={close} saved={saved} />));
+  await change(host.querySelector('input[name=title]')!, 'Keep in original library');
+  api.request.mockReturnValueOnce(pending);
+  await submit();
+  await act(async () => root.render(<Editor data={{...data, rootId:'other'}} record={record} locale="en" close={close} saved={saved} />));
+  await act(async () => resolve({}));
+  expect(saved).not.toHaveBeenCalled();
+  expect(close).not.toHaveBeenCalled();
+  expect(host.textContent).toContain('Library changed');
+  expect(readViewDraft({rootId:'root', viewId:'tasks',personId:'t1',kind:'work-record'})?.values.title).toBe('Keep in original library');
+  await submit();
+  expect(api.request.mock.calls.filter(([op]) => op === 'mutate')).toHaveLength(1);
+});

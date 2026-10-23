@@ -9,16 +9,18 @@ export function SectionLabel({ children }: { children: React.ReactNode }) {
   return <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">{children}</p>;
 }
 
+const controlClass = 'w-full min-w-0 border border-border bg-background text-foreground outline-none transition-colors duration-150 enabled:hover:border-foreground/25 aria-invalid:border-error aria-invalid:hover:border-error disabled:cursor-not-allowed disabled:opacity-50';
+
 const FieldContext = createContext<{ labelId?: string; hintId?: string; invalid?: boolean; controlId?: string }>({});
 
 export function Field({ label, hint, hintError, htmlFor, children }: { label: React.ReactNode; hint?: string; hintError?: boolean; htmlFor?: string; children: React.ReactNode }) {
   const uid = useId();
   return (
-    <FieldContext.Provider value={{ labelId: `${uid}-label`, hintId: hint ? `${uid}-hint` : undefined, invalid: hintError, controlId: htmlFor }}>
+    <FieldContext.Provider value={{ labelId: `${uid}-label`, hintId: hint ? `${uid}-hint` : undefined, invalid: hintError, controlId: htmlFor ?? `${uid}-control` }}>
     <div className="space-y-1.5">
-      <label id={`${uid}-label`} htmlFor={htmlFor} className="text-sm text-foreground font-medium">{label}</label>
+      <label id={`${uid}-label`} htmlFor={htmlFor ?? `${uid}-control`} className="text-sm text-foreground font-medium">{label}</label>
       {children}
-      {hint && <p id={`${uid}-hint`} className={`text-xs ${hintError ? 'text-destructive' : 'text-muted-foreground'}`}>{hint}</p>}
+      {hint && <p id={`${uid}-hint`} className={`text-xs ${hintError ? 'text-error' : 'text-muted-foreground'}`}>{hint}</p>}
     </div>
     </FieldContext.Provider>
   );
@@ -33,7 +35,7 @@ export function Input({ className = '', ...props }: React.InputHTMLAttributes<HT
       aria-describedby={field.hintId}
       aria-invalid={field.invalid || undefined}
       {...props}
-      className={`w-full px-3 py-2 text-sm bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 ${className}`}
+      className={`${controlClass} px-3 py-2 text-sm rounded-lg placeholder:text-muted-foreground ${className}`}
     />
   );
 }
@@ -53,30 +55,31 @@ export function PasswordInput({ value, onChange, placeholder, disabled, classNam
   const field = useContext(FieldContext);
   const [show, setShow] = useState(false);
   const sm = size === 'sm';
+  useEffect(() => { if (disabled) setShow(false); }, [disabled]);
   return (
-    <div className={`flex items-center border border-border rounded-lg bg-background focus-within:ring-1 focus-within:ring-ring overflow-hidden ${className}`}>
+    <div className={`relative min-w-0 ${className}`}>
       <input
         id={field.controlId}
         aria-labelledby={field.labelId}
         aria-describedby={field.hintId}
         aria-invalid={field.invalid || undefined}
-        type={show ? 'text' : 'password'}
+        type={show && !disabled ? 'text' : 'password'}
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder ?? '••••••••'}
         disabled={disabled}
-        className={`flex-1 bg-transparent text-foreground placeholder:text-muted-foreground outline-none disabled:opacity-50 ${
-          sm ? 'px-2.5 py-1.5 text-xs font-mono' : 'px-3 py-2 text-sm'
+        className={`${controlClass} rounded-lg pr-10 placeholder:text-muted-foreground ${
+          sm ? 'pl-2.5 py-1.5 text-xs font-mono' : 'pl-3 py-2 text-sm'
         }`}
       />
       {!!value && (
         <button
           type="button"
-          aria-pressed={show}
+          aria-pressed={show && !disabled}
           onMouseDown={e => e.preventDefault()}
           onClick={() => setShow(v => !v)}
           disabled={disabled}
-          className={`shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50 ${
+          className={`absolute right-1 top-1/2 -translate-y-1/2 rounded-md text-muted-foreground enabled:hover:bg-muted/60 enabled:hover:text-foreground transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-50 ${
             sm ? 'p-1.5' : 'p-2'
           }`}
           title={show ? 'Hide' : 'Show'}
@@ -117,6 +120,8 @@ export function Select({ value, onChange, children, className = '', disabled, si
       })),
     [children],
   );
+
+  useEffect(() => { if (disabled) setOpen(false); }, [disabled]);
 
   const selectedIdx = options.findIndex(o => o.value === value);
   const selectedLabel = options[selectedIdx]?.label ?? '';
@@ -182,7 +187,7 @@ export function Select({ value, onChange, children, className = '', disabled, si
         aria-activedescendant={open && !disabled && focusIdx >= 0 ? `${uid}-opt-${focusIdx}` : undefined}
         aria-haspopup="listbox"
         aria-expanded={open && !disabled}
-        className={`${size === 'sm' ? 'px-1.5 py-0.5 text-xs rounded cursor-pointer' : 'w-full px-3 py-2 text-sm rounded-lg'} bg-background border border-border text-foreground text-left flex items-center justify-between gap-2 outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-not-allowed`}
+        className={`${size === 'sm' ? 'px-1.5 py-0.5 text-xs rounded cursor-pointer' : 'w-full px-3 py-2 text-sm rounded-lg'} ${controlClass} [--focus-ring-offset:-1px] text-left flex items-center justify-between gap-2`}
       >
         <span className={`truncate ${selectedLabel ? '' : 'text-muted-foreground'}`}>{selectedLabel || '—'}</span>
         <ChevronDown size={size === 'sm' ? 10 : 14} className={`shrink-0 text-muted-foreground transition-transform duration-150 ${open ? 'rotate-180' : ''}`} />
@@ -195,7 +200,7 @@ export function Select({ value, onChange, children, className = '', disabled, si
           id={`${uid}-list`}
           aria-label={ariaLabel}
           aria-labelledby={ariaLabelledBy ?? (ariaLabel ? undefined : field.labelId)}
-          className={`absolute z-20 ${size === 'sm' ? 'min-w-[8rem]' : 'w-full'} mt-1 py-1 border border-border rounded-lg bg-card shadow-lg max-h-60 overflow-auto animate-in fade-in-0 zoom-in-95 duration-100`}
+          className={`absolute z-20 ${size === 'sm' ? 'min-w-[8rem]' : 'w-full'} mt-1 py-1 border border-border rounded-lg bg-card shadow-md max-h-60 overflow-auto animate-in fade-in-0 duration-100`}
         >
           {options.map((opt, idx) => {
             const isSelected = opt.value === value;
@@ -212,7 +217,7 @@ export function Select({ value, onChange, children, className = '', disabled, si
                 onClick={() => select(idx)}
                 onMouseEnter={() => setFocusIdx(idx)}
                 className={`w-full ${size === 'sm' ? 'px-2 py-1 text-xs' : 'px-3 py-1.5 text-sm'} text-left flex items-center gap-2 transition-colors ${
-                  isFocused ? 'bg-accent text-accent-foreground' : 'text-foreground'
+                  isFocused ? 'bg-muted/60 text-foreground' : 'text-foreground'
                 }`}
               >
                 <Check size={size === 'sm' ? 10 : 14} className={`shrink-0 ${isSelected ? 'text-[var(--amber)]' : 'invisible'}`} />
@@ -243,12 +248,15 @@ export function Toggle({ checked, onChange, size = 'md', disabled, title, ariaLa
   onClick?: (e: React.MouseEvent) => void;
 }) {
   const sm = size === 'sm';
+  const field = useContext(FieldContext);
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
       aria-label={ariaLabel}
+      aria-labelledby={ariaLabel ? undefined : field.labelId}
+      aria-describedby={field.hintId}
       disabled={disabled}
       title={title}
       onClick={onClick ?? (() => onChange?.(!checked))}
@@ -413,13 +421,16 @@ export function SettingRow({ label, hint, children }: {
   hint?: string;
   children: React.ReactNode;
 }) {
+  const uid = useId();
   return (
-    <div className="flex items-center justify-between gap-4">
+    <div className="flex min-w-0 items-center justify-between gap-4">
       <div className="flex-1 min-w-0">
-        <div className="text-sm text-foreground">{label}</div>
-        {hint && <div className="text-xs text-muted-foreground mt-0.5">{hint}</div>}
+        <div id={`${uid}-label`} className="text-sm text-foreground">{label}</div>
+        {hint && <div id={`${uid}-hint`} className="text-xs text-muted-foreground mt-0.5">{hint}</div>}
       </div>
-      <div className="shrink-0">{children}</div>
+      <FieldContext.Provider value={{ labelId: `${uid}-label`, hintId: hint ? `${uid}-hint` : undefined }}>
+        <div className="min-w-0 shrink-0">{children}</div>
+      </FieldContext.Provider>
     </div>
   );
 }

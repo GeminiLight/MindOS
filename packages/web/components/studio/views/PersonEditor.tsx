@@ -1,7 +1,7 @@
 'use client';
 import { useViewOperationScope } from '@/lib/views/hooks';
 import { useDialogReturnFocus } from './ViewPrimitives';
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Dialog,
@@ -88,6 +88,7 @@ export default function PersonEditor({
       },
   );
   const [error, setError] = useState('');
+  const errorId = useId();
   const [busy, setBusy] = useState(false);
   const [storage, setStorage] = useState(true);
   const [latest, setLatest] = useState<PersonDocument>();
@@ -227,7 +228,7 @@ export default function PersonEditor({
             {person?.name ? `${person.name} · ${c.draftHint}` : c.newPersonBody}
           </DialogDescription>
         </DialogHeader>
-        <form className="space-y-4" onSubmit={submit}>
+        <form aria-busy={busy} className="space-y-4" onSubmit={submit}>
           {restored && (
             <p role="status" className="text-xs text-muted-foreground">
               {c.draftRestored}
@@ -243,6 +244,8 @@ export default function PersonEditor({
                     className={fieldClass}
                     maxLength={80}
                     required
+                    aria-invalid={error === 'INVALID_INPUT' && !value('name').trim() || undefined}
+                    aria-describedby={error === 'INVALID_INPUT' ? errorId : undefined}
                     disabled={busy}
                     value={value('name')}
                     onChange={(e) => update('name', e.target.value)}
@@ -288,6 +291,8 @@ export default function PersonEditor({
                     className={fieldClass}
                     rows={4}
                     required
+                    aria-invalid={error === 'INVALID_INPUT' && !value('text').trim() || undefined}
+                    aria-describedby={error === 'INVALID_INPUT' ? errorId : undefined}
                     maxLength={kind === 'interaction' ? 8000 : 4000}
                     disabled={busy}
                     value={value('text')}
@@ -302,6 +307,8 @@ export default function PersonEditor({
                   <input
                     id={id}
                     type="date"
+                    aria-invalid={error === 'INVALID_INPUT' && !value('date') || undefined}
+                    aria-describedby={error === 'INVALID_INPUT' ? errorId : undefined}
                     className={fieldClass}
                     required
                     disabled={busy}
@@ -400,12 +407,13 @@ export default function PersonEditor({
             </section>
           ) : (
             error && (
-              <p role="alert" className="text-sm text-error">
+              <p id={errorId} role="alert" className="break-words text-sm text-error">
                 {viewErrorText(error, c)}
               </p>
             )
           )}
-          <DialogFooter className="items-center">
+          <p role="status" className="min-h-5 text-xs text-muted-foreground">{busy ? c.saving : ''}</p>
+          <DialogFooter className="sm:items-center">
             <Button
               type="button"
               variant="ghost"

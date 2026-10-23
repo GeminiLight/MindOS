@@ -189,7 +189,8 @@ export default function PeopleWorkspace({
     setMeeting(false);
     setEditor(undefined);
     setNotice('');
-  }, [rootId, personQuery]);
+  // Adding the current person to the URL is navigation metadata, not a new editor context.
+  }, [rootId, viewId, summary?.id]);
   useEffect(() => {
     if (
       !person ||

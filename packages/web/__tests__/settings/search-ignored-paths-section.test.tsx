@@ -75,3 +75,22 @@ describe('SearchIgnoredPathsSection', () => {
     host.remove();
   });
 });
+it('protects an explicit save from duplicate clicks and preserves the draft after failure', async () => {
+  let reject!: (error: Error) => void;
+  mocks.apiFetch.mockReset().mockReturnValueOnce(new Promise((_, fail) => { reject = fail; }));
+  const host = document.createElement('div'); document.body.append(host);
+  const root = createRoot(host);
+  try {
+    await act(async()=>root.render(<SearchIgnoredPathsSection data={makeSettings()} setData={vi.fn()} t={messages.en} />));
+    const area=host.querySelector('textarea')!;
+    await act(async()=>setTextareaValue(area,'Archive\nBuild'));
+    const save=Array.from(host.querySelectorAll('button')).find(b=>b.textContent?.includes('Save'))!;
+    await act(async()=>{save.click();save.click();});
+    expect(mocks.apiFetch).toHaveBeenCalledTimes(1);
+    expect(area.disabled).toBe(true);
+    await act(async()=>reject(new Error('Disk unavailable')));
+    expect(area.disabled).toBe(false);
+    expect(area.value).toBe('Archive\nBuild');
+    expect(host.querySelector('[role=alert]')?.textContent).toContain('Disk unavailable');
+  } finally { await act(async()=>root.unmount());host.remove(); }
+});

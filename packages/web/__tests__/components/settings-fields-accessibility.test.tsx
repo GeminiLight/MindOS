@@ -33,3 +33,35 @@ it('announces and selects the keyboard-highlighted option and respects disabled 
   await act(async () => root.render(view(true)));
   expect(button.disabled).toBe(true);
 });
+
+it('closes a select permanently when disabled while open', async () => {
+  const view = (disabled = false) => <Select value="a" disabled={disabled}><option value="a">A</option></Select>;
+  await act(async () => root.render(view()));
+  await act(async () => host.querySelector('button')!.click());
+  expect(host.querySelector('[role=listbox]')).not.toBeNull();
+  await act(async () => root.render(view(true)));
+  await act(async () => root.render(view(false)));
+  expect(host.querySelector('[role=listbox]')).toBeNull();
+});
+it('resets secret visibility after a control becomes disabled', async () => {
+  const view = (disabled = false) => <PasswordInput value="secret" onChange={() => {}} disabled={disabled} />;
+  await act(async () => root.render(view()));
+  await act(async () => host.querySelector('button')!.click());
+  expect(host.querySelector('input')!.type).toBe('text');
+  await act(async () => root.render(view(true)));
+  expect(host.querySelector('input')!.type).toBe('password');
+  expect(host.querySelector('button')!.disabled).toBe(true);
+});
+it('gives generated fields an explicit label target even without htmlFor', async () => {
+  await act(async () => root.render(<Field label="Endpoint"><Input /></Field>));
+  const label = host.querySelector('label')!;
+  expect(label.htmlFor).toBeTruthy();
+  expect(document.getElementById(label.htmlFor)).toBe(host.querySelector('input'));
+});
+it('names inline settings controls from their row and describes the hint', async () => {
+  const { SettingRow, Toggle } = await import('@/components/settings/Primitives');
+  await act(async () => root.render(<SettingRow label="Enable feature" hint="Available locally"><Toggle checked={false} /></SettingRow>));
+  const control = host.querySelector('[role=switch]')!;
+  expect(document.getElementById(control.getAttribute('aria-labelledby')!)?.textContent).toBe('Enable feature');
+  expect(document.getElementById(control.getAttribute('aria-describedby')!)?.textContent).toBe('Available locally');
+});

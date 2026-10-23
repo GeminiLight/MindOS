@@ -13,12 +13,14 @@ export default function WorkPersonField({
   value,
   onChange,
   zh,
+  disabled = false,
 }: {
   id: string;
   rootId: string;
   value: string;
   onChange: (value: string) => void;
   zh: boolean;
+  disabled?: boolean;
 }) {
   const [collections, setCollections] = useState<Collection[]>([]);
   const [collectionId, setCollectionId] = useState(value.split("/")[0] || "");
@@ -84,7 +86,7 @@ export default function WorkPersonField({
         id={id}
         className={fieldClass}
         value={collectionId}
-        disabled={loading}
+        disabled={loading || disabled}
         onChange={(e) => setCollectionId(e.target.value)}
         aria-label={zh ? "人物资料夹" : "People folder"}
       >
@@ -113,7 +115,7 @@ export default function WorkPersonField({
           aria-label={zh ? "选择人物" : "Choose a person"}
           className={fieldClass}
           value={value}
-          disabled={loading}
+          disabled={loading || disabled}
           onChange={(e) => onChange(e.target.value)}
         >
           <option value="">{zh ? "不关联人物" : "No linked person"}</option>
@@ -142,6 +144,7 @@ export default function WorkPersonField({
           <Button
             type="button"
             variant="ghost"
+            disabled={disabled || loading}
             onClick={() => setRetry((n) => n + 1)}
           >
             {zh ? "重试" : "Retry"}
