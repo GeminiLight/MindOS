@@ -1,10 +1,14 @@
 import { expect, test } from '@playwright/test';
+import { pageFixture } from '../helpers/pages-fixture';
 
 for (const { theme, width, locale, path, surface } of [
   { theme: 'light', width: 1440, locale: 'en', path: '/', surface: 'home' },
   { theme: 'dark', width: 390, locale: 'zh', path: '/', surface: 'home' },
 ] as const) {
-  test(`${surface} composer stays readable and calm in ${theme} ${locale} at ${width}px`, async ({ page, context, baseURL }) => {
+  test(`${surface} composer stays readable and calm in ${theme} ${locale} at ${width}px`, async ({ page, context, baseURL, request }) => {
+    // A disposable library starts empty and renders onboarding instead of Home.
+    // Seed only inside the runner's identity-checked synthetic library.
+    if (process.env.MINDOS_VIEWS_ISOLATED === '1') await pageFixture(request);
     await page.setViewportSize({ width, height: 900 });
     await context.addCookies([{ name: 'locale', value: locale, url: baseURL! }]);
     await page.addInitScript(({ themeName, localeName }) => {

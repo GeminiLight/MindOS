@@ -804,6 +804,19 @@ body {
   scroll-margin: 8px;
 }
 
+/* Text entry owns one close edge. Textareas also match :focus-visible after a
+   pointer click; an offset outline plus a utility ring painted two large frames.
+   Keep the 2px keyboard cue against the field, preserving geometry, ordinary
+   shadows and invalid borders. Composite composers override the outline below. */
+:is(input:not(:is([type="hidden"], [type="checkbox"], [type="radio"],
+    [type="range"], [type="color"], [type="file"], [type="button"],
+    [type="submit"], [type="reset"])), textarea):focus-visible:not(:disabled) {
+  outline: 2px solid var(--ring);
+  outline-offset: -1px;
+  --tw-ring-shadow: 0 0 transparent;
+  --tw-ring-offset-shadow: 0 0 transparent;
+}
+
 /* Composer cards and sidebar search containers supply their own softer,
    rounded focus cues. Scope the override because the global selector is
    stronger than a utility class. */
