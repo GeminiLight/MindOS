@@ -134,7 +134,7 @@ export default function AskOptionCapsule<T extends string>({
         items[index]?.focus();
       }}
       className={cn(
-        'fixed z-50 overflow-y-auto overscroll-contain pointer-events-auto rounded-lg border border-border bg-card py-1 shadow-lg animate-in fade-in-0 zoom-in-95 duration-100',
+        'fixed z-50 overflow-y-auto overscroll-contain pointer-events-auto rounded-lg border border-border bg-card py-1 shadow-md animate-in fade-in-0 duration-100',
         dropdownWidthClassName,
       )}
       style={{
@@ -153,7 +153,7 @@ export default function AskOptionCapsule<T extends string>({
       {children ? (
         children({ close })
       ) : (
-        <div className="py-1">
+        <div className="px-1 py-1">
           {(options ?? []).map((option) => {
             const selected = value === option.value;
             return (
@@ -169,10 +169,10 @@ export default function AskOptionCapsule<T extends string>({
                   close();
                 }}
                 className={cn(
-                  'flex w-full items-start gap-2.5 px-3 py-2 text-left text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                  'flex w-full items-start gap-2.5 rounded-md px-3 py-2 text-left text-xs transition-colors duration-150 aria-selected:bg-[var(--amber-subtle)]',
                   option.disabled
                     ? 'cursor-not-allowed opacity-45'
-                    : 'hover:bg-muted',
+                    : 'hover:bg-muted/60 active:bg-muted',
                 )}
               >
                 {option.icon && (

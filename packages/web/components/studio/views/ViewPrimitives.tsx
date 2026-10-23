@@ -24,7 +24,7 @@ export function useDialogReturnFocus() {
   );
 }
 export const fieldClass =
-  'w-full min-w-0 rounded-md border border-input bg-background px-3 py-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50';
+  'w-full min-w-0 rounded-md border border-input bg-background px-3 py-2.5 text-sm outline-none transition-colors duration-150 hover:border-foreground/25 aria-invalid:border-error aria-invalid:hover:border-error disabled:hover:border-input disabled:cursor-not-allowed disabled:opacity-50';
 export function Field({
   label,
   hint,

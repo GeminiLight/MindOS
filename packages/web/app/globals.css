@@ -736,7 +736,7 @@ body {
       inset 0 0 0 var(--hit-target-border-width, 0px) var(--hit-target-border, transparent);
     transition: background-color 75ms ease, box-shadow 75ms ease, border-color 75ms ease;
   }
-  .hit-target-box:hover::before {
+  .hit-target-box:where(:not(:disabled):not([aria-disabled="true"])):hover::before {
     border-color: var(--hit-target-hover-outline, var(--hit-target-outline, transparent));
     background: var(--hit-target-hover-bg, var(--muted));
     box-shadow:
@@ -802,19 +802,39 @@ body {
   outline: var(--focus-ring-width, 2px) solid var(--ring);
   outline-offset: var(--focus-ring-offset, 2px);
   scroll-margin: 8px;
+  /* The outline owns focus. Local utility rings must not add another frame. */
+  --tw-ring-shadow: 0 0 transparent;
+  --tw-ring-offset-shadow: 0 0 transparent;
 }
 
-/* Text entry owns one close edge. Textareas also match :focus-visible after a
+/* Text entry and native selects share one close edge. Textareas also match :focus-visible after a
    pointer click; an offset outline plus a utility ring painted two large frames.
    Keep the 2px keyboard cue against the field, preserving geometry, ordinary
    shadows and invalid borders. Composite composers override the outline below. */
 :is(input:not(:is([type="hidden"], [type="checkbox"], [type="radio"],
     [type="range"], [type="color"], [type="file"], [type="button"],
-    [type="submit"], [type="reset"])), textarea):focus-visible:not(:disabled) {
+    [type="submit"], [type="reset"])), textarea, select):focus-visible:not(:disabled) {
   outline: 2px solid var(--ring);
   outline-offset: -1px;
   --tw-ring-shadow: 0 0 transparent;
   --tw-ring-offset-shadow: 0 0 transparent;
+}
+
+/* The visible capsule may be smaller and rounder than its touch target. Paint
+   keyboard focus on that same surface, keeping the full hit area unchanged. */
+.hit-target-box:focus-visible:not(:disabled) {
+  outline: none;
+}
+.hit-target-box:focus-visible:not(:disabled)::before {
+  outline: var(--focus-ring-width, 2px) solid var(--ring);
+  outline-offset: var(--focus-ring-offset, 2px);
+}
+
+/* Menu rows meet the popup edge; keep their focus inside instead of clipping
+   an outside frame or stacking an inset utility ring with an outline. */
+:is([role="option"], [role="menuitem"], [role="menuitemcheckbox"],
+    [role="menuitemradio"]):focus-visible:not(:disabled) {
+  outline-offset: -2px;
 }
 
 /* Composer cards and sidebar search containers supply their own softer,
@@ -845,6 +865,13 @@ body {
 /* A review reminder stays pending while the user is reading in Home focus;
    it returns on exit instead of floating over the conversation. */
 #main-content:has([data-home-focus-shell]) [data-changes-banner] {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Pending review must not cover a modal's actions. Hiding only the presentation
+   preserves unread/dismissal state and the existing activity-notice timeout. */
+body:has(:is([role="dialog"], [role="alertdialog"])[aria-modal="true"]) [data-changes-banner] {
   visibility: hidden;
   pointer-events: none;
 }

@@ -551,7 +551,7 @@ export default function RuntimeIconSwitcher({
       ref={dropdownRef}
       role="listbox"
       aria-label={p.acpSelectAgent ?? 'Select agent'}
-      className={`${FLOATING_SURFACE_CLASS} isolate pointer-events-auto max-h-[min(420px,calc(100vh-24px))] w-[min(320px,calc(100vw-24px))] overflow-y-auto py-1.5 shadow-xl shadow-foreground/10`}
+      className={`${FLOATING_SURFACE_CLASS} isolate pointer-events-auto max-h-[min(420px,calc(100vh-24px))] w-[min(320px,calc(100vw-24px))] overflow-y-auto py-1.5 shadow-md`}
       style={dropdownStyle}
     >
       <div className="flex items-center justify-between gap-2 px-3 pb-1.5 pt-1">
@@ -650,7 +650,7 @@ export default function RuntimeIconSwitcher({
             title={tooltip}
             disabled={optionDisabled}
             onClick={() => handleSelect(option)}
-            className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left opacity-100 transition-colors duration-75 hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left opacity-100 transition-colors duration-150 enabled:hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <RuntimeMark option={option} small />
             <span className={`min-w-0 flex-1 truncate text-xs font-medium ${optionDisabled ? 'text-muted-foreground' : 'text-foreground'}`}>
@@ -707,7 +707,7 @@ export default function RuntimeIconSwitcher({
                     title={tooltip}
                     disabled={optionDisabled}
                     onClick={() => handleSelect(option)}
-                    className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left opacity-100 transition-colors duration-75 hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left opacity-100 transition-colors duration-150 enabled:hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <RuntimeMark option={option} small />
                     <span className={`min-w-0 flex-1 truncate text-xs font-medium ${optionDisabled ? 'text-muted-foreground' : 'text-foreground'}`}>

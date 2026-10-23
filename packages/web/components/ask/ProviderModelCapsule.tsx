@@ -441,7 +441,7 @@ export default function ProviderModelCapsule({
       <div
         ref={flyoutRef}
         style={flyoutStyle}
-        className="w-[220px] rounded-lg border border-border bg-card shadow-lg py-1 animate-in fade-in-0 zoom-in-95 duration-100"
+        className="w-[220px] rounded-lg border border-border bg-card shadow-md py-1 animate-in fade-in-0 duration-100"
         onMouseEnter={cancelCloseTimer}
         onMouseLeave={startCloseTimer}
       >
@@ -534,7 +534,7 @@ export default function ProviderModelCapsule({
         ref={providerPanelRef}
         role="listbox"
         aria-label="Model"
-        className="w-full rounded-lg border border-border bg-card shadow-lg py-1 animate-in fade-in-0 zoom-in-95 duration-100"
+        className="w-full rounded-lg border border-border bg-card shadow-md py-1 animate-in fade-in-0 duration-100"
         style={{ maxHeight: '70vh', overflowY: 'auto' }}
       >
         <div className="border-b border-border/40 px-3 py-2">
