@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <a href="https://tianfuwang.tech/MindOS"><img src="https://img.shields.io/badge/Website-MindOS-0ea5e9.svg?style=for-the-badge" alt="Website"></a>
+  <a href="https://mindos.you/"><img src="https://img.shields.io/badge/Website-MindOS-0ea5e9.svg?style=for-the-badge" alt="Website"></a>
   <a href="https://www.npmjs.com/package/@geminilight/mindos"><img src="https://img.shields.io/npm/v/@geminilight/mindos.svg?style=for-the-badge&color=6366f1" alt="npm version"></a>
   <a href="#wechat"><img src="https://img.shields.io/badge/WeChat-群聊-07C160.svg?style=for-the-badge&logo=wechat&logoColor=white" alt="WeChat"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-64748b.svg?style=for-the-badge" alt="MIT License"></a>
@@ -141,7 +141,7 @@ Agent 记忆锁在黑箱中，推理难以审查，错误也难以纠正。**Min
 
 **方式 A：桌面客户端（macOS / Windows / Linux）**
 
-从[官网](https://tianfuwang.tech/MindOS/#quickstart)或 [GitHub Releases](https://github.com/GeminiLight/MindOS/releases/latest) 下载安装包，双击安装，无需终端。
+从[官网](https://mindos.you/#quickstart)或 [GitHub Releases](https://github.com/GeminiLight/MindOS/releases/latest) 下载安装包，双击安装，无需终端。
 
 **方式 B：npm 安装**
 
