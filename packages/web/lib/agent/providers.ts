@@ -28,6 +28,8 @@ export interface ProviderPreset {
   description?: string; // Helper text for settings (e.g., "China region version")
   descriptionZh?: string; // Chinese helper text
   defaultModel: string;
+  /** Curated ordinary model choices, in recommended order. Saved IDs remain valid. */
+  registryModels?: string[];
   /** If ProviderId differs from pi-ai's KnownProvider (e.g. deepseek → openai) */
   piProviderOverride?: KnownProvider;
   /** DeepSeek/Ollama need a fixed baseUrl since they're not native pi-ai providers */
@@ -191,7 +193,8 @@ export const PROVIDER_PRESETS: Record<ProviderId, ProviderPreset> = {
     name: 'MiniMax',
     nameZh: 'MiniMax (国际版)',
     shortLabel: 'MiniMax',
-    defaultModel: 'MiniMax-M3',
+    defaultModel: 'MiniMax-M3.1-Flash',
+    registryModels: ['MiniMax-M3.1-Flash', 'MiniMax-M3'],
     supportsBaseUrl: false,
     supportsThinking: true,
     supportsListModels: false,
@@ -204,7 +207,8 @@ export const PROVIDER_PRESETS: Record<ProviderId, ProviderPreset> = {
     shortLabel: 'MiniMax-CN',
     description: 'China region version',
     descriptionZh: '中国区版本',
-    defaultModel: 'MiniMax-M3',
+    defaultModel: 'MiniMax-M3.1-Flash',
+    registryModels: ['MiniMax-M3.1-Flash', 'MiniMax-M3'],
     supportsBaseUrl: false,
     supportsThinking: true,
     supportsListModels: false,
@@ -369,6 +373,10 @@ export function getApiKeyFromEnv(id: ProviderId): string | undefined {
 export function getDefaultBaseUrl(id: ProviderId): string {
   const preset = PROVIDER_PRESETS[id];
   if (preset.fixedBaseUrl) return preset.fixedBaseUrl;
+  // The ESM Pi catalog is not always synchronously loadable during fallback.
+  if (id === 'minimax') return 'https://api.minimax.io/anthropic';
+  if (id === 'minimax-cn') return 'https://api.minimaxi.com/anthropic';
+  if (id === 'openrouter') return 'https://openrouter.ai/api/v1';
   try {
     const models = loadPiAiRuntime()?.getModels?.(toPiProvider(id) as KnownProvider);
     return models?.[0]?.baseUrl ?? '';

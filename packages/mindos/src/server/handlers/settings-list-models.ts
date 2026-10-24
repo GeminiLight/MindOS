@@ -91,6 +91,11 @@ async function listModels(input: {
   baseUrl: string;
   services: SettingsListModelsServices;
 }): Promise<MindosServerResponse<{ ok: true; models: string[] } | { ok: false; error: string }>> {
+  if ((input.provider === 'minimax' || input.provider === 'minimax-cn')
+    && input.services.supportsListModels?.(input.provider) === false
+    && (!input.baseUrl || input.baseUrl === input.services.getDefaultBaseUrl?.(input.provider))) {
+    return json({ ok: true, models: await getRegistryModels(input.provider, input.services) });
+  }
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), input.services.timeoutMs ?? DEFAULT_TIMEOUT_MS);
   try {
@@ -115,7 +120,18 @@ async function fetchModels(
 ): Promise<string[]> {
   const apiType = services.getProviderApiType?.(provider) ?? 'openai-completions';
   const endpoints = resolveListModelsUrls(provider, baseUrl, apiType, services);
-  return await fetchCompatModels(endpoints, apiKey, apiType, signal, services);
+  const models = await fetchCompatModels(endpoints, apiKey, apiType, signal, services);
+  if (provider === 'openrouter'
+    && (!baseUrl || baseUrl.replace(/\/+$/, '') === 'https://openrouter.ai/api/v1')) {
+    const current = ['minimax/minimax-m3.1-flash:free', 'minimax/minimax-m3'];
+    // Filter only the ordinary text picker. Saved IDs and custom endpoints are
+    // still accepted by model resolution; this does not rewrite request IDs.
+    return models.filter(id => !/^minimax\/minimax-(?:m\d|01)/i.test(id) || current.includes(id))
+      .sort((a, b) => current.includes(a) && current.includes(b)
+        ? current.indexOf(a) - current.indexOf(b)
+        : a < b ? -1 : a > b ? 1 : 0);
+  }
+  return models;
 }
 
 function resolveListModelsUrls(provider: string, baseUrl: string, apiType: string, services: SettingsListModelsServices): string[] {
@@ -177,7 +193,8 @@ async function fetchCompatModels(
 }
 
 async function getRegistryModels(provider: string, services: SettingsListModelsServices): Promise<string[]> {
-  return (await services.getRegistryModels?.(provider) ?? []).filter(Boolean).sort();
+  const models = (await services.getRegistryModels?.(provider) ?? []).filter(Boolean);
+  return provider === 'minimax' || provider === 'minimax-cn' ? models : models.sort();
 }
 
 async function defaultFetch(input: string, init: { headers: Record<string, string>; signal: AbortSignal }) {

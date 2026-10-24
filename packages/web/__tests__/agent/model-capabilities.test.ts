@@ -18,6 +18,17 @@ function provider(overrides: Partial<Provider> = {}): Provider {
 }
 
 describe('resolveModelCapabilities', () => {
+  it.each(['minimax', 'minimax-cn'])('resolves current %s caps while preserving user limits', (protocol) => {
+    const caps = resolveModelCapabilities({ protocol, baseUrl: '', modelId: 'MiniMax-M3.1-Flash' });
+    expect(caps).toMatchObject({ contextWindow: 1_000_000, maxTokens: 524_288, reasoning: true, source: 'catalog' });
+    const overridden = resolveModelCapabilities({
+      protocol, baseUrl: '', modelId: 'MiniMax-M3.1-Flash',
+      providerEntry: provider({ contextWindow: 64_000, maxTokens: 4_096 }),
+    });
+    expect(overridden).toMatchObject({ contextWindow: 64_000, maxTokens: 4_096, source: 'user' });
+    expect(resolveModelCapabilities({ protocol: 'openai', baseUrl: '', modelId: 'MiniMax-M3.1-Flash' }).source).toBe('fallback');
+  });
+
   it('lets a provider-entry per-model override beat provider defaults, catalog, pi-ai, and fallback', () => {
     const caps = resolveModelCapabilities({
       providerEntry: provider({

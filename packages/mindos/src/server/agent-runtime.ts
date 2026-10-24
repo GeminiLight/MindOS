@@ -7,6 +7,8 @@ import { createMindosAgentPermissionPolicy } from '../agent/mindos-pi/permission
 import { runWithMindosKbExtensionHost, runWithKbPermissionPolicy } from '../agent/mindos-pi/extension/kb-extension.js';
 import { buildMindosSystemPrompt } from '../agent/prompt/index.js';
 import { nativeImport } from '../foundation/native-import.js';
+import { applyMiniMaxModelCompatibility } from '../agent/mindos-pi/minimax-model.js';
+import { MINDOS_PROVIDER_PRESETS } from './provider-settings.js';
 import { getSkillRootsFromRuntime, readRuntimeSettings, type MindosRuntimeSettings } from './runtime.js';
 import { createStandaloneAutomationKbToolkit } from './automations/standalone-kb-host.js';
 type PiProvidersModule = typeof import('@earendil-works/pi-ai/providers/all');
@@ -53,17 +55,27 @@ async function resolveStandaloneModel(settings: MindosRuntimeSettings, modelOver
   const provider = selectedProvider(settings, providerOverride);
   const protocol = provider.protocol;
   const runtimeProvider = PROVIDER_ALIASES[protocol] ?? protocol;
-  const modelName = modelOverride?.trim() || provider.model;
+  const miniMaxPreset = protocol === 'minimax' || protocol === 'minimax-cn' ? MINDOS_PROVIDER_PRESETS[protocol] : undefined;
+  const modelName = modelOverride?.trim() || provider.model || miniMaxPreset?.defaultModel;
   if (!modelName) throw new Error('Agent needs a configured model in ~/.mindos/config.json.');
-  const apiKey = provider.apiKey || firstEnvironmentValue(PROVIDER_ENV_KEYS[protocol] ?? []);
+  const apiKey = provider.apiKey || firstEnvironmentValue(miniMaxPreset?.envKeys ?? PROVIDER_ENV_KEYS[protocol] ?? []);
   if (!apiKey && !isKeylessProvider(protocol)) {
     throw new Error(`Agent provider ${protocol} is missing an API key.`);
   }
   const providers = await nativeImport<PiProvidersModule>('@earendil-works/pi-ai/providers/all');
   const builtin = providers.builtinModels().getModel(runtimeProvider, modelName);
-  const model = builtin
+  const resolved = builtin
     ? applyBaseUrl(builtin as unknown as Record<string, unknown>, provider.baseUrl)
-    : fallbackModel(protocol, runtimeProvider, modelName, provider.baseUrl);
+    : {
+      ...fallbackModel(protocol, runtimeProvider, modelName, provider.baseUrl),
+      ...(miniMaxPreset && (modelName === 'MiniMax-M3.1-Flash' || modelName === 'MiniMax-M3') ? {
+        api: miniMaxPreset.apiType,
+        baseUrl: provider.baseUrl || miniMaxPreset.defaultBaseUrl,
+      } : {}),
+      ...(protocol === 'openrouter' && modelName === 'minimax/minimax-m3.1-flash:free' && !provider.baseUrl
+        ? { baseUrl: 'https://openrouter.ai/api/v1' } : {}),
+    };
+  const model = applyMiniMaxModelCompatibility(resolved, protocol);
   return {
     model,
     modelName,
