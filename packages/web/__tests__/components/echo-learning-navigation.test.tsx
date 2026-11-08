@@ -19,7 +19,7 @@ it('opens the saved learning record from an insight without starting duplicate r
   await act(async () => root.render(<EchoLearningStartButton cardId="real-insight" enabled />));
   await act(async () => { host.querySelector('button')!.click(); host.querySelector('button')!.click(); });
   expect(fetch).toHaveBeenCalledTimes(1);
-  expect(nav.push).toHaveBeenCalledWith('/echo/learning?learning=' + id);
+  await vi.waitFor(() => expect(nav.push).toHaveBeenCalledWith('/echo/learning?learning=' + id));
  } finally { await act(async () => root.unmount()); host.remove(); }
 });
 it('preserves the selected record and independent practice in legacy bookmarks', async () => {

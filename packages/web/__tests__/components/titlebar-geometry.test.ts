@@ -38,6 +38,8 @@ const VIEWPORT_HEIGHT_ALLOWLIST: Record<string, string> = {
     'fixed rail intentionally spans the full viewport — its logo row lives inside the titlebar row',
   'components/MobileNavigationDrawer.tsx':
     'mobile drawer is a fixed overlay that intentionally spans the full viewport',
+  'components/studio/context/ContextHandoff.tsx':
+    'modal handoff sheet is a fixed top-0 overlay that intentionally covers the titlebar row',
 };
 
 function walk(dir: string): string[] {

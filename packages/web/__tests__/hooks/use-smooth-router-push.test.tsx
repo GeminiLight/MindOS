@@ -94,6 +94,22 @@ describe('useSmoothRouterPush', () => {
     expect(mockPush).toHaveBeenCalledTimes(1);
     expect(mockPush).toHaveBeenCalledWith('/second');
   });
+
+  it('forwards scroll:false and omits options when none are given', () => {
+    let smoothPush!: ReturnType<typeof useSmoothRouterPush>;
+    function OptionsHarness() { smoothPush = useSmoothRouterPush(); return null; }
+    act(() => { root.render(<OptionsHarness />); });
+
+    act(() => { smoothPush('/context?mode=files', { scroll: false }); });
+    act(() => { flushRaf(); });
+    act(() => { smoothPush('/plain'); });
+    act(() => { flushRaf(); });
+
+    expect(mockPush.mock.calls).toEqual([
+      ['/context?mode=files', { scroll: false }],
+      ['/plain'],
+    ]);
+  });
 });
 
 describe('shouldHandleSmoothNavigation', () => {

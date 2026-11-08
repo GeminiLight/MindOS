@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 
+type SmoothPushOptions = { scroll?: boolean };
+
 type MouseNavigationEvent = {
   button: number;
   defaultPrevented: boolean;
@@ -37,7 +39,7 @@ function useRouterOrNull() {
   }
 }
 
-export function useSmoothRouterPush(): (href: string) => void {
+export function useSmoothRouterPush(): (href: string, options?: SmoothPushOptions) => void {
   const router = useRouterOrNull();
   const [, startTransition] = useTransition();
   const frameRef = useRef<number | null>(null);
@@ -46,11 +48,12 @@ export function useSmoothRouterPush(): (href: string) => void {
     if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
   }, []);
 
-  return useCallback((href: string) => {
+  return useCallback((href: string, options?: SmoothPushOptions) => {
     const run = () => {
       startTransition(() => {
         if (router) {
-          router.push(href);
+          if (options) router.push(href, options);
+          else router.push(href);
         } else if (typeof window !== 'undefined') {
           window.location.assign(href);
         }

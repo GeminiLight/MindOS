@@ -1,14 +1,14 @@
 'use client';
-import { useRouter } from 'next/navigation';
 import { useId, useRef, useState } from 'react';
 import { ArrowUpRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 import { useLocale } from '@/lib/stores/locale-store';
 import { announceLearningUpdate, learningErrorMessage, learningRequest } from './learning-client';
 
 export default function EchoLearningStartButton({ cardId, enabled }: { cardId: string; enabled: boolean }) {
   const { t } = useLocale();
-  const router = useRouter();
+  const push = useSmoothRouterPush();
   const p = t.echoLearning;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -23,7 +23,7 @@ export default function EchoLearningStartButton({ cardId, enabled }: { cardId: s
       announceLearningUpdate(loop, true);
       const panel = document.getElementById('echo-learning');
       if (panel) panel.scrollIntoView({ block: 'start' });
-      else router.push('/echo/learning?learning=' + encodeURIComponent(loop.id));
+      else push('/echo/learning?learning=' + encodeURIComponent(loop.id));
     } catch (err) { setError(learningErrorMessage(err, p)); }
     finally { inFlight.current = false; setBusy(false); }
   }

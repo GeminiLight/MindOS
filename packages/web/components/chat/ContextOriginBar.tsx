@@ -1,7 +1,8 @@
 'use client';
 import { ArrowLeft, FileText, FolderOpen, ChevronDown } from 'lucide-react';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 import { useLocale } from '@/lib/stores/locale-store';
 import { useViewsIndex } from '@/lib/views/hooks';
 import { contextHref } from '@/lib/context-work/continuity';
@@ -12,7 +13,7 @@ export default function ContextOriginBar({ origin, close }: { origin: HandoffOri
   const { locale } = useLocale();
   const zh = locale === 'zh';
   const pathname = usePathname();
-  const router = useRouter();
+  const push = useSmoothRouterPush();
   const index = useViewsIndex();
   if (index.error) return <div role="alert" className="flex items-center justify-between gap-2 border-b border-border px-4 py-3 text-xs text-muted-foreground">
     <p>{zh ? '暂时无法核对 Context 来源。' : 'Could not verify the Context origin.'}</p>
@@ -24,7 +25,7 @@ export default function ContextOriginBar({ origin, close }: { origin: HandoffOri
     const href = contextHref({ ...origin.position, ...(path ? { mode: 'files', file: path } : {}) });
     close?.();
     if (href.split('?')[0] === pathname) window.history.replaceState(null, '', href);
-    else router.push(href, { scroll: false });
+    else push(href, { scroll: false });
   }
   return <section aria-label={zh ? '本次 Context' : 'Handoff Context'} className="shrink-0 border-b border-border bg-muted/20 px-4 py-3">
     <div className="flex items-start justify-between gap-2">
