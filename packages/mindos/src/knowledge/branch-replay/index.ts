@@ -1,10 +1,11 @@
 import { z } from 'zod';
 import { extractExplicitRoutes } from './extract-options.js';
 export { simulateRequestRace } from './race.js';
+export const isReplayInternalText = (text: string) => /^(?:# AGENTS\.md|<environment_context>|<external_codex_apps|<user_instructions>|<codex_?internal_?context\b|<subagent_notification\b|<collaboration_message\b|<turn_aborted\b|<task-notification\b|<system-reminder\b)/i.test(text.trim());
 
-export interface ReplayMessage { id: string; role: 'user' | 'assistant'; text: string; timestamp?: string; }
-export interface ReplaySource { id: string; runtime: 'codex' | 'claude' | 'example'; title: string; project?: string; updatedAt?: number; messages: ReplayMessage[]; }
-export interface ReplaySourceSummary extends Omit<ReplaySource, 'messages'> { cwd?: string; }
+export interface ReplayMessage { id: string; role: 'user' | 'assistant'; text: string; timestamp?: string; sequence?: number; }
+export interface ReplaySource { id: string; runtime: 'codex' | 'claude' | 'example'; title: string; project?: string; cwd?: string; createdAt?: number; updatedAt?: number; coverage?: { totalMessages: number; includedMessages: number; truncated: boolean }; messages: ReplayMessage[]; }
+export interface ReplaySourceSummary extends Omit<ReplaySource, 'messages'> { archived?: boolean; projectId?: string; projectPath?: string; }
 export interface ReplayRef { messageId: string; quote: string; }
 export interface ReplaySignal { label: string; value: string; }
 export interface ReplayTradeoff { benefit: string; cost: string; check: string; refs: ReplayRef[]; }
@@ -192,21 +193,24 @@ export function extractBranchStory(source: ReplaySource): BranchStory | null {
   for (let i = 1; i < rows.length - 1 && scenes.length < 5; i++) {
     const feedback = rows[i];
     if (!feedback) continue;
-    if (feedback.role !== 'user' || !/(不是|不是什么|不想|不需要|好怪|变化.*大|不要|不合适|instead|too much|rather than)/i.test(feedback.text)) continue;
+    if (feedback.role !== 'user' || !/((?<!是)不是|不想|不需要|好怪|变化.*大|不要|不合适|不科学|不合理|不应该|instead|too much|rather than)/i.test(feedback.text)) continue;
     const before = rows.slice(0, i).reverse().find(m => m.role === 'assistant' && m.text.length > 20);
     const after = rows.slice(i + 1).find(m => m.role === 'assistant' && m.text.length > 20);
     const context = rows.slice(0, i).reverse().find(m => m.role === 'user') ?? feedback;
     if (!before || !after) continue;
+    // A sampled gap cannot supply the missing cause or response to a correction.
+    if ([before, feedback, after].some(m => m.sequence !== undefined) &&
+      (feedback.sequence !== (before.sequence ?? -2) + 1 || after.sequence !== (feedback.sequence ?? -2) + 1)) continue;
     const id = `fork-${scenes.length + 1}`;
-    scenes.push({ id, title: '面对这次反馈，你会怎样调整？', context: compact(context.text, 360), evidence: [ref(context)], choices: [
+    scenes.push({ id, title: '面对这次反馈，你会怎样调整？', context: compact(feedback.text, 360), evidence: [ref(context), ref(before), ref(feedback)], choices: [
       { id: 'original', label: '沿着最初的方向', description: compact(before.text, 180), proposal: ref(before),
         outcome: { kind: 'recorded', title: '会话里出现了新的约束', steps: [{ title: '用户提出了纠偏', text: compact(feedback.text, 700), refs: [ref(feedback)] }] } },
-      { id: 'revised', label: '看看后来怎样调整', description: compact(after.text, 180), proposal: ref(after),
+      { id: 'revised', label: '按这条新约束重新调整', description: '先回应眼前的约束，再核对后续方案和结果。', proposal: ref(feedback),
         outcome: { kind: 'recorded', title: '后续方案发生了变化', steps: [
           { title: '变化来自这条反馈', text: compact(feedback.text, 700), refs: [ref(feedback)] },
           { title: 'Agent 调整了方案', text: compact(after.text, 1000), refs: [ref(after)] },
         ] } },
-    ] });
+    ], historicalChoiceId: 'revised' });
   }
   if (!scenes.length) return null;
   for (let i = 0; i < scenes.length - 1; i++) {

@@ -1,7 +1,8 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 import { ArrowLeft, ArrowRight, GitBranch, Play, RotateCcw, Info, ShieldCheck, X } from 'lucide-react';
-import { createReplayState, restoreReplayState, transitionReplay, historicalReplayChoice, type BranchStory, type ReplayAction } from '@geminilight/mindos/knowledge/branch-replay';
+import { restoreReplayState, transitionReplay, historicalReplayChoice, type BranchStory, type ReplayAction } from '@geminilight/mindos/knowledge/branch-replay';
+import { experienceTitle } from '@/lib/echo-experiences';
 import { Button } from '@/components/ui/button';
 import { ReplayCanvas } from './ReplayCanvas';
 import { ReplayJourneyReview } from './ReplayJourneyReview';
@@ -9,17 +10,17 @@ import { OriginalRecord } from './ReplayEvidence';
 import { replayCopy } from './replay-copy';
 import { ReplayRaceLab } from './ReplayRaceLab';
 import { DEFAULT_PRACTICE_CONDITIONS, practiceOutcome, restorePracticeConditions } from './replay-practice';
-import { resumeReplayRoute, revisitReplayScene } from './replay-navigation';
+import { resumeReplayRoute, revisitReplayScene, restoreReplayEntry } from './replay-navigation';
 import { ReplayPredictionGate } from './ReplayParticipation';
 import { useReplayJudgments } from './useReplayJudgments';
 import { judgmentKey } from './replay-judgments';
 import './replay.css';
 
-export function ReplayExperience({story,locale}:{story:BranchStory;locale:'zh'|'en'}) {
+export function ReplayExperience({story,locale,initialSceneId,onContinue,continuing=false}:{story:BranchStory;locale:'zh'|'en';initialSceneId?:string;onContinue?:(takeaway:string)=>void;continuing?:boolean}) {
   const copy=replayCopy(locale);const storageKey=`mindos:branch-replay:${story.id}`;
   const [state,setState]=useState(()=>{
-    try{return restoreReplayState(story,JSON.parse(localStorage.getItem(storageKey)||'null'));}
-    catch{return createReplayState(story);}
+    try{return restoreReplayEntry(story,JSON.parse(localStorage.getItem(storageKey)||'null'),initialSceneId);}
+    catch{return restoreReplayEntry(story,null,initialSceneId);}
   });
   const {judgments,saved:notesSaved,write,selectTransfer}=useReplayJudgments(story);
   const [pendingChoice,setPendingChoice]=useState<string|null>(null);
@@ -43,13 +44,13 @@ export function ReplayExperience({story,locale}:{story:BranchStory;locale:'zh'|'
   const attempts=state.attempts.filter(a=>a.sceneId===scene.id);
   const canTryAnother=attempts.length<scene.choices.length&&(state.phase==='complete'||state.phase==='unobserved')&&!choice?.nextSceneId;
   useEffect(()=>{let success=true;try{
-    localStorage.setItem(storageKey,JSON.stringify(state));
+    localStorage.setItem(storageKey,JSON.stringify({...state,entrySceneId:initialSceneId}));
     if(story.source.runtime==='example')localStorage.setItem(`${storageKey}:practice`,JSON.stringify({fingerprint:story.fingerprint,...labConditions}));
   }catch{success=false;}
     // Storage availability is a runtime result, not derivable from the cursor.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSaved(success);
-  },[state,storageKey,labConditions,story.source.runtime,story.fingerprint]);
+  },[state,storageKey,labConditions,story.source.runtime,story.fingerprint,initialSceneId]);
   const dispatch=useCallback((action:ReplayAction)=>{setProgressNotice(null);setState(s=>transitionReplay(story,s,action));},[story]);
   const commitChoice=useCallback((id:string)=>{
     setProgressNotice(null);
@@ -100,7 +101,7 @@ export function ReplayExperience({story,locale}:{story:BranchStory;locale:'zh'|'
       <span className="replay-private" data-saving={saved} title={saved?copy.private:copy.unsaved}><ShieldCheck size={13}/>{!saved&&copy.unsaved}</span>
     </div>
     <header className="replay-heading">
-      <div><h1 className="text-2xl font-semibold leading-tight tracking-tight">{view==='source'?copy.source:story.title}</h1><span className="replay-compact-identity">{copy.compactIdentity}</span></div>
+      <div><h1 className="text-2xl font-semibold leading-tight tracking-tight">{view==='source'?copy.source:experienceTitle(story.title,story.source.project||copy.replay)}</h1><span className="replay-compact-identity">{copy.compactIdentity}</span></div>
       <span className="replay-scene-badge"><GitBranch size={13}/>{copy.scene} {state.sceneIndex+1}<span> / {story.scenes.length}</span></span>
     </header>
     <details className="replay-about"><summary><Info size={13}/>{copy.aboutReplay}</summary><div><p>{story.summary}</p><p>{copy.identityHint}</p><p>{story.source.runtime==='example'?copy.simulationNote:copy.recordedNote}</p><p>{copy.private}</p><p>{copy.keyboard}</p></div></details>
@@ -108,7 +109,7 @@ export function ReplayExperience({story,locale}:{story:BranchStory;locale:'zh'|'
     {progressNotice&&<div className="replay-resume-notice" role="status"><span>{copy[progressNotice]}</span><Button variant="ghost" size="icon-sm" aria-label={copy.dismissProgress} onClick={()=>setProgressNotice(null)}><X size={13}/></Button></div>}
     <div id="replay-view" className="replay-view" role="tabpanel" aria-labelledby={`replay-tab-${view}`}>
       {pending&&<div data-prediction-draft className="replay-prediction-draft" hidden={view!=='story'}><ReplayPredictionGate key={`${scene.id}/${pending.id}`} scene={scene} choice={pending} copy={copy} historical={pendingHistory} onCancel={()=>setPendingChoice(null)} onContinue={value=>{if(value)write(scene.id,pending.id,value);setPendingChoice(null);if(pendingHistory)dispatch({type:'follow-history'});else commitChoice(pending.id);}}/></div>}
-      {view==='source'?<div className="replay-source-page"><OriginalRecord story={story} copy={copy}/></div>:view==='journey'?<ReplayJourneyReview story={story} state={state} copy={copy} onRevisit={revisit} judgments={judgments} onTransfer={selectTransfer}/>:<ReplayCanvas story={story} state={state} copy={copy} compare={view==='compare'} pending={!!pending&&view==='story'} onChoose={choose}
+      {view==='source'?<div className="replay-source-page"><OriginalRecord story={story} copy={copy}/></div>:view==='journey'?<ReplayJourneyReview story={story} state={state} copy={copy} onRevisit={revisit} judgments={judgments} onTransfer={selectTransfer} onContinue={onContinue} continuing={continuing}/>:<ReplayCanvas story={story} state={state} copy={copy} compare={view==='compare'} pending={!!pending&&view==='story'} onChoose={choose}
         onResume={resume} onRevisit={revisit} judgment={choice?judgments.entries[judgmentKey(scene.id,choice.id)]:undefined} onJudgment={patch=>{if(choice)write(scene.id,choice.id,patch);}}
         practice={story.source.runtime==='example'?{...labConditions,render:renderPractice}:undefined}>
         <div className="replay-dock-progress"><div className="replay-dock-title-row"><span className="replay-dock-label">{choice?`${state.historyFrom?copy.historicalRoute:copy.yourNow} · ${choice.label}`:copy.canvasJourney}</span>
@@ -124,7 +125,13 @@ export function ReplayExperience({story,locale}:{story:BranchStory;locale:'zh'|'
             {state.phase==='complete'&&!choice?.nextSceneId&&story.scenes.length>1&&<Button variant="amber" onClick={()=>setView('journey')}>{copy.reviewChain}<ArrowRight size={13}/></Button>}
             {state.phase==='complete'&&attempts.length>1&&<Button className="replay-dock-compare" variant={canTryAnother||story.scenes.length>1?'outline':'amber'} onClick={()=>setView('compare')}>{copy.compare}<ArrowRight size={13}/></Button>}
           </>}
-          {view==='compare'&&<Button variant="outline" onClick={()=>{dispatch({type:'rewind'});setView('story');}}><ArrowLeft size={14}/>{copy.back}</Button>}
+          {view==='compare'&&<>
+            <Button variant="outline" onClick={()=>{dispatch({type:'rewind'});setView('story');}}><ArrowLeft size={14}/>{copy.back}</Button>
+            {state.choiceId&&<Button variant="amber" onClick={()=>{
+              if(state.phase==='complete'&&choice?.nextSceneId){dispatch({type:'advance'});setView('story');}
+              else setView(state.phase==='complete'&&story.scenes.length>1?'journey':'story');
+            }}>{state.phase==='complete'?(choice?.nextSceneId?copy.nextFork:story.scenes.length>1?copy.reviewChain:copy.next):copy.next}<ArrowRight size={13}/></Button>}
+          </>}
         </div>
       </ReplayCanvas>}
       <span className="sr-only" role="status" aria-live="polite">{choice?`${choice.label} · ${current}`:''}</span>

@@ -105,6 +105,7 @@ MindOS is now organized around a few stable product modules instead of one-off s
 | **Native Agent Runtime** | Run agents with resumable sessions, cancellation, reconnect/reattach support, and reviewable output history where the runtime exposes it. |
 | **Workflow & Audit Surfaces** | YAML workflows, Agent Inspector, run ledgers, backlinks, graph views, and importer progress help keep human review in the loop. |
 | **Echo Coevolution Workspace** | Bring Claude/Codex history into a task canvas: decisions, participation modes, confirmed standards, disagreement tests, experience transfer, and collaboration trials. MindOS runs can use these agreements and return attributable outputs for review. |
+| **Project Experiences** | Discover local Claude/Codex sessions together, revisit a project's documented decisions on the replay canvas, and return to the original session with an unsent continuation draft. |
 | **Cross-platform Delivery** | Install through Desktop releases or `npm install -g @geminilight/mindos@latest`; the npm package includes the CLI and prebuilt local Web runtime. |
 
 ## 🧠 Human-AI Shared Mind

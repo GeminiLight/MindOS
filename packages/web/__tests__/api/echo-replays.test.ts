@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({ list: vi.fn(), read: vi.fn(), saved: vi.fn(), save: vi.fn() }));
 vi.mock('@geminilight/mindos/agent/runtime/adapters', () => ({ listReplaySources: mocks.list, readReplaySource: mocks.read }));
-vi.mock('@geminilight/mindos/knowledge/branch-replay/store', () => ({ listBranchStories: mocks.saved, saveBranchStory: mocks.save }));
+vi.mock('@geminilight/mindos/knowledge/branch-replay/store', () => ({ listBranchStories: mocks.saved, readBranchStory: (id: string) => mocks.saved().find((story: {id: string}) => story.id === id) || null, saveBranchStory: mocks.save }));
 import { GET, POST } from '@/app/api/echo/replays/route';
 import { extractBranchStory, type ReplaySource } from '@geminilight/mindos/knowledge/branch-replay';
 const source = { id: 'one', runtime: 'codex', title: '产品选择', messages: [

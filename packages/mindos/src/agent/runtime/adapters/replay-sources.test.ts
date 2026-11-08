@@ -36,6 +36,11 @@ describe('local replay source boundaries', () => {
     expect(parsed.map(m => m.text)).toEqual(['先保留文件树。', '按现有结构继续。']);
     expect(parsed[0].id).not.toBe(parsed[1].id);
   });
+  it('excludes internal continuation and delegated agent messages even when stored as user input', () => {
+    const raw = ['<codexinternalcontext source="goal">Continue internal goal</codexinternalcontext>', '<codex_internal_context source="goal">不要停止推进内部目标</codex_internal_context>', '<subagent_notification>worker result</subagent_notification>', '<collaboration_message>delegated task</collaboration_message>', '<task-notification>background process result</task-notification>', '<system-reminder>internal reminder</system-reminder>', '<in-app-browser-context>ambient</in-app-browser-context>\n\n## My request:\n请保留我真正的问题。'];
+    const records = raw.map(text => ({ type: 'response_item', payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text }] } }));
+    expect(parseReplayRecords(records).map(m => m.text)).toEqual(['请保留我真正的问题。']);
+  });
   it('reads only the indexed source and returns searchable metadata without raw rollout paths', async () => {
     const { homeDir } = fixture();
     const entries = await listReplaySources({ homeDir, runtime: 'codex', query: '工作台', limit: 4 });

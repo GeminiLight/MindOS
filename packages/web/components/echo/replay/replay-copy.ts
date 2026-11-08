@@ -1,4 +1,5 @@
 const zh = {
+  chainProgress:'已回看的决策',chainEvidence:'展开已读记录与证据',routeUnitOne:'条路线',takeawayContinue:'把判断带回原会话',takeawayPreparing:'正在准备草稿…',takeawaySendHint:'会打开原会话，准备待发送草稿；由你核对后发送。',
   aboutReplay:'关于这段经历',writeCheck:'记下验证思路',canvasJourney:'选择 → 看结果 → 回来重选',compactIdentity:'你来选路 · 回放当时的记录',
   thinkAgain:'刚看到的证据，支持了你的哪项预期？还有什么没有被验证？',
   historicalRoute:'当时采用的路线',followHistory:'接回当时的记录',historyBoundary:'已接回历史。你的选择仍保留；下面不是它的执行结果。',
@@ -51,6 +52,7 @@ const zh = {
   visibleMessages:'条可见消息', simulationNote:'这里的变化由演练条件计算。改变返回顺序后，结果也会改变。',
 };
 const en: typeof zh = {
+  chainProgress:'Decisions revisited',chainEvidence:'Expand revealed records and evidence',routeUnitOne:'route',takeawayContinue:'Take this judgment back to the conversation',takeawayPreparing:'Preparing draft…',takeawaySendHint:'Opens the original conversation with an unsent draft for you to review.',
   aboutReplay:'About this experience',writeCheck:'Note a way to test',canvasJourney:'Choose → Observe → Try another route',compactIdentity:'Your choices · Recorded history',
   thinkAgain:'Which expectation did the evidence support? What is still unverified?',
   historicalRoute:'Route taken then',followHistory:'Return to recorded history',historyBoundary:'Your choice is kept. What follows is the route taken in the session, not the outcome of your alternative.',

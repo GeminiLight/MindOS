@@ -43,7 +43,7 @@ describe('navigation panel route recovery', () => {
   it('keeps route panel hrefs aligned with real entry routes', () => {
     expect(ROUTE_PANEL_HREF.files).toBe('/wiki');
     expect(ROUTE_PANEL_HREF.capture).toBe('/capture');
-    expect(ROUTE_PANEL_HREF.echo).toBe('/echo/overview');
+    expect(ROUTE_PANEL_HREF.echo).toBe('/echo/experiences');
     expect(ROUTE_PANEL_HREF.agents).toBe('/agents');
     expect(ROUTE_PANEL_HREF.studio).toBe('/studio');
     expect(ROUTE_PANEL_HREF.discover).toBe('/explore');

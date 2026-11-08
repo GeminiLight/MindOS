@@ -2,18 +2,20 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import readline from 'node:readline';
+import { replayProjectIdentity, sampleReplayMessages } from './replay-projects.js';
 import { loadSqliteDriver } from '../../../foundation/storage/sqlite-driver.js';
 import { listRuntimeSessionTranscripts } from './session-transcripts/registry.js';
 import { browseNativeSessions } from './session-transcripts/native-browser.js';
 import type { ReplayMessage, ReplaySource, ReplaySourceSummary } from '../../../knowledge/branch-replay/index.js';
+import { isReplayInternalText } from '../../../knowledge/branch-replay/index.js';
 
 function cleanVisibleText(text: string): string {
-  if (/^(# AGENTS\.md|<environment_context>|<external_codex_apps|<user_instructions>)/.test(text.trim())) return '';
+  if (isReplayInternalText(text)) return '';
   const request = text.includes('## My request:') ? text.slice(text.indexOf('## My request:') + 14) : text;
   return request.replace(/<image\b[^>]*>[\s\S]*?<\/image>/g, '').replace(/\b(?:sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{20,})\b/g, '[redacted]').trim().slice(0, 18000);
 }
 
-export function parseReplayRecords(records: unknown[]): ReplayMessage[] {
+function visibleReplayRecords(records: unknown[]): ReplayMessage[] {
   const messages: ReplayMessage[] = [];
   records.forEach((raw, index) => {
     if (!raw || typeof raw !== 'object') return;
@@ -24,61 +26,80 @@ export function parseReplayRecords(records: unknown[]): ReplayMessage[] {
     const text = cleanVisibleText(content.map(b => b && typeof b === 'object' && ['input_text', 'output_text', 'text'].includes(b.type) && typeof b.text === 'string' ? b.text : '').filter(Boolean).join('\n'));
     if (text) messages.push({ id: `m${index}`, role: p.role as ReplayMessage['role'], text, ...(typeof record.timestamp === 'string' ? { timestamp: record.timestamp } : {}) });
   });
-  return messages.length > 160 ? [...messages.slice(0, 40), ...messages.slice(-120)] : messages;
+  return messages;
 }
 
+function codexRoot(home: string): string { return home === os.homedir() && process.env.CODEX_HOME ? path.resolve(process.env.CODEX_HOME) : path.join(home, '.codex'); }
+export function parseReplayRecords(records: unknown[]): ReplayMessage[] { return sampleReplayMessages(visibleReplayRecords(records)).messages; }
 function codexDatabase(home: string): string | null {
-  const dir = path.join(home, '.codex');
+  const dir = codexRoot(home);
   if (!fs.existsSync(dir)) return null;
   const names = fs.readdirSync(dir).filter(n => /^state_\d+\.sqlite$/.test(n)).sort((a, b) => Number(b.match(/\d+/)?.[0]) - Number(a.match(/\d+/)?.[0]));
   return names[0] ? path.join(dir, names[0]) : null;
 }
-function codexRows(home: string, input: { id?: string; query?: string; limit: number }) {
+function codexRows(home: string, input: { id?: string; query?: string; limit: number; offset?: number; includeArchived?: boolean }) {
   const file = codexDatabase(home);
   if (!file) return [];
   const db = loadSqliteDriver().open(file, { readOnly: true });
   try {
     const clauses: string[] = []; const values: (string | number)[] = [];
+    const columns = new Set(db.prepare('PRAGMA table_info(threads)').all().map(column => column.name));
     if (input.id) { clauses.push('id = ?'); values.push(input.id); }
-    else clauses.push('archived = 0');
+    else if (!input.includeArchived) clauses.push('archived = 0');
+    if (!input.id && columns.has('source')) clauses.push(`(source IS NULL OR instr(source, '"subagent"') = 0)`);
     if (input.query) { clauses.push('(instr(lower(title),lower(?)) > 0 OR instr(lower(cwd),lower(?)) > 0)'); values.push(input.query, input.query); }
-    return db.prepare(`SELECT id,title,cwd,updated_at,rollout_path FROM threads WHERE ${clauses.join(' AND ')} ORDER BY updated_at DESC LIMIT ?`).all(...values, input.limit);
+    return db.prepare(`SELECT id,title,cwd,updated_at,${columns.has('created_at') ? 'created_at' : 'NULL AS created_at'},rollout_path,archived FROM threads${clauses.length ? ` WHERE ${clauses.join(' AND ')}` : ''} ORDER BY updated_at DESC, id DESC LIMIT ? OFFSET ?`).all(...values, input.limit, input.offset ?? 0);
   } finally { db.close(); }
 }
 
-export async function listReplaySources(options: { homeDir?: string; runtime?: string; query?: string; limit?: number } = {}): Promise<ReplaySourceSummary[]> {
-  const home = options.homeDir ?? os.homedir();
-  const limit = options.limit ?? 20;
+export interface ReplaySourcePage { sources: ReplaySourceSummary[]; nextCursor: string | null; }
+export interface ReplaySourceOptions { homeDir?: string; runtime?: string; query?: string; limit?: number; cursor?: string; includeArchived?: boolean; }
+export async function listReplaySourcePage(options: ReplaySourceOptions = {}): Promise<ReplaySourcePage> {
+  const home = options.homeDir ?? os.homedir(), limit = options.limit ?? 50, offset = options.cursor ? Number(options.cursor) : 0;
   if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new Error('Source limit must be between 1 and 100');
-  const runtime = options.runtime ?? 'codex';
-  if (runtime === 'codex') return codexRows(home, { query: options.query?.trim().slice(0, 160), limit }).map(row => ({
-    id: String(row.id), runtime: 'codex', title: cleanVisibleText(String(row.title || row.id)).slice(0, 160)||String(row.id), cwd: String(row.cwd || ''),
-    project: path.basename(String(row.cwd || '')), updatedAt: Number(row.updated_at) * 1000,
-  }));
-  if (runtime !== 'claude') throw new Error('Unsupported replay source');
-  const rows = options.homeDir
-    ? await listRuntimeSessionTranscripts({ runtimeId: 'claude', homeDir: home, metadataOnly: true, limit: 100 })
-    : (await browseNativeSessions({ runtimeId: 'claude', limit, query: options.query })).sessions;
-  const query = options.query?.trim().toLowerCase();
-  return rows.filter(r => !query || `${r.title} ${r.cwd}`.toLowerCase().includes(query)).slice(0, limit).map(r => ({
-    id: r.id, runtime: 'claude', title: cleanVisibleText(String(r.title || r.preview || r.id)).slice(0, 160)||r.id, cwd: r.cwd, project: r.cwd ? path.basename(r.cwd) : 'Claude', updatedAt: typeof r.updatedAt === 'number' ? r.updatedAt : Date.parse(r.updatedAt || ''),
-  }));
+  if (!Number.isSafeInteger(offset) || offset < 0 || offset > 100000 || (options.cursor && !/^\d+$/.test(options.cursor))) throw new Error('Invalid source cursor');
+  const runtime = options.runtime ?? 'codex', query = options.query?.trim().slice(0, 160);
+  let sources: ReplaySourceSummary[], nextCursor: string | null;
+  if (runtime === 'codex') {
+    const rows = codexRows(home, { query, limit: limit + 1, offset, includeArchived: options.includeArchived });
+    nextCursor = rows.length > limit ? String(offset + limit) : null;
+    sources = rows.slice(0, limit).map(row => ({ id: String(row.id), runtime: 'codex', title: cleanVisibleText(String(row.title || row.id)).slice(0,160) || String(row.id), cwd: String(row.cwd || ''), createdAt: row.created_at ? Number(row.created_at) * 1000 : undefined, updatedAt: Number(row.updated_at) * 1000, archived: !!row.archived }));
+  } else if (runtime === 'claude') {
+    const page = await browseNativeSessions({ runtimeId: 'claude', limit, cursor: options.cursor, query });
+    sources = page.sessions.map(row => ({ id: row.id, runtime: 'claude', title: cleanVisibleText(String(row.title || row.preview || row.id)).slice(0,160) || row.id, cwd: row.cwd, createdAt: typeof row.createdAt === 'number' ? row.createdAt : Date.parse(row.createdAt || ''), updatedAt: typeof row.updatedAt === 'number' ? row.updatedAt : Date.parse(row.updatedAt || '') }));
+    nextCursor = page.nextCursor;
+  } else throw new Error('Unsupported replay source');
+  const identities = new Map<string, ReturnType<typeof replayProjectIdentity>>();
+  return { sources: sources.map(source => {
+    const cwd = source.cwd || ''; let project = identities.get(cwd);
+    if (!project) { project = replayProjectIdentity(cwd); identities.set(cwd, project); }
+    return { ...source, project: project.title, projectId: project.id, projectPath: project.path };
+  }), nextCursor };
+}
+export async function listReplaySources(options: ReplaySourceOptions = {}): Promise<ReplaySourceSummary[]> {
+  if (options.runtime === 'claude' && options.homeDir) {
+    const rows = await listRuntimeSessionTranscripts({ runtimeId: 'claude', homeDir: options.homeDir, metadataOnly: true, limit: 100 });
+    return rows.filter(r => !options.query || `${r.title} ${r.cwd}`.toLowerCase().includes(options.query.toLowerCase())).slice(0, options.limit ?? 20).map(r => ({ id: r.id, runtime: 'claude', title: cleanVisibleText(String(r.title || r.id)), cwd: r.cwd, project: path.basename(r.cwd || 'Claude') }));
+  }
+  return (await listReplaySourcePage(options)).sources;
 }
 
 export async function readReplaySource(runtime: string, id: string, homeDir?: string): Promise<ReplaySource> {
   if (!/^[\w-]{1,100}$/.test(id)) throw new Error('Invalid source session identity');
   const home = homeDir ?? os.homedir();
   if (runtime === 'claude') {
-    const rows = await listRuntimeSessionTranscripts({ runtimeId: 'claude', sessionId: id, homeDir: home, limit: 1 });
+    const rows = homeDir ? await listRuntimeSessionTranscripts({ runtimeId: 'claude', sessionId: id, homeDir: home, limit: 1 }) : (await browseNativeSessions({ runtimeId: 'claude', sessionId: id, limit: 1 })).sessions;
     const row = rows.find(r => r.id === id);
     if (!row) throw new Error('Claude session is missing or unreadable');
     const messages = (row.turns || []).map((m, i) => ({ id: `m${i}`, role: m.role, text: cleanVisibleText(m.content) })).filter(m => m.text);
-    return { id, runtime: 'claude', title: cleanVisibleText(String(row.title || id)).slice(0, 160)||id, project: path.basename(row.cwd || 'Claude'), messages: messages.slice(-160) };
+    return { id, runtime: 'claude', title: cleanVisibleText(String(row.title || id)).slice(0, 160)||id, project: replayProjectIdentity(row.cwd).title, cwd: row.cwd, createdAt: typeof row.createdAt === 'number' ? row.createdAt : Date.parse(row.createdAt || ''), updatedAt: typeof row.updatedAt === 'number' ? row.updatedAt : Date.parse(row.updatedAt || ''), ...sampleReplayMessages(messages) };
   }
   if (runtime !== 'codex') throw new Error('Unsupported replay source');
   const row = codexRows(home, { id, limit: 1 })[0];
   if (!row) throw new Error('Codex session is missing or unreadable');
-  const root = path.join(home, '.codex', 'sessions');
+  const roots = ['sessions', 'archived_sessions'].map(name => path.join(codexRoot(home), name));
+  const root = roots.find(candidate => { const relative = path.relative(candidate, path.resolve(String(row.rollout_path))); return !relative.startsWith('..') && !path.isAbsolute(relative); });
+  if (!root) throw new Error('Transcript path is outside session storage');
   const file = path.resolve(String(row.rollout_path));
   const relative = path.relative(root, file);
   if (relative.startsWith('..') || path.isAbsolute(relative)) throw new Error('Transcript path is outside session storage');
@@ -100,5 +121,5 @@ export async function readReplaySource(runtime: string, id: string, homeDir?: st
       if (records.length > 300_000) throw new Error('Session exceeds the replay record budget');
     }
   } finally { lines.close(); stream.destroy(); }
-  return { id, runtime: 'codex', title: cleanVisibleText(String(row.title || id)).slice(0, 160)||id, project: path.basename(String(row.cwd || 'Codex')), updatedAt: Number(row.updated_at) * 1000, messages: parseReplayRecords(records) };
+  return { id, runtime: 'codex', title: cleanVisibleText(String(row.title || id)).slice(0, 160)||id, project: replayProjectIdentity(String(row.cwd || '')).title, cwd: String(row.cwd || ''), createdAt: row.created_at ? Number(row.created_at) * 1000 : undefined, updatedAt: Number(row.updated_at) * 1000, ...sampleReplayMessages(visibleReplayRecords(records)) };
 }

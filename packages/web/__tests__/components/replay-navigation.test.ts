@@ -1,11 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import { createReplayState, transitionReplay, validateBranchStory } from '@geminilight/mindos/knowledge/branch-replay';
-import { resumeReplayRoute, revisitReplayScene } from '@/components/echo/replay/replay-navigation';
+import { resumeReplayRoute, revisitReplayScene, restoreReplayEntry } from '@/components/echo/replay/replay-navigation';
 
 const story=validateBranchStory({id:'navigation',runtime:'example',title:'连续判断',messages:[{id:'m',role:'user',text:'先观察，再验证。'}]}, {
  title:'连续判断',summary:'逐个判断',scenes:['first','second','third'].map((id,index)=>({id,title:`判断 ${index+1}`,context:'先观察，再验证。',evidence:[{messageId:'m',quote:'先观察'}],choices:['a','b'].map(choiceId=>({id:choiceId,label:choiceId,description:'再验证',proposal:{messageId:'m',quote:'再验证'},nextSceneId:index<2&&choiceId==='b'?['second','third'][index]:undefined,outcome:{kind:'recorded',title:'有后续',steps:[1,2,3].map(n=>({title:`变化 ${n}`,text:'再验证',refs:[{messageId:'m',quote:'再验证'}]}))}}))}))
 });
 describe('replay recovery navigation',()=>{
+ it('allows an explicit project decision entry without inventing earlier attempts',()=>{
+  const entered=restoreReplayEntry(story,null,'third');
+  expect(entered).toMatchObject({sceneIndex:2,phase:'choice',attempts:[],visibleSteps:0});
+  expect(restoreReplayEntry(story,null,'missing').sceneIndex).toBe(0);
+ });
+ it('refreshes an entry link at the exact saved cursor after moving forward',()=>{
+  let state=restoreReplayEntry(story,null,'second');
+  state=transitionReplay(story,state,{type:'choose',choiceId:'b'});
+  for(let i=0;i<4;i++) state=transitionReplay(story,state,{type:'advance'});
+  const raw={...state,entrySceneId:'second'};
+  expect(restoreReplayEntry(story,raw,'second')).toEqual(state);
+  expect(restoreReplayEntry(story,raw,'first')).toMatchObject({sceneIndex:0,phase:'choice'});
+ });
  it('resumes the last observed moment without opening an unseen later result',()=>{
   let state=transitionReplay(story,createReplayState(story),{type:'choose',choiceId:'a'});
   state=transitionReplay(story,state,{type:'advance'});state=transitionReplay(story,state,{type:'advance'});

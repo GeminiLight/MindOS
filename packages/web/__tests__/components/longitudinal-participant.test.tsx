@@ -81,6 +81,55 @@ it('maps access failures to participant copy and keeps withdrawal behind an inli
   expect(window.confirm).not.toHaveBeenCalled();
 });
 
+it('asks before discarding a drafted revision when keeping the current method', async () => {
+  view = { ...base(), status: 'revision', updateAllowed: true, method: 'Check evidence first' };
+  await render();
+  await fill('revised-method', 'Compare the underlying evidence');
+  await fill('revision-evidence', 'The first case exposed an exception');
+  await click('Keep the current method');
+  expect(vi.mocked(fetch).mock.calls.filter(c => c[1]?.method === 'PATCH')).toHaveLength(0);
+  expect(host.textContent).toContain('Discard this unsubmitted revision?');
+  expect((host.querySelector('[name="revised-method"]') as HTMLTextAreaElement).value).toBe('Compare the underlying evidence');
+  await click('Continue editing');
+  expect(host.textContent).not.toContain('Discard this unsubmitted revision?');
+  await click('Keep the current method');
+  view = { ...base(), version: 4, status: 'waiting', dueAt: '2026-10-01T00:00:00.000Z' };
+  await click('Discard draft and keep current method');
+  expect(JSON.parse(String(vi.mocked(fetch).mock.calls.at(-1)?.[1]?.body))).toMatchObject({ action: 'keep', version: 3 });
+  expect(host.textContent).toContain('Return using the same private link');
+});
+
+it('keeps a drafted revision after a failed keep request', async () => {
+  view = { ...base(), status: 'revision', updateAllowed: true, method: 'Check evidence first' };
+  await render();
+  await fill('revised-method', 'Compare the underlying evidence');
+  await click('Keep the current method');
+  status = 500; code = 'storage';
+  await click('Discard draft and keep current method');
+  expect((host.querySelector('[name="revised-method"]') as HTMLTextAreaElement).value).toBe('Compare the underlying evidence');
+  expect(host.querySelector('[role=alert]')?.textContent).toContain('Your input is preserved');
+});
+
+it('keeps the current method immediately when no revision was drafted', async () => {
+  view = { ...base(), status: 'revision', updateAllowed: true, method: 'Check evidence first' };
+  await render();
+  view = { ...base(), version: 4, status: 'waiting', dueAt: '2026-10-01T00:00:00.000Z' };
+  await click('Keep the current method');
+  expect(JSON.parse(String(vi.mocked(fetch).mock.calls.at(-1)?.[1]?.body))).toMatchObject({ action: 'keep', version: 3 });
+  expect(host.textContent).not.toContain('Discard this unsubmitted revision?');
+});
+
+it('does not call an unsubmitted local revision synced study progress', async () => {
+  view = { ...base(), status: 'revision', updateAllowed: true, method: 'Check evidence first' };
+  await render();
+  expect(host.textContent).toContain('Study progress synced');
+  await fill('revised-method', 'Compare evidence across cases');
+  expect(host.textContent).toContain('Unsubmitted draft');
+  expect(host.textContent).not.toContain('Study progress synced');
+  await fill('revised-method', '');
+  expect(host.textContent).toContain('Study progress synced');
+});
+
 it('shows loading instead of a missing invitation while progress is being read', async () => {
   vi.mocked(fetch).mockImplementation(() => new Promise(() => {}));
   await render();

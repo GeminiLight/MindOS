@@ -19,7 +19,8 @@ export function extractExplicitRoutes(source:ReplaySource):ReplayScene[] {
     if(choices.length<2||choices.length>5||new Set(choices.map(c=>c.letter)).size!==choices.length)continue;
     const context=source.messages.slice(0,i).reverse().find(m=>m.role==='user')||message;
     const nextOptions=source.messages.findIndex((m,j)=>j>i&&m.role==='assistant'&&options(m).length>=2);
-    const future=source.messages.slice(i+1,nextOptions>i?nextOptions:Math.min(source.messages.length,i+20));
+    const future=source.messages.slice(i+1,nextOptions>i?nextOptions:Math.min(source.messages.length,i+20))
+      .filter(m => message.sequence === undefined || (m.sequence !== undefined && m.sequence > message.sequence && m.sequence <= message.sequence + 20));
     const chinese=/[\u4e00-\u9fff]/.test(context.text);
     scenes.push({id:`options-${scenes.length+1}`,title:chinese?'你想先试哪条路径？':'Which route would you try first?',context:compact(context.text,360),evidence:[reference(context)],choices:choices.map(c=>{
       const recorded=future.filter(m=>m.text.includes(c.label)&&/(尝试|验证|测试|执行|采用|已完成|确认|成功|失败|tested|worked|failed)/i.test(m.text)&&!/(如果|假如|可能|建议|would|might|should)/i.test(m.text)).slice(0,4);

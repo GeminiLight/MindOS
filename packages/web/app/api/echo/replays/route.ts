@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 import { listReplaySources, readReplaySource } from '@geminilight/mindos/agent/runtime/adapters';
 import { extractBranchStory, validateBranchStory } from '@geminilight/mindos/knowledge/branch-replay';
-import { listBranchStories, saveBranchStory } from '@geminilight/mindos/knowledge/branch-replay/store';
+import { listBranchStories, saveBranchStory, readBranchStory } from '@geminilight/mindos/knowledge/branch-replay/store';
 
 const headers = { 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' };
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers });
@@ -30,7 +30,7 @@ export async function POST(req: Request) {
     if (!body || typeof body !== 'object' || !['codex', 'claude'].includes(String(body.runtime)) || typeof body.sessionId !== 'string' || !/^[\w-]{1,100}$/.test(body.sessionId)) return json({ error: 'A valid runtime and sessionId are required' }, 400);
   } catch { return json({ error: 'Invalid JSON request' }, 400); }
   try {
-    const saved=!body.draft&&body.op!=='read'&&!body.regenerate?listBranchStories().find(s=>s.id===`replay-${body.runtime}-${body.sessionId}`):undefined;
+    const saved=!body.draft&&body.op!=='read'&&!body.regenerate?readBranchStory(`replay-${body.runtime}-${body.sessionId}`):undefined;
     if(saved)return json({story:saved,generation:'saved'});
     const source = await readReplaySource(String(body.runtime), String(body.sessionId));
     if(req.signal.aborted)return json({error:'Request cancelled'},499);

@@ -18,6 +18,16 @@ function story() {return validateBranchStory({ id:'ui-one',runtime:'codex',title
  ]}],});}
 const button=(text:string)=>Array.from(host.querySelectorAll('button')).find(b=>b.textContent?.includes(text))!;
 describe('branch replay experience',()=>{
+ it('continues to the next decision directly after comparing completed routes',async()=>{
+  const base=story();const value=validateBranchStory(base.source,{...base,scenes:[{...base.scenes[0],choices:base.scenes[0].choices.map(c=>({...c,nextSceneId:c.id==='a'?'second':undefined}))},{...base.scenes[0],id:'second',title:'第二层判断'}]});
+  await act(async()=>root.render(<ReplayExperience story={value} locale="zh"/>));
+  await act(async()=>button('清理缓存').click());await act(async()=>button('继续回放').click());
+  await act(async()=>host.querySelector<HTMLButtonElement>('#replay-tab-compare')!.click());
+  const next=[...host.querySelectorAll('button')].find(b=>b.textContent?.includes('进入下一个分岔点'));
+  expect(next).toBeTruthy();await act(async()=>next!.click());
+  expect(host.querySelector('#replay-tab-story')?.getAttribute('aria-selected')).toBe('true');
+  expect(host.textContent).toContain('第二层判断');
+ });
  it('keeps the canvas mounted while predicting and conceals the pending result',async()=>{
   const base=story();const value=validateBranchStory(base.source,{...base,scenes:[{...base.scenes[0],prediction:{question:'你预计会怎样？',options:['会恢复','还不确定']}}]});
   await act(async()=>root.render(<ReplayExperience story={value} locale="zh"/>));

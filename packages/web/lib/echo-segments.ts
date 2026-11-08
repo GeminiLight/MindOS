@@ -26,7 +26,7 @@ export function defaultEchoSegment(): EchoSegment {
   return 'overview';
 }
 
-/** Default landing route — `/` and `/echo` server-redirect here. */
+/** Echo lands on project experiences; legacy segment navigation remains available. */
 export function defaultEchoPath(): string {
-  return `/echo/${defaultEchoSegment()}`;
+  return '/echo/experiences';
 }

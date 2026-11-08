@@ -17,6 +17,17 @@ const story=validateBranchStory({id:'journey-review',runtime:'claude',title:'会
 const observed=()=>transitionReplay(story,transitionReplay(story,createReplayState(story),{type:'choose',choiceId:'a'}),{type:'advance'});
 afterEach(async()=>{await act(async()=>root.unmount());root=createRoot(host);vi.unstubAllGlobals();localStorage.clear();vi.restoreAllMocks();});
 describe('observed decision chain',()=>{
+ it('puts the personal takeaway before the evidence list and passes unsaved text to continuation',async()=>{
+  const continuation=vi.fn();await act(async()=>root.render(<ReplayJourneyReview story={story} state={observed()} copy={replayCopy('zh')} onRevisit={vi.fn()} onContinue={continuation}/>));
+  const field=host.querySelector('textarea')!;
+  expect(document.activeElement).toBe(host.querySelector('h2'));
+  expect(field.compareDocumentPosition(host.querySelector('ol')!)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  vi.stubGlobal('localStorage',{getItem:()=>null,setItem:()=>{throw new Error('blocked');}});
+  await act(async()=>{Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')!.set!.call(field,'先验证发生率');field.dispatchEvent(new Event('input',{bubbles:true}));});
+  const next=[...host.querySelectorAll('button')].find(b=>b.textContent?.includes('带回原会话'))!;
+  await act(async()=>next.click());expect(continuation).toHaveBeenCalledWith('先验证发生率');
+  expect(host.querySelector<HTMLDetailsElement>('.replay-journey-evidence')?.open).toBe(false);
+ });
  it('starts empty and does not reveal future scene titles or result text',async()=>{
   await act(async()=>root.render(<ReplayJourneyReview story={story} state={createReplayState(story)} copy={replayCopy('zh')} onRevisit={vi.fn()}/>));
   expect(host.textContent).toContain('还没有走过的判断');expect(host.textContent).not.toContain('分岔 2');expect(host.textContent).not.toContain('未来结果');

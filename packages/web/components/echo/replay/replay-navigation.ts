@@ -1,4 +1,12 @@
-import { transitionReplay, type BranchStory, type ReplayState } from '@geminilight/mindos/knowledge/branch-replay';
+import { restoreReplayState, transitionReplay, type BranchStory, type ReplayState } from '@geminilight/mindos/knowledge/branch-replay';
+
+/** An explicit project entry may start later; refresh still preserves its exact cursor. */
+export function restoreReplayEntry(story: BranchStory, raw: unknown, sceneId?: string): ReplayState {
+ const state = restoreReplayState(story, raw);
+ if (!sceneId || (raw && typeof raw === 'object' && 'entrySceneId' in raw && raw.entrySceneId === sceneId && 'fingerprint' in raw && raw.fingerprint === story.fingerprint)) return state;
+ const index = story.scenes.findIndex(scene => scene.id === sceneId);
+ return index < 0 ? state : { ...state, sceneIndex: index, choiceId: null, visibleSteps: 0, phase: 'choice', historyFrom: undefined };
+}
 
 /** Only completed links and already explored forks can be revisited. */
 export function availableReplayScenes(story:BranchStory,state:ReplayState):Set<number>{

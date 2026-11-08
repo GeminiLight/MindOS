@@ -115,3 +115,6 @@ packages/mindos/bin/lib/generated/
 
 # Isolated local coevolution preview builds
 .next-coevolution-*/
+
+# Isolated Echo project preview artifacts
+.next-echo-project-*/

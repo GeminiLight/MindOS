@@ -39,7 +39,7 @@ import HomePage, { dynamic as homeDynamic } from '@/app/page';
 import EchoIndexPage from '@/app/echo/page';
 import HomeContent from '@/components/HomeContent';
 import ClientRedirect from '@/components/ClientRedirect';
-import { defaultEchoPath, defaultEchoSegment } from '@/lib/echo-segments';
+import { defaultEchoPath } from '@/lib/echo-segments';
 
 describe('startup redirects', () => {
   beforeEach(() => {
@@ -47,9 +47,8 @@ describe('startup redirects', () => {
     vi.mocked(readSetupPending).mockReturnValue(false);
   });
 
-  it('defaultEchoPath points at the default echo segment route', () => {
-    expect(defaultEchoPath()).toBe(`/echo/${defaultEchoSegment()}`);
-    expect(defaultEchoPath()).toBe('/echo/overview');
+  it('defaultEchoPath points at project experiences while Home keeps its own route', () => {
+    expect(defaultEchoPath()).toBe('/echo/experiences');
   });
 
   it('/ renders the home page (no redirect to echo) when setup is complete', () => {

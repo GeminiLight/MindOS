@@ -38,6 +38,7 @@ export default function LongitudinalParticipant({ id, zh }: { id: string; zh: bo
   const [error, setError] = useState<ErrorCode | "">("");
   const [consented, setConsented] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
+  const [confirmKeep, setConfirmKeep] = useState(false);
   const [erase, setErase] = useState(false);
   const [withdrawConfirmed, setWithdrawConfirmed] = useState(false);
   const [lastAction, setLastAction] = useState("");
@@ -50,9 +51,18 @@ export default function LongitudinalParticipant({ id, zh }: { id: string; zh: bo
   const pending = useRef<{ key: string; body: { action: string; version: number; requestId: string; [key: string]: unknown } } | null>(null);
   const invitation = useRef<string | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
+  const keepConfirmation = useRef<HTMLHeadingElement>(null);
   const stateKey = view ? `${view.status}:${view.round}:${view.stage ?? ""}` : "";
   useEffect(() => { if (stateKey) heading.current?.focus(); }, [stateKey]);
   useEffect(() => { setConfirmed(false); }, [stateKey]);
+  useEffect(() => { setConfirmKeep(false); }, [stateKey]);
+  useEffect(() => {
+    if (!confirmKeep) return;
+    keepConfirmation.current?.focus();
+    // On narrow screens the confirmation follows two tall textareas. Keep both
+    // the consequence and the decision buttons in view after the first click.
+    keepConfirmation.current?.scrollIntoView?.({ block: "center" });
+  }, [confirmKeep]);
 
   async function call(url: string, method = "GET", body?: unknown) {
     if (lock.current) return;
@@ -103,8 +113,17 @@ export default function LongitudinalParticipant({ id, zh }: { id: string; zh: bo
     }
   }
 
+  function keepMethod() {
+    if (draft.method.trim() || draft.evidence.trim()) {
+      setConfirmKeep(true);
+      return;
+    }
+    void send("keep");
+  }
+
   const stageIndex = view?.stageIndex ?? (view?.stage ? stageOrder.indexOf(view.stage) : 0);
   const help = view?.help;
+  const hasUnsubmittedDraft = Object.values(draft).some((value) => typeof value === "string" && value.length > 0);
   const helpPending = !!view?.runs.some((run) => run.status === "pending");
   const helpExhausted = !!help && (help.attempts >= help.maxAttempts || help.succeeded >= help.maxSucceeded);
   const canWithdraw = !!view && view.status !== "withdrawn" && view.status !== "consent";
@@ -112,7 +131,7 @@ export default function LongitudinalParticipant({ id, zh }: { id: string; zh: bo
   return (
     <NarrowPageShell as="main" aria-labelledby="longitudinal-title" className="min-h-[calc(100dvh-var(--app-titlebar-h))] space-y-7">
       <header className="space-y-4 border-b border-border pb-6">
-        <div className="flex items-center justify-between gap-3"><p className="font-display text-sm tracking-wide">MindOS <span className="text-muted-foreground">/ {p.title}</span></p>{view && !busy && !error && !["consent", "expired", "withdrawn"].includes(view.status) ? <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"><Check size={14} className="text-success" aria-hidden />{p.saved}</span> : null}</div>
+        <div className="flex items-center justify-between gap-3"><p className="font-display text-sm tracking-wide">MindOS <span className="text-muted-foreground">/ {p.title}</span></p>{view && !busy && !error && !["consent", "expired", "withdrawn"].includes(view.status) ? <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground" aria-live="polite">{hasUnsubmittedDraft ? <Clock3 size={14} aria-hidden /> : <Check size={14} className="text-success" aria-hidden />}{hasUnsubmittedDraft ? p.unsent : p.saved}</span> : null}</div>
         <h1 id="longitudinal-title" ref={heading} tabIndex={-1} className="rounded font-display text-3xl break-words focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           {view?.title ?? p.title}
         </h1>
@@ -207,8 +226,18 @@ export default function LongitudinalParticipant({ id, zh }: { id: string; zh: bo
                 <EchoDraftNotice locale={zh ? "zh" : "en"} state={draftState} />
                 <div className="flex flex-wrap gap-3">
                   <Button variant="amber" type="submit" className="min-h-11 h-auto whitespace-normal" disabled={busy || !draft.method.trim() || !draft.evidence.trim()}>{p.submitRevision}</Button>
-                  <Button type="button" variant="outline" className="min-h-11 h-auto whitespace-normal" disabled={busy} onClick={() => void send("keep")}>{p.keep}</Button>
+                  {!confirmKeep ? <Button type="button" variant="outline" className="min-h-11 h-auto whitespace-normal" disabled={busy} onClick={keepMethod}>{p.keep}</Button> : null}
                 </div>
+                {confirmKeep ? (
+                  <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-4" aria-labelledby="keep-method-confirmation">
+                    <h3 id="keep-method-confirmation" ref={keepConfirmation} tabIndex={-1} className="rounded text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{p.keepDraftWarning}</h3>
+                    <p className={studyNote}>{p.keepDraftExplanation}</p>
+                    <div className="flex flex-wrap gap-3">
+                      <Button type="button" variant="outline" className="min-h-11 h-auto whitespace-normal" disabled={busy} onClick={() => setConfirmKeep(false)}>{p.continueEditing}</Button>
+                      <Button type="button" variant="ghost" className="min-h-11 h-auto whitespace-normal" disabled={busy} onClick={() => void send("keep")}>{p.discardRevisionAndKeep}</Button>
+                    </div>
+                  </div>
+                ) : null}
               </fieldset>
             </form>
           ) : (

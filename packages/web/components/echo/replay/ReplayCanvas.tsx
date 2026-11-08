@@ -32,6 +32,9 @@ function CanvasStage({story,state,copy,compare,onChoose,onResume,onRevisit,child
   const fullscreenTarget=useCallback(()=>container.current?.closest<HTMLElement>('.replay-view')??container.current,[]);
   const viewportWidth=useStore(s=>s.width);const viewportHeight=useStore(s=>s.height);
   const narrow=viewportWidth>0&&viewportWidth<650;
+  // A short desktop pane cannot fit two route lanes at a readable zoom.
+  // Use the same explicit route navigation as a narrow pane instead of clipping an option.
+  const singleRoute=narrow||(viewportHeight>0&&viewportHeight<540);
   const [immersive,setImmersive]=useState(false);
   const [stageHeight,setStageHeight]=useState<number|undefined>(undefined);
   useEffect(()=>{
@@ -86,14 +89,14 @@ function CanvasStage({story,state,copy,compare,onChoose,onResume,onRevisit,child
   const overview=useCallback(()=>void flow.fitView({padding:{top:'70px',bottom:'100px',x:'32px'},minZoom:.25,maxZoom:1,duration:duration()}),[flow]);
   const follow=useCallback(()=>{
     let ids:string[];
-    if(!state.choiceId){const choices=map.nodes.filter(n=>n.data.kind==='choice').slice(0,narrow?1:2).map(n=>n.id);ids=narrow?choices:[map.rootId,...choices];}
+    if(!state.choiceId){const choices=map.nodes.filter(n=>n.data.kind==='choice').slice(0,singleRoute?1:2).map(n=>n.id);ids=singleRoute?choices:[map.rootId,...choices];}
     else{
       const incoming=map.edges.find(e=>e.target===map.focusId)?.source;
       const prior=map.nodes.find(node=>node.id===incoming);const current=map.nodes.find(node=>node.id===map.focusId);
       ids=narrow||(prior&&current&&Math.abs(prior.position.y-current.position.y)>100)?[map.focusId]:[incoming??map.rootId,map.focusId];
     }
     void flow.fitView({nodes:ids.map(id=>({id})),padding:{top:cameraTop,bottom:narrow?'140px':'100px',left:narrow?'24px':'50px',right:narrow?'24px':'50px'},minZoom:.8,maxZoom:1,duration:duration()});
-  },[state.choiceId,narrow,map,flow,cameraTop]);
+  },[state.choiceId,narrow,singleRoute,map,flow,cameraTop]);
   const focusRoute=(id:string)=>{
     setReviewHidden(true);setInspection(null);
     const endpoint=map.nodes.filter(node=>node.data.choiceId===id).at(-1);if(!endpoint)return;
@@ -134,7 +137,7 @@ function CanvasStage({story,state,copy,compare,onChoose,onResume,onRevisit,child
       </div>
       <div className="replay-canvas-caption"><span className="replay-chapter font-mono">{String(state.sceneIndex+1).padStart(2,'0')}</span><div><p>{compare?copy.compare:state.historyFrom?copy.historicalRoute:state.choiceId?copy.afterChoice:copy.beforeChoice}</p><span>{narrow?story.scenes[state.sceneIndex].title:copy.canvasHelp}</span></div></div>
       {story.scenes.length>1&&<nav className="replay-scene-trail" aria-label={copy.journey}>{story.scenes.map((scene,index)=><Button key={scene.id} size="icon-sm" variant="ghost" aria-current={state.sceneIndex===index?'step':undefined} disabled={!available.has(index)} aria-label={`${available.has(index)?copy.revisitScene:copy.lockedScene} ${index+1}`} title={available.has(index)?scene.title:copy.lockedScene} onClick={()=>onRevisit(index)}><span className="font-mono">{index+1}</span></Button>)}</nav>}
-      {!compare&&!state.choiceId&&(narrow||story.scenes[state.sceneIndex].choices.length>2)&&<nav className="replay-route-jump" aria-label={copy.routes}>{story.scenes[state.sceneIndex].choices.map((choice,index)=><Button key={choice.id} size="sm" variant="outline" aria-label={`${copy.jumpChoice} ${String.fromCharCode(65+index)}`} onClick={()=>focusNode(`${story.scenes[state.sceneIndex].id}:choice:${choice.id}`)}>{String.fromCharCode(65+index)}</Button>)}</nav>}
+      {!compare&&!state.choiceId&&(singleRoute||story.scenes[state.sceneIndex].choices.length>2)&&<nav className="replay-route-jump" aria-label={copy.routes}>{story.scenes[state.sceneIndex].choices.map((choice,index)=><Button key={choice.id} size="sm" variant="outline" title={choice.label} aria-label={`${copy.jumpChoice} ${String.fromCharCode(65+index)}`} onClick={()=>focusNode(`${story.scenes[state.sceneIndex].id}:choice:${choice.id}`)}>{String.fromCharCode(65+index)}</Button>)}</nav>}
       <div className="replay-canvas-tools">
         {!compare&&state.choiceId&&<Button variant="ghost" size="sm" className="replay-read-tool" title={copy.readCurrent} aria-label={copy.readCurrent} onClick={()=>{setInspection(null);setRequestedReading(cursorKey);}}><GitBranch size={14}/><span>{copy.readCurrent}</span></Button>}
         {compare&&reviewHidden&&<Button variant="ghost" size="sm" onClick={()=>setReviewHidden(false)}><GitBranch size={14}/><span>{copy.showResults}</span></Button>}

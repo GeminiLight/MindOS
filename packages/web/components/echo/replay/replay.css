@@ -177,6 +177,11 @@
 .replay-journey-attempt { margin-top:20px; border-left:2px solid var(--border); padding-left:18px; }
 .replay-journey-moment { margin-top:17px; }
 .replay-journey-moment .replay-evidence-item { margin-top:10px; }
+.replay-chain-progress { color:var(--amber-text); font-size:11px; margin-bottom:12px; }
+.replay-chain-summary { font-size:12px; line-height:1.9; color:var(--muted-foreground); margin:10px 0; }
+.replay-journey-evidence > summary { cursor:pointer; padding:8px 0; font-size:11px; color:var(--muted-foreground); }
+.replay-takeaway-next { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-top:16px; }
+.replay-takeaway-next > p { font-size:11px; line-height:1.8; color:var(--muted-foreground); max-width:300px; }
 .replay-takeaway { border-top:1px solid var(--border); padding-top:24px; }
 .replay-tradeoff { display:grid; gap:7px; margin-top:12px; font-size:13px; font-weight:400; line-height:1.8; color:var(--muted-foreground); }
 .replay-tradeoff>span { display:grid; grid-template-columns:28px minmax(0,1fr); gap:6px; text-align:left; }

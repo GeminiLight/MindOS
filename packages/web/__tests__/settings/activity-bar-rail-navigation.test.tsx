@@ -157,7 +157,7 @@ describe('ActivityBar rail navigation', () => {
 
     const echoButton = host.querySelector('[data-walkthrough="echo-panel"]');
     expect(echoButton).not.toBeNull();
-    expect(echoButton?.getAttribute('href')).toBe('/echo/overview');
+    expect(echoButton?.getAttribute('href')).toBe('/echo/experiences');
 
     await act(async () => {
       root.unmount();

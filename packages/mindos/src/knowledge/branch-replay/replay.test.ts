@@ -66,6 +66,14 @@ describe('source-grounded branching stories', () => {
     expect(extractBranchStory({ ...source, messages: [] })).toBeNull();
     expect(extractBranchStory({ ...source, messages: [{ id: 'm0', role: 'user', text: '你好' }] })).toBeNull();
   });
+  it('does not turn a neutral yes/no question into a correction decision', () => {
+    expect(extractBranchStory({ id: 'neutral', runtime: 'codex', title: '核对数量', messages: [
+      { id: 'm0', role: 'user', text: '请帮我看一下首页的徽章数量。' },
+      { id: 'm1', role: 'assistant', text: '首页目前显示了三个不同的徽章，分别对应三个部分。' },
+      { id: 'm2', role: 'user', text: '是不是有三个徽章了？' },
+      { id: 'm3', role: 'assistant', text: '是的，目前首页已经显示三个徽章，可以在页面里查看。' },
+    ] })).toBeNull();
+  });
   it('handles Unicode and rejects oversized or ambiguous scene identities', () => {
     const bad = draft(); bad.scenes.push({ ...bad.scenes[0] });
     expect(() => validateBranchStory(source, bad)).toThrow(/duplicate|unique/i);

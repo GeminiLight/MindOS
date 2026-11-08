@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, 
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { closeAllMindosDatabases } from '../../foundation/storage/sqlite.js';
 import { readStudioAutomationState } from '../automations/store.js';
 import {
@@ -40,6 +40,7 @@ function seedJsonlEvents(root: string, events: Array<Record<string, unknown>>, l
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   closeAllMindosDatabases();
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
@@ -203,6 +204,8 @@ describe('handlers/change-log store (sqlite)', () => {
   });
 
   it('marks changes seen in the state table without recreating legacy files', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-26T00:00:00.000Z'));
     const root = makeRoot();
     seedJsonlEvents(root, [
       { id: '1', ts: '2026-01-01T00:00:00.000Z', op: 'save_file', path: 'a.md', source: 'user', summary: 'a changed' },
@@ -217,6 +220,8 @@ describe('handlers/change-log store (sqlite)', () => {
     expect(existsSync(join(root, '.mindos', 'change-log.meta.json'))).toBe(false);
 
     // A newer event is unread again.
+    // "Newer" must be explicit; a fast SQLite write can share the seen millisecond.
+    vi.setSystemTime(new Date('2026-10-26T00:00:00.001Z'));
     appendContentChangeToLog(root, { op: 'save_file', path: 'b.md', source: 'user', summary: 'later' });
     expect(getContentChangeSummaryFromLog(root).unreadCount).toBe(1);
   });

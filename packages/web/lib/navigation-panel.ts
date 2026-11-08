@@ -54,7 +54,7 @@ export const ROUTE_PANEL_HREF: Record<RoutePanelId, string> = {
   capture: '/capture',
   // Must be a valid echo segment (see ECHO_SEGMENT_IDS) so app/echo/[segment]
   // can validate the route before rendering.
-  echo: '/echo/overview',
+  echo: '/echo/experiences',
   agents: '/agents',
   studio: '/studio',
   discover: '/explore',
