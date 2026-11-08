@@ -1,3 +1,4 @@
+import { privateCheckout } from './helpers/private-checkout';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -41,7 +42,7 @@ function findPackageManifests(dir: string): string[] {
 }
 
 describe('OpenCode architecture quality goal contract', () => {
-  it('documents subpath boundaries as the default instead of package splitting', () => {
+  it.skipIf(!privateCheckout)('documents subpath boundaries as the default instead of package splitting', () => {
     const spec = readText('wiki/specs/spec-opencode-architecture-quality-goal.md');
 
     for (const required of [

@@ -1,3 +1,4 @@
+import { privateCheckout } from './helpers/private-checkout';
 import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -401,7 +402,7 @@ describe('product npm publish contract', () => {
     expect(verifyStandalone).toContain('/api/health');
   });
 
-  it('documents the OpenCode-style artifact-only Web runtime direction', () => {
+  it.skipIf(!privateCheckout)('documents the OpenCode-style artifact-only Web runtime direction', () => {
     const spec = readText('wiki/specs/spec-opencode-style-web-runtime.md');
 
     expect(spec).toContain('packages/web');

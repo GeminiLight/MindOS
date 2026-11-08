@@ -1,3 +1,4 @@
+import { privateCheckout } from './helpers/private-checkout';
 import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -174,7 +175,7 @@ describe('OpenCode-style platform runtime packages', () => {
     expect(release).toContain('.agents/skills/mindos/SKILL.md');
   });
 
-  it('documents the migration plan and acceptance criteria', () => {
+  it.skipIf(!privateCheckout)('documents the migration plan and acceptance criteria', () => {
     const specPath = 'wiki/specs/spec-opencode-style-platform-runtime.md';
     expect(existsSync(resolve(root, specPath))).toBe(true);
     const spec = readText(specPath);

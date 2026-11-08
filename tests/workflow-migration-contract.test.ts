@@ -1,3 +1,4 @@
+import { privateCheckout } from './helpers/private-checkout';
 import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -24,9 +25,11 @@ describe('GitHub workflow migration contract', () => {
       'packages/mobile/package.json': '@mindos/mobile',
       'packages/browser-extension/package.json': '@mindos/browser-extension',
       'packages/desktop-tauri/package.json': '@mindos/desktop-tauri',
-      'examples/package.json': '@mindos/examples',
       'tests/integration/package.json': '@mindos/integration-tests',
-      'demo/package.json': '@mindos/demo',
+      ...(privateCheckout ? {
+        'examples/package.json': '@mindos/examples',
+        'demo/package.json': '@mindos/demo',
+      } : {}),
     };
 
     for (const [packagePath, expectedName] of Object.entries(expectedAppNames)) {
@@ -141,9 +144,8 @@ describe('GitHub workflow migration contract', () => {
     expect(yml).not.toMatch(/\bcd app\b|\bcd \.\.\/mcp\b|app\/package-lock\.json/);
   });
 
-  it('builds desktop from packages/desktop and dispatches tagged releases with inputs', () => {
+  it('builds desktop from packages/desktop for an exact tag', () => {
     const desktop = workflow('build-desktop.yml');
-    const sync = workflow('sync-to-mindos.yml');
 
     expect(desktop).toContain('cd packages/desktop');
     expect(desktop).toContain('pnpm install --frozen-lockfile');
@@ -163,7 +165,10 @@ describe('GitHub workflow migration contract', () => {
     expect(desktop).toContain('packages/desktop/dist/*.dmg');
     expect(desktop).toContain('packages/desktop/dist/*.blockmap');
     expect(desktop).not.toMatch(/\bcd desktop\b|\bcd app\b|\bcd mcp\b|(^|\s)desktop\/dist\//m);
+  });
 
+  it.skipIf(!privateCheckout)('dispatches tagged desktop releases with exact inputs', () => {
+    const sync = workflow('sync-to-mindos.yml');
     expect(sync).toContain('\\"tag\\":\\"${TAG}\\"');
     expect(sync).toContain('\\"publish\\":\\"true\\"');
     expect(sync).toContain('\\"ref\\":\\"${TAG}\\"');
@@ -173,7 +178,6 @@ describe('GitHub workflow migration contract', () => {
   });
 
   it('keeps release workflow triggers single-sourced by tag family', () => {
-    const sync = workflow('sync-to-mindos.yml');
     const publishNpm = workflow('publish-npm.yml');
     const publishRuntime = workflow('publish-runtime.yml');
     const publishClipper = workflow('publish-clipper.yml');
@@ -182,20 +186,23 @@ describe('GitHub workflow migration contract', () => {
     expect(publishNpm).toContain('workflow_dispatch:');
     expect(publishRuntime).toContain("tags:\n      - 'v[0-9]+.[0-9]+.[0-9]+'");
     expect(publishClipper).toContain("tags:\n      - 'clipper-v[0-9]+.[0-9]+.[0-9]+'");
+  });
 
+  it.skipIf(!privateCheckout)('lets the public tag trigger npm instead of dispatching it', () => {
+    const sync = workflow('sync-to-mindos.yml');
     expect(sync).toContain('build-desktop.yml/dispatches');
     expect(sync).not.toContain('publish-npm.yml/dispatches');
     expect(sync).toContain('public repo tag push will trigger publish-npm.yml and publish-runtime.yml');
   });
 
-  it('serializes public repository syncs so branch and tag pushes cannot race', () => {
+  it.skipIf(!privateCheckout)('serializes public repository syncs so branch and tag pushes cannot race', () => {
     const sync = workflow('sync-to-mindos.yml');
 
     expect(sync).toContain('concurrency:\n  group: sync-to-mindos');
     expect(sync).toContain('cancel-in-progress: false');
   });
 
-  it('preserves co-author trailers when syncing commits to the public repo', () => {
+  it.skipIf(!privateCheckout)('preserves co-author trailers when syncing commits to the public repo', () => {
     const sync = workflow('sync-to-mindos.yml');
 
     expect(sync).toContain("DEV_SUBJECT=$(git -C \"$GITHUB_WORKSPACE\" log -1 --format='%s')");
@@ -331,7 +338,7 @@ describe('GitHub workflow migration contract', () => {
     }
   });
 
-  it('keeps the public sync whitelist aligned with the monorepo layout', () => {
+  it.skipIf(!privateCheckout)('keeps the public sync whitelist aligned with the monorepo layout', () => {
     const syncinclude = readText('.syncinclude');
 
     expect(syncinclude).not.toMatch(/^\s+- apps$/m);
@@ -341,6 +348,7 @@ describe('GitHub workflow migration contract', () => {
     expect(syncinclude).toMatch(/^\s+- pnpm-lock\.yaml$/m);
     expect(syncinclude).toMatch(/^\s+- pnpm-workspace\.yaml$/m);
     expect(syncinclude).toMatch(/^\s+- turbo\.json$/m);
+    expect(syncinclude).toMatch(/^\s+- eslint\.config\.mjs$/m);
     expect(syncinclude).not.toMatch(/^\s+- app$/m);
     expect(syncinclude).not.toMatch(/^\s+- mcp$/m);
     expect(syncinclude).not.toMatch(/^\s+- desktop$/m);

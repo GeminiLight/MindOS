@@ -1,3 +1,4 @@
+import { privateCheckout } from './helpers/private-checkout';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { builtinModules } from 'node:module';
 import { resolve } from 'node:path';
@@ -11,7 +12,7 @@ function read(relativePath: string): string {
 }
 
 describe('Bun single-binary runtime contract', () => {
-  it('documents the Bun single-binary target and extraction model', () => {
+  it.skipIf(!privateCheckout)('documents the Bun single-binary target and extraction model', () => {
     const specPath = 'wiki/specs/spec-bun-single-binary-runtime.md';
     expect(existsSync(resolve(root, specPath))).toBe(true);
 
@@ -174,6 +175,9 @@ describe('Bun single-binary runtime contract', () => {
     expect(release).toContain('doctor storage --json');
     expect(release).toContain('"driver"[[:space:]]*:[[:space:]]*"bun:sqlite"');
 
+  });
+
+  it.skipIf(!privateCheckout)('documents the Bun SQLite driver prerequisites', () => {
     expect(existsSync(resolve(root, 'wiki/specs/spec-sqlite-bun-driver.md'))).toBe(true);
     const spec = read('wiki/specs/spec-bun-single-binary-runtime.md');
     expect(spec).toContain('bun:sqlite');

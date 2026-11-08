@@ -1,3 +1,4 @@
+import { privateCheckout } from './helpers/private-checkout';
 import { describe, expect, it } from 'vitest';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -49,7 +50,7 @@ describe('test architecture contract', () => {
     const workspacePackageDirs = [
       'packages/browser-extension',
       'packages/desktop-tauri',
-      'examples',
+      ...(privateCheckout ? ['examples'] : []),
       'packages/mindos',
       'packages/web',
       'packages/desktop',

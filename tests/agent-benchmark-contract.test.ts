@@ -1,3 +1,4 @@
+import { privateCheckout } from './helpers/private-checkout';
 import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -45,7 +46,7 @@ function loadCases(): BenchmarkCase[] {
   return parsed.cases;
 }
 
-describe('Agent benchmark contract', () => {
+describe.skipIf(!privateCheckout)('Agent benchmark contract', () => {
   it('keeps a broad set of realistic MindOS Agent cases', () => {
     const cases = loadCases();
     expect(cases.length).toBeGreaterThanOrEqual(20);
@@ -153,6 +154,9 @@ describe('Agent benchmark contract', () => {
     expect(readme).toContain('--replay-results');
   });
 
+});
+
+describe('Default MindOS skills', () => {
   it('keeps default MindOS skill copies aligned', () => {
     for (const [source, packaged] of mirroredSkillFiles) {
       expect(readFileSync(path.join(repoRoot, packaged), 'utf8'), `${packaged} should match ${source}`)

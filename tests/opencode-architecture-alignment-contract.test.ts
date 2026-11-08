@@ -1,3 +1,4 @@
+import { privateCheckout } from './helpers/private-checkout';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -13,7 +14,7 @@ function readText(relativePath: string): string {
 }
 
 describe('OpenCode architecture alignment', () => {
-  it('documents the source/runtime/client boundary migration', () => {
+  it.skipIf(!privateCheckout)('documents the source/runtime/client boundary migration', () => {
     const specPath = 'wiki/specs/spec-opencode-architecture-alignment.md';
     expect(existsSync(resolve(root, specPath))).toBe(true);
 
@@ -36,7 +37,7 @@ describe('OpenCode architecture alignment', () => {
     expect(spec).toContain('serve');
   });
 
-  it('documents the agent architecture cleanup and keeps Web on package exports', () => {
+  it.skipIf(!privateCheckout)('documents the agent architecture cleanup', () => {
     const specPath = 'wiki/specs/spec-agent-architecture-cleanup.md';
     expect(existsSync(resolve(root, specPath))).toBe(true);
 
@@ -57,7 +58,9 @@ describe('OpenCode architecture alignment', () => {
     expect(spec).toContain('packages/mindos/src/agent/turn');
     expect(spec).toContain('packages/mindos/src/agent/mindos-pi/runtime.ts');
     expect(spec).toContain('package exports');
+  });
 
+  it('keeps Web on package exports', () => {
     const webTsconfig = readJson<{ compilerOptions?: { paths?: Record<string, unknown> } }>('packages/web/tsconfig.json');
     expect(webTsconfig.compilerOptions?.paths?.['@geminilight/mindos/agent']).toBeUndefined();
   });

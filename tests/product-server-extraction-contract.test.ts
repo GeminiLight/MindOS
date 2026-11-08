@@ -1,3 +1,4 @@
+import { privateCheckout } from './helpers/private-checkout';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -19,7 +20,7 @@ function readRouteTable(): string {
 }
 
 describe('Product server extraction contract', () => {
-  it('documents the full Product Server extraction plan', () => {
+  it.skipIf(!privateCheckout)('documents the full Product Server extraction plan', () => {
     const specPath = 'wiki/specs/spec-product-server-extraction.md';
     expect(existsSync(resolve(root, specPath))).toBe(true);
     const spec = read(specPath);

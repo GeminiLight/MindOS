@@ -53,3 +53,7 @@ Obsidian 语料扫描默认不自动运行，仅保留 **Obsidian Corpus (Manual
 [首次手动同步运行](https://github.com/GeminiLight/mindos-dev/actions/runs/34701975848) 成功（15:21–15:24 UTC）；公开仓 main 更新到 `d651c80c`，gh-pages 更新到 `013b8281`，网站树与源 main 的 landing 树完全一致，公开仓 Obsidian 手动工作流文件也与源文件 SHA 相同。运行器完成一次任务后自动注销，API 返回 0 个 runner，容器已删除。未修改付款方式、预算，也未发布 npm/Desktop 版本。
 
 本次对话期望 workflow：恢复同步，已完成。后续需要同步时重新启动单次运行器并手动派发；其他 GitHub 托管 PR 检查仍受账户额度限制。
+
+### 公开仓根契约
+
+私有源仓和公开镜像共用 Linux 回归任务。公开镜像继续运行产品、打包和已发布工作流的通用断言，只跳过需要私有规格、基准和同步配置的断言。根 ESLint 配置通过白名单同步。私有源仓仍运行全部契约；CI 用仓库身份判断私有源仓，缺少私有文件会失败。
