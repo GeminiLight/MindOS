@@ -2,9 +2,10 @@
 import { learningRecordStatus } from './learning-client';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowUpRight, Sprout } from 'lucide-react';
+import { ArrowRight, BookOpen, Search } from 'lucide-react';
 import type { LearningLoop } from '@geminilight/mindos/knowledge';
-import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { useLocale } from '@/lib/stores/locale-store';
 import { cn } from '@/lib/utils';
 import EchoLearningEditor from './EchoLearningEditor';
@@ -18,9 +19,42 @@ import { LEARNING_UPDATED, learningRequest, learningErrorMessage, reviewIsDue } 
 export default function EchoLearningPanel() {
   const { t, locale } = useLocale();
   const p = t.echoLearning;
+  const w = p.workspace;
+  const [search, setSearch] = useState('');
+  const [browsing, setBrowsing] = useState(false);
+  const [missingLink, setMissingLink] = useState(false);
+  const focusSelection = useRef(false);
+  const detail = useRef<HTMLDivElement>(null);
   const [loops, setLoops] = useState<LearningLoop[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const selectedRef = useRef(selected);
+  useEffect(() => {
+    if (selected && focusSelection.current) {
+      focusSelection.current = false;
+      const heading = detail.current?.querySelector('h3');
+      heading?.focus();
+      heading?.scrollIntoView?.({ block: 'start' });
+    }
+  }, [selected]);
+  function rememberSelection(id: string | null) {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('learning') !== id) {
+      url.searchParams.delete('practice');
+      if (url.hash.startsWith('#echo-transfer-')) url.hash = '';
+      setReturningPractice(null);
+    }
+    if (id) url.searchParams.set('learning', id);
+    else url.searchParams.delete('learning');
+    window.history.replaceState(window.history.state, '', url);
+    consumedLink.current = id;
+    setMissingLink(false);
+  }
+  function selectRecord(id: string) {
+    if (selected !== id && !requestLearningNavigation()) return;
+    focusSelection.current = true;
+    setSelected(id); setBrowsing(false); rememberSelection(id);
+    if (selected === id) detail.current?.querySelector('h3')?.focus();
+  }
   useEffect(() => { selectedRef.current = selected; }, [selected]);
   const [returningPractice, setReturningPractice] = useState<string | null>(null);
   useEffect(() => {
@@ -51,8 +85,10 @@ export default function EchoLearningPanel() {
         }
         setLoops([...merged.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)));
         const linked = new URLSearchParams(window.location.search).get('learning');
+        setMissingLink(!!linked && !merged.has(linked));
         if (linked && merged.has(linked) && consumedLink.current !== linked) {
           consumedLink.current = linked;
+          if (!selectedRef.current && new URLSearchParams(window.location.search).get('practice') !== '1') focusSelection.current = true;
           setSelected((current) => current ?? linked);
           setArchived(merged.get(linked)!.archived);
         }
@@ -68,47 +104,87 @@ export default function EchoLearningPanel() {
       const { loop, select } = (event as CustomEvent<{ loop: LearningLoop; select: boolean }>).detail;
       updatesDuringLoad.current.set(loop.id, loop);
       setLoops((current) => [loop, ...current.filter((item) => item.id !== loop.id)]);
-      if (select && (selectedRef.current === loop.id || requestLearningNavigation())) { setSelected(loop.id); setArchived(loop.archived); }
+      if (select && (selectedRef.current === loop.id || requestLearningNavigation())) { setSelected(loop.id); setArchived(loop.archived); setBrowsing(false); rememberSelection(loop.id); }
+      else if (selectedRef.current === loop.id) setArchived(loop.archived);
     };
     window.addEventListener(LEARNING_UPDATED, update);
     window.addEventListener('focus', reload);
     return () => { ++requestId.current; controller.current?.abort(); window.removeEventListener(LEARNING_UPDATED, update); window.removeEventListener('focus', reload); };
   }, [reload]);
-  const visible = loops.filter((loop) => loop.archived === archived);
+  const filtered = loops.filter((loop) => loop.archived === archived);
+  const visible = filtered.filter((loop) => loop.source.title.toLocaleLowerCase(locale).includes(search.trim().toLocaleLowerCase(locale)));
+  function changeFilter(value: boolean) {
+    if (value === archived || !requestLearningNavigation()) return;
+    setArchived(value); setSelected(null); setSearch(''); rememberSelection(null);
+  }
   const current = loops.find((loop) => loop.id === selected);
   return (
-    <section id="echo-learning" className="scroll-mt-4 space-y-4" aria-labelledby="echo-learning-title">
-      <header className="space-y-2">
-        <h2 id="echo-learning-title" className="flex items-center gap-2 font-display text-xl"><Sprout className="text-[var(--amber)]" size={20} aria-hidden />{p.title}</h2>
-        <p className="max-w-2xl font-sans text-sm leading-6 text-muted-foreground">{p.lead}</p>
+    <section id="echo-learning" className="@container scroll-mt-4 space-y-6" aria-labelledby="echo-learning-title">
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <h2 id="echo-learning-title" className="text-base font-medium">{w.records}</h2>
+        {loops.length > 0 && <Link href="/echo/growth#echo-insight" className={buttonVariants({ variant: 'outline', className: 'min-h-11' })}>{w.newPractice}<ArrowRight aria-hidden /></Link>}
       </header>
-      <InquiryQueue />
-      <EchoTransferQueue loops={loops} />
       {loading ? <p className="text-sm text-muted-foreground" role="status">{p.loading}</p> : null}
-      {error ? <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-error">{error}<Button className="min-h-11" variant="outline" size="sm" onClick={() => void reload()}>{p.reload}</Button></div> : null}
+      {error ? <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-error/40 p-4 text-sm leading-6"><span>{error}</span><Button className="min-h-11" variant="outline" size="sm" onClick={() => void reload()}>{p.reload}</Button></div> : null}
+      {missingLink && !loading && !error ? <div role="status" className="flex flex-wrap items-center justify-between gap-3 border-l-2 border-border pl-3 text-sm leading-6"><p>{w.unavailable}</p><Button variant="outline" className="min-h-11" onClick={() => void reload()}>{p.reload}</Button></div> : null}
+      <EchoTransferQueue loops={loops} hideWhenEmpty />
       {loops.length ? <>
-        <div className="flex flex-wrap gap-2" role="group" aria-label={p.title}>
-          {[false, true].map((value) => <Button key={String(value)} size="sm" variant="ghost" aria-pressed={archived === value}
-            className={cn('min-h-11', archived === value && 'bg-muted')} onClick={() => setArchived(value)}>{value ? p.archived : p.active}</Button>)}
+        {current && <Button variant="outline" className="min-h-11 @min-[680px]:hidden" aria-expanded={browsing} aria-controls="learning-record-list" onClick={() => setBrowsing(value => !value)}>{w.browseRecords}</Button>}
+        <div className="grid min-w-0 items-start gap-6 @min-[680px]:grid-cols-[210px_minmax(0,1fr)]">
+          <div id="learning-record-list" className={cn('min-w-0 space-y-3 @min-[680px]:block', current && !browsing && 'hidden')}>
+            <div className="flex flex-wrap gap-1 border-b border-border pb-2" role="group" aria-label={w.records}>
+              {[false, true].map((value) => <Button key={String(value)} size="sm" variant="ghost" aria-pressed={archived === value}
+                className={cn('min-h-11', archived === value && 'bg-muted font-medium')} onClick={() => changeFilter(value)}>{value ? p.archived : p.active}</Button>)}
+            </div>
+            <label className="relative block">
+              <span className="sr-only">{w.search}</span><Search size={15} className="pointer-events-none absolute left-3 top-3.5 text-muted-foreground" aria-hidden />
+              <Input name="learningSearch" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={w.searchPlaceholder} className="min-h-11 pl-9" />
+            </label>
+            <ul className="space-y-1 max-h-64 overflow-y-auto @min-[680px]:max-h-[32rem] p-1 -m-1">
+              {visible.map((loop) => <li key={loop.id} className={cn('rounded-lg border-l-2 px-3 py-2 transition-colors duration-150', selected === loop.id ? 'border-[var(--amber)] bg-[var(--amber-subtle)]' : 'border-transparent hover:bg-muted/50')}>
+                <button type="button" aria-expanded={selected === loop.id} aria-controls="learning-record-detail" onClick={() => selectRecord(loop.id)}
+                  className="min-h-11 w-full min-w-0 rounded text-left text-sm font-medium leading-6 [overflow-wrap:anywhere] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{loop.source.title}</button>
+                <p className={cn('pb-1 text-xs leading-5', reviewIsDue(loop) ? 'font-medium text-foreground' : 'text-muted-foreground')}>{learningRecordStatus(loop, p)}</p>
+              </li>)}
+            </ul>
+            {!visible.length && <div role="status" className="py-5 text-sm leading-6 text-muted-foreground">
+              <p>{search.trim() ? w.noResults : archived ? w.noArchived : p.empty}</p>
+              {search.trim() ? <Button variant="ghost" className="mt-2 min-h-11" onClick={() => setSearch('')}>{w.clearSearch}</Button> : null}
+            </div>}
+          </div>
+          <div ref={detail} id="learning-record-detail" className="min-w-0">
+            {current ? <EchoLearningEditor key={current.id} loop={current} p={p} /> : <div className="flex min-h-64 flex-col justify-center border-y border-border py-8 @min-[680px]:px-6">
+              <BookOpen size={24} strokeWidth={1.5} className="mb-4 text-muted-foreground" aria-hidden />
+              <h3 className="text-lg font-medium">{w.select}</h3><p className="mt-2 max-w-sm text-sm leading-6 text-muted-foreground">{w.selectHint}</p>
+            </div>}
+          </div>
         </div>
-        <ul className="divide-y divide-border rounded-lg border border-border">
-          {visible.map((loop) => <li key={loop.id} className={cn('flex flex-wrap items-center justify-between gap-2 px-3 py-2.5', selected === loop.id && 'bg-muted/40')}>
-            <button type="button" aria-expanded={selected === loop.id} onClick={() => { if (selected !== loop.id && requestLearningNavigation()) setSelected(loop.id); }}
-              className="min-h-11 min-w-0 rounded text-left font-sans text-sm font-medium leading-6 break-words hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{loop.source.title}</button>
-            <span className={cn('text-xs', reviewIsDue(loop) ? 'text-foreground' : 'text-muted-foreground')}>{learningRecordStatus(loop, p)}</span>
-          </li>)}
-        </ul>
       </> : null}
-      {!loading && !error && visible.length === 0 ? <div className="rounded-lg border border-dashed border-border px-4 py-5">
-        <p className="font-sans text-sm font-medium">{archived ? p.archived : p.empty}</p>
-        {!archived ? <><p className="mt-1 text-sm leading-6 text-muted-foreground">{p.emptyHint}</p>
-          <Link href="/echo/growth#echo-insight" className="mt-3 inline-flex min-h-11 items-center gap-1 rounded text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{p.findInsight}<ArrowUpRight size={14} aria-hidden /></Link></> : null}
+      {!loading && !error && loops.length === 0 ? <div className="border-y border-border py-8 sm:py-10">
+        <div className="grid gap-8 @min-[680px]:grid-cols-[1fr_1fr] @min-[680px]:gap-12">
+          <div className="flex flex-col items-start justify-center">
+            <BookOpen size={26} strokeWidth={1.5} className="mb-5 text-[var(--amber)]" aria-hidden />
+            <h3 className="text-2xl font-medium leading-9">{p.empty}</h3>
+            <p className="mt-3 max-w-sm text-sm leading-7 text-muted-foreground">{p.emptyHint}</p>
+            <Link href="/echo/growth#echo-insight" className={buttonVariants({ variant: 'amber', className: 'mt-6 min-h-11 px-4' })}>{p.findInsight}<ArrowRight aria-hidden /></Link>
+          </div>
+          <ol className="space-y-6" aria-label={p.title}>
+            {p.steps.map((step, index) => <li key={step} className="flex items-start gap-4">
+              <span className="pt-1 font-mono text-xs text-muted-foreground">0{index + 1}</span>
+              <div><p className="text-sm font-medium leading-6">{step}</p><p className="mt-1 text-sm leading-6 text-muted-foreground">{w.stepHints[index]}</p></div>
+            </li>)}
+          </ol>
+        </div>
       </div> : null}
       {returningPractice && !loading && !loops.some(loop => loop.id === returningPractice) ? <div className="space-y-2">
         <p className="text-sm leading-6 text-muted-foreground">{transferCopy[locale].sourceUnavailable}</p>
         <EchoTransferPractice key={returningPractice} learningId={returningPractice} locale={locale} archived />
       </div> : null}
-      {current ? <EchoLearningEditor key={current.id} loop={current} p={p} /> : null}
+      <details className="group border-t border-border pt-2">
+        <summary className="min-h-11 cursor-pointer rounded py-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{w.supporting}</summary>
+        <p className="mb-5 text-sm leading-6 text-muted-foreground">{w.supportingHint}</p>
+        <InquiryQueue />
+      </details>
     </section>
   );
 }

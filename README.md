@@ -387,7 +387,8 @@ Join our WeChat group for early access, feedback, and AI workflow discussions:
 
 ### 🙏 Acknowledgements
 
-This project has been published on the [LINUX DO community](https://linux.do), and we deeply appreciate the community's support and feedback.
+- This project has been published on the [LINUX DO community](https://linux.do), and we deeply appreciate the community's support and feedback.
+- Developers in mainland China can also use the [AtomGit mirror](https://atomgit.com/GeminiLight/MindOS).
 
 ---
 

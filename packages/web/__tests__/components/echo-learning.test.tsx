@@ -10,6 +10,8 @@ import EchoLearningStartButton from '@/components/echo/learning/EchoLearningStar
 import { messages } from '@/lib/i18n';
 import { announceLearningUpdate } from '@/components/echo/learning/learning-client';
 
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
+
 vi.mock('@/lib/stores/locale-store', () => ({
   useLocale: () => ({ locale: 'en', t: messages.en }),
 }));
@@ -20,6 +22,7 @@ let root: Root;
 let failSave: boolean;
 let fetchMock: ReturnType<typeof vi.fn>;
 beforeEach(() => {
+  window.history.replaceState({}, '', '/echo/learning');
   host = document.createElement('div'); document.body.append(host); root = createRoot(host); failSave = false;
   fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
     if (_url === '/api/echo/inquiries') return Response.json({ inquiries: [], unavailableCount: 0 });
@@ -49,6 +52,8 @@ async function click(label: string) {
   await act(async () => button!.click());
 }
 async function fill(name: string, value: string) {
+  const radio = host.querySelector(`input[type=radio][name="${name}"][value="${value}"]`) as HTMLInputElement | null;
+  if (radio) { await act(async () => radio.click()); return; }
   const input = host.querySelector('[name="' + name + '"]') as HTMLInputElement | HTMLTextAreaElement;
   expect(input, name).not.toBeNull();
   await act(async () => {
@@ -99,6 +104,8 @@ describe('Echo human learning experience', () => {
     await fill('reviewOn', '2026-09-10');
     await click('Save this practice');
     expect(host.textContent).toContain('Check each claim against the paper');
+    const plan = [...host.querySelectorAll('details')].find(el => el.querySelector('summary')?.textContent === 'Practice plan');
+    expect(plan?.open).toBe(false);
     await fill('outcome', 'mixed');
     await fill('observation', 'I corrected two claims; one remains unclear.');
     await fill('revisedRule', 'Explain the evidence before choosing the wording.');
@@ -119,6 +126,7 @@ describe('Echo human learning experience', () => {
     failSave = true;
     await click('Save my understanding');
     expect(host.querySelector('[role="alert"]')).not.toBeNull();
+    expect(document.activeElement).toBe(host.querySelector('[role="alert"]'));
     expect((host.querySelector('[name="understanding"]') as HTMLTextAreaElement).value).toBe('My own revised judgment');
     failSave = false;
     await click('Save my understanding');
@@ -140,6 +148,8 @@ describe('Echo human learning experience', () => {
   it('disables starting an ungrounded sample and restores archived records', async () => {
     await act(async () => root.render(<EchoLearningStartButton cardId="sample" enabled={false} />));
     expect(host.querySelector('button')?.disabled).toBe(true);
+    expect(host.textContent).toContain('Start from an insight with a source conversation.');
+    expect(host.querySelector('button')?.getAttribute('aria-describedby')).toBeTruthy();
     const loop = startLearningLoop(testMindRoot, source);
     updateLearningLoop(testMindRoot, loop.id, { action: 'archive', version: 1 });
     await render();
@@ -250,4 +260,168 @@ it('keeps counterexamples independent from pausing and reviews revisions without
   expect(host.textContent).toContain('Check attrition before using this again.');
   expect(host.textContent).toContain('A design label missed the attrition problem.');
   expect([...host.querySelectorAll('button')].filter((button) => button.textContent === 'Resume this method')).toHaveLength(0);
+});
+
+
+it('keeps the open draft while filtering titles and offers a clear no-results recovery', async () => {
+  startLearningLoop(testMindRoot, source);
+  await render(); await click(source.title); await fill('before', 'Keep this thought');
+  await fill('learningSearch', '不存在的记录 🪴');
+  expect(host.textContent).toContain('No matching records');
+  expect((host.querySelector('[name=before]') as HTMLTextAreaElement).value).toBe('Keep this thought');
+  await click('Clear search');
+  expect(host.querySelector('button[aria-expanded=true]')?.textContent).toBe(source.title);
+});
+
+it('protects drafts when changing the archive filter and closes the old editor after confirmed navigation', async () => {
+  startLearningLoop(testMindRoot, source);
+  await render(); await click(source.title); await fill('before', 'Unfinished thought');
+  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+  await click('Archived');
+  expect(host.querySelector('[name=before]')).not.toBeNull();
+  expect([...host.querySelectorAll('button')].find(el => el.textContent === 'Archived')?.getAttribute('aria-pressed')).toBe('false');
+  confirm.mockReturnValue(true); await click('Archived');
+  expect(host.querySelector('[name=before]')).toBeNull();
+  expect(host.textContent).toContain('No archived records');
+});
+
+it('marks the step being edited instead of the saved stage', async () => {
+  let loop = startLearningLoop(testMindRoot, source);
+  loop = updateLearningLoop(testMindRoot, loop.id, { action: 'reflect', version: loop.version, before: 'Old', understanding: 'New' });
+  await render(); await click(source.title);
+  expect(host.querySelector('[aria-current=step]')?.textContent).toContain('One practice');
+  await click('Edit my understanding');
+  expect(host.querySelector('[aria-current=step]')?.textContent).toContain('My understanding');
+});
+
+it('offers an actionable retry without claiming an empty library after an initial read failure', async () => {
+  const original = fetchMock.getMockImplementation()!;
+  fetchMock.mockImplementation((url: string, init?: RequestInit) => url === '/api/echo/learning' ? Promise.reject(new Error('offline')) : original(url, init));
+  await render();
+  expect(host.querySelector('[role=alert]')).not.toBeNull();
+  expect(host.textContent).not.toContain(messages.en.echoLearning.empty);
+  fetchMock.mockImplementation(original); await click('Retry');
+  expect(host.textContent).toContain(messages.en.echoLearning.empty);
+});
+
+it('keeps the selected record in the address so refreshing resumes the same practice', async () => {
+  const loop = startLearningLoop(testMindRoot, source);
+  await render(); await click(source.title);
+  expect(new URLSearchParams(location.search).get('learning')).toBe(loop.id);
+  await act(async () => root.render(null)); await render();
+  expect(host.querySelector('[name=before]')).not.toBeNull();
+});
+
+it('restores an unfinished reflection against its original version after another page saves', async () => {
+  const loop = startLearningLoop(testMindRoot, source);
+  await render(); await click(source.title);
+  await fill('before', 'My earlier view'); await fill('understanding', 'My private draft');
+  await act(async () => root.render(null));
+  updateLearningLoop(testMindRoot, loop.id, { action: 'reflect', version: loop.version, before: 'Another page', understanding: 'A different conclusion' });
+  await render(); await click(source.title);
+  expect((host.querySelector('[name=understanding]') as HTMLTextAreaElement)?.value).toBe('My private draft');
+  expect(host.textContent).toContain('This record changed');
+  await click('Save my understanding');
+  expect(listLearningLoops(testMindRoot)[0].reflection?.understanding).toBe('A different conclusion');
+  expect(host.querySelector('[role=alert]')).not.toBeNull();
+});
+
+it('restores the plan editing step along with its unsent input', async () => {
+  let loop = startLearningLoop(testMindRoot, source);
+  loop = updateLearningLoop(testMindRoot, loop.id, { action: 'reflect', version: loop.version, before: 'Old', understanding: 'New' });
+  updateLearningLoop(testMindRoot, loop.id, { action: 'plan', version: loop.version, situation: 'Original', experiment: 'Check', check: 'Evidence', reviewOn: '2099-01-01' });
+  await render(); await click(source.title); await click('Adjust the plan');
+  await fill('situation', 'An unfinished new situation');
+  await act(async () => root.render(null)); await render(); await click(source.title);
+  expect(host.querySelector('[aria-current=step]')?.textContent).toContain('One practice');
+  expect((host.querySelector('[name=situation]') as HTMLTextAreaElement)?.value).toBe('An unfinished new situation');
+});
+
+it('announces a saved understanding and focuses the next step', async () => {
+  startLearningLoop(testMindRoot, source);
+  await render(); await click(source.title); await fill('before', 'Old'); await fill('understanding', 'New');
+  await click('Save my understanding');
+  expect(host.textContent).toContain('Understanding saved. Plan one small practice next.');
+  expect(document.activeElement?.textContent).toBe('One practice');
+});
+
+it('explains an unavailable bookmarked record without pretending the library is empty', async () => {
+  startLearningLoop(testMindRoot, source);
+  window.history.replaceState({}, '', '/echo/learning?learning=learn-' + 'f'.repeat(24));
+  await render();
+  expect(host.textContent).toContain('This learning record is unavailable');
+  expect(host.textContent).toContain(source.title);
+});
+
+it('loads current server data after a committed form is reopened instead of reviving a saved snapshot', async () => {
+  const first = startLearningLoop(testMindRoot, source);
+  await render(); await click(source.title); await fill('before', 'Old'); await fill('understanding', 'First revision');
+  await click('Save my understanding');
+  await act(async () => root.render(null));
+  updateLearningLoop(testMindRoot, first.id, { action: 'reflect', version: 2, before: 'Elsewhere', understanding: 'Latest revision' });
+  await render();
+  expect(host.textContent).toContain('Latest revision');
+  expect(host.textContent).not.toContain('This record changed');
+});
+
+it('keeps a local draft when leaving, and explicitly confirms replacing it with the latest record', async () => {
+  const loop = startLearningLoop(testMindRoot, source);
+  startLearningLoop(testMindRoot, { ...source, cardId: 'other', title: 'Another record' });
+  await render(); await click(source.title); await fill('before', 'Keep my local draft');
+  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+  await click('Another record');
+  expect(confirm).toHaveBeenLastCalledWith(messages.en.echoLearning.workspace.leaveDraft);
+  await click(source.title);
+  expect((host.querySelector('[name=before]') as HTMLTextAreaElement).value).toBe('Keep my local draft');
+  updateLearningLoop(testMindRoot, loop.id, { action: 'reflect', version: 1, before: 'Remote', understanding: 'New' });
+  await act(async () => window.dispatchEvent(new Event('focus')));
+  confirm.mockReturnValue(false); await click('Load latest version (replace this form)');
+  expect((host.querySelector('[name=before]') as HTMLTextAreaElement).value).toBe('Keep my local draft');
+  confirm.mockReturnValue(true); await click('Load latest version (replace this form)');
+  expect(host.querySelector('[name=situation]')).not.toBeNull();
+});
+
+it('keeps input usable when local storage is full and warns instead of claiming it can be restored', async () => {
+  startLearningLoop(testMindRoot, source);
+  await render(); await click(source.title);
+  vi.spyOn(localStorage, 'setItem').mockImplementation(() => { throw new Error('Quota exceeded'); });
+  await fill('before', 'Still here');
+  expect((host.querySelector('[name=before]') as HTMLTextAreaElement).value).toBe('Still here');
+  expect(host.textContent).toContain('Draft storage is unavailable');
+  await fill('understanding', 'Save directly'); await click('Save my understanding');
+  expect(listLearningLoops(testMindRoot)[0].reflection?.understanding).toBe('Save directly');
+});
+
+it('preserves a legacy draft without silently rebasing its missing version', async () => {
+  let loop = startLearningLoop(testMindRoot, source);
+  loop = updateLearningLoop(testMindRoot, loop.id, { action: 'reflect', version: 1, before: 'Old', understanding: 'New' });
+  localStorage.setItem('mindos-echo-draft-v1:' + loop.id + ':personal', JSON.stringify({schema:1,at:Date.now(),value:{before:'Local old',understanding:'Local new',situation:'My situation',experiment:'My action',check:'My evidence',reviewOn:'2099-01-01',outcome:'',observation:'',revisedRule:''}}));
+  await render(); await click(source.title);
+  expect((host.querySelector('[name=situation]') as HTMLTextAreaElement).value).toBe('My situation');
+  await click('Save this practice');
+  expect(listLearningLoops(testMindRoot)[0].stage).toBe('planning');
+  expect(host.textContent).toContain('This older draft has no saved base version');
+});
+
+it('ignores malformed and expired workspace drafts without breaking the record editor', async () => {
+  const loop = startLearningLoop(testMindRoot, source);
+  const key = 'mindos-echo-draft-v1:' + loop.id + ':workspace';
+  localStorage.setItem(key, JSON.stringify({ schema:1, at:Date.now(), value:{snapshot:null,values:{},editing:'bogus'} }));
+  await render(); await click(source.title);
+  expect((host.querySelector('[name=before]') as HTMLTextAreaElement).value).toBe('');
+  await act(async () => root.render(null));
+  localStorage.setItem(key, JSON.stringify({ schema:1,at:Date.now()-8*86400000,value:{} }));
+  await render();
+  expect(host.querySelector('[name=before]')).not.toBeNull();
+});
+
+it('clears a previous practice anchor when selecting another record', async () => {
+  const first = startLearningLoop(testMindRoot, source);
+  const second = startLearningLoop(testMindRoot, { ...source, cardId: 'second-anchor', title: 'Another record' });
+  window.history.replaceState({}, '', '/echo/learning?learning=' + first.id + '&practice=1#echo-transfer-' + first.id);
+  await render(); await click(second.source.title);
+  const url = new URL(window.location.href);
+  expect(url.searchParams.get('learning')).toBe(second.id);
+  expect(url.searchParams.has('practice')).toBe(false);
+  expect(url.hash).toBe('');
 });

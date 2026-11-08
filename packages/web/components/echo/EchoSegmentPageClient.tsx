@@ -19,8 +19,7 @@ import { EchoPageHeader } from './EchoSegmentPageHeader';
 import EchoImprintCardsReview from './EchoImprintCardsReview';
 import { EchoInsightCollapsible } from './EchoInsightCollapsible';
 import EchoMemoryReaderPanel from './EchoMemoryReaderPanel';
-import EchoLearningPanel from './learning/EchoLearningPanel';
-import ResearchEntry from './research/ResearchEntry';
+import EchoLearningEntry from './learning/EchoLearningEntry';
 import { EchoWorktablePanel, OverviewPanel } from './EchoOverviewPanels';
 import {
   InsightPanel,
@@ -385,8 +384,7 @@ export default function EchoSegmentPageClient({ segment }: { segment: EchoSegmen
 
         {readerEchoSegment && (
           <>
-            {(readerEchoSegment === 'growth' || readerEchoSegment === 'practice') && <EchoLearningPanel />}
-            {readerEchoSegment === 'growth' && <ResearchEntry />}
+            {(readerEchoSegment === 'growth' || readerEchoSegment === 'practice') && <EchoLearningEntry />}
             {readerEchoSegment === 'practice' ? (
               <>
                 <PromotionPanel

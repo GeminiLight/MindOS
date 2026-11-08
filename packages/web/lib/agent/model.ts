@@ -1,4 +1,5 @@
 import { effectiveAiConfig } from '@/lib/settings';
+import { applyMiniMaxModelCompatibility } from '@geminilight/mindos/agent/mindos-pi';
 import type { Provider } from '@/lib/custom-endpoints';
 import { resolveModelCapabilities, type ResolvedModelCapabilities } from './model-capabilities';
 import { type ProviderId, getPreset, toPiProvider, getDefaultApi, getDefaultBaseUrl } from './providers';
@@ -144,8 +145,7 @@ function applyEndpointOverrides(model: Model<any>, providerId: ProviderId, baseU
   const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
   const hasCustomBase = !!normalizedBaseUrl;
 
-  // 2.5. Apply preset fixedBaseUrl when registry lookup succeeded but needs endpoint override
-  // (zai-cn: domestic endpoint, deepseek: fixed baseUrl, ollama: localhost)
+  // 2.5. Apply the preset endpoint for provider aliases.
   if (preset.fixedBaseUrl && !hasCustomBase) {
     model = { ...model, baseUrl: preset.fixedBaseUrl };
   }
@@ -153,10 +153,10 @@ function applyEndpointOverrides(model: Model<any>, providerId: ProviderId, baseU
   // 3. Apply user's custom baseUrl
   if (hasCustomBase) {
     model = { ...model, baseUrl: normalizedBaseUrl };
+  }
 
-    if (model.api === 'openai-responses') {
-      model = { ...model, api: 'openai-completions' as any };
-    }
+  if ((hasCustomBase || providerId === 'requesty') && model.api === 'openai-responses') {
+    model = { ...model, api: 'openai-completions' };
   }
 
   // 4. For deepseek/zai-cn/ollama or any custom endpoint, apply conservative compat
@@ -173,5 +173,5 @@ function applyEndpointOverrides(model: Model<any>, providerId: ProviderId, baseU
     };
   }
 
-  return model;
+  return applyMiniMaxModelCompatibility(model, providerId);
 }

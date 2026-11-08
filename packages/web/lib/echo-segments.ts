@@ -7,14 +7,16 @@ export const ECHO_SEGMENT_IDS = ['overview', 'imprint', 'threads', 'growth', 'pr
 export type EchoSegment = (typeof ECHO_SEGMENT_IDS)[number];
 
 export const ECHO_SEGMENT_ORDER: readonly EchoSegment[] = ['overview', 'imprint', 'threads', 'growth', 'practice'];
-export const ECHO_PRIMARY_SEGMENT_ORDER: readonly EchoSegment[] = ['overview', 'imprint', 'growth', 'practice'];
+export type EchoDestination = EchoSegment | 'learning';
+export const ECHO_PRIMARY_SEGMENT_ORDER: readonly EchoDestination[] = ['overview', 'imprint', 'growth', 'learning', 'practice'];
 
 /** App Router paths for each segment (single source for panel + in-page nav). */
-export const ECHO_SEGMENT_HREF: Record<EchoSegment, string> = {
+export const ECHO_SEGMENT_HREF: Record<EchoDestination, string> = {
   overview: '/echo/overview',
   imprint: '/echo/imprint',
   threads: '/echo/threads',
   growth: '/echo/growth',
+  learning: '/echo/learning',
   practice: '/echo/practice',
 };
 

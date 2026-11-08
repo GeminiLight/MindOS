@@ -7,13 +7,15 @@ import { createMindosAgentPermissionPolicy } from '../agent/mindos-pi/permission
 import { runWithMindosKbExtensionHost, runWithKbPermissionPolicy } from '../agent/mindos-pi/extension/kb-extension.js';
 import { buildMindosSystemPrompt } from '../agent/prompt/index.js';
 import { nativeImport } from '../foundation/native-import.js';
+import { applyMiniMaxModelCompatibility } from '../agent/mindos-pi/minimax-model.js';
+import { MINDOS_PROVIDER_PRESETS, REQUESTY_DEFAULT_BASE_URL } from './provider-settings.js';
 import { getSkillRootsFromRuntime, readRuntimeSettings, type MindosRuntimeSettings } from './runtime.js';
 import { createStandaloneAutomationKbToolkit } from './automations/standalone-kb-host.js';
 type PiProvidersModule = typeof import('@earendil-works/pi-ai/providers/all');
 type CreateRuntime = (options: MindosPiCodingAgentRuntimeOptions) => Promise<MindosPiAgentRuntime>;
 
 const PACKAGE_ROOT = fileURLToPath(new URL('../..', import.meta.url).href);
-const PROVIDER_ALIASES: Record<string, string> = { deepseek: 'openai', 'zai-cn': 'zai' };
+const PROVIDER_ALIASES: Record<string, string> = { deepseek: 'openai', requesty: 'openai', 'zai-cn': 'zai' };
 const PROVIDER_ENV_KEYS: Record<string, string[]> = {
   anthropic: ['ANTHROPIC_API_KEY'],
   openai: ['OPENAI_API_KEY'],
@@ -21,6 +23,7 @@ const PROVIDER_ENV_KEYS: Record<string, string[]> = {
   groq: ['GROQ_API_KEY'],
   xai: ['XAI_API_KEY'],
   openrouter: ['OPENROUTER_API_KEY'],
+  requesty: ['REQUESTY_API_KEY'],
   mistral: ['MISTRAL_API_KEY'],
   deepseek: ['DEEPSEEK_API_KEY'],
   zai: ['ZAI_API_KEY', 'ZHIPUAI_API_KEY'],
@@ -53,17 +56,28 @@ async function resolveStandaloneModel(settings: MindosRuntimeSettings, modelOver
   const provider = selectedProvider(settings, providerOverride);
   const protocol = provider.protocol;
   const runtimeProvider = PROVIDER_ALIASES[protocol] ?? protocol;
-  const modelName = modelOverride?.trim() || provider.model;
+  const miniMaxPreset = protocol === 'minimax' || protocol === 'minimax-cn' ? MINDOS_PROVIDER_PRESETS[protocol] : undefined;
+  const modelName = modelOverride?.trim() || provider.model || miniMaxPreset?.defaultModel;
   if (!modelName) throw new Error('Agent needs a configured model in ~/.mindos/config.json.');
-  const apiKey = provider.apiKey || firstEnvironmentValue(PROVIDER_ENV_KEYS[protocol] ?? []);
+  const apiKey = provider.apiKey || firstEnvironmentValue(miniMaxPreset?.envKeys ?? PROVIDER_ENV_KEYS[protocol] ?? []);
   if (!apiKey && !isKeylessProvider(protocol)) {
     throw new Error(`Agent provider ${protocol} is missing an API key.`);
   }
   const providers = await nativeImport<PiProvidersModule>('@earendil-works/pi-ai/providers/all');
   const builtin = providers.builtinModels().getModel(runtimeProvider, modelName);
-  const model = builtin
-    ? applyBaseUrl(builtin as unknown as Record<string, unknown>, provider.baseUrl)
-    : fallbackModel(protocol, runtimeProvider, modelName, provider.baseUrl);
+  const baseUrl = protocol === 'requesty'
+    ? provider.baseUrl.trim() || REQUESTY_DEFAULT_BASE_URL
+    : provider.baseUrl;
+  const resolved = builtin
+    ? applyBaseUrl(builtin as unknown as Record<string, unknown>, baseUrl)
+    : {
+      ...fallbackModel(protocol, runtimeProvider, modelName, baseUrl),
+      ...(miniMaxPreset && (modelName === 'MiniMax-M3.1-Flash' || modelName === 'MiniMax-M3') ? {
+        api: miniMaxPreset.apiType,
+        baseUrl: provider.baseUrl || miniMaxPreset.defaultBaseUrl,
+      } : {}),
+    };
+  const model = applyMiniMaxModelCompatibility(resolved, protocol);
   return {
     model,
     modelName,
@@ -136,6 +150,7 @@ function defaultBaseUrl(protocol: string): string {
   if (protocol === 'anthropic') return 'https://api.anthropic.com';
   if (protocol === 'google') return 'https://generativelanguage.googleapis.com';
   if (protocol === 'deepseek') return 'https://api.deepseek.com/v1';
+  if (protocol === 'openrouter') return 'https://openrouter.ai/api/v1';
   if (protocol === 'ollama') return 'http://127.0.0.1:11434/v1';
   return 'https://api.openai.com/v1';
 }

@@ -9,7 +9,7 @@ type KnownProvider = string;
  */
 export type ProviderId =
   | 'anthropic' | 'openai' | 'google' | 'groq'
-  | 'xai' | 'openrouter' | 'mistral' | 'deepseek'
+  | 'xai' | 'openrouter' | 'requesty' | 'mistral' | 'deepseek'
   | 'zai' | 'zai-cn' | 'kimi-coding'
   | 'cerebras' | 'minimax' | 'minimax-cn' | 'huggingface'
   | 'ollama' | 'lm-studio' | 'vllm';
@@ -28,6 +28,8 @@ export interface ProviderPreset {
   description?: string; // Helper text for settings (e.g., "China region version")
   descriptionZh?: string; // Chinese helper text
   defaultModel: string;
+  /** Curated ordinary model choices, in recommended order. Saved IDs remain valid. */
+  registryModels?: string[];
   /** If ProviderId differs from pi-ai's KnownProvider (e.g. deepseek → openai) */
   piProviderOverride?: KnownProvider;
   /** DeepSeek/Ollama need a fixed baseUrl since they're not native pi-ai providers */
@@ -112,6 +114,20 @@ export const PROVIDER_PRESETS: Record<ProviderId, ProviderPreset> = {
     supportsListModels: true,
     category: 'more',
   },
+  requesty: {
+    id: 'requesty',
+    name: 'Requesty',
+    nameZh: 'Requesty',
+    shortLabel: 'Requesty',
+    defaultModel: 'openai/gpt-4o-mini',
+    piProviderOverride: 'openai' as KnownProvider,
+    fixedBaseUrl: 'https://router.requesty.ai/v1',
+    supportsBaseUrl: true,
+    supportsThinking: false,
+    supportsListModels: true,
+    signupUrl: 'https://app.requesty.ai/api-keys',
+    category: 'more',
+  },
   mistral: {
     id: 'mistral',
     name: 'Mistral',
@@ -191,7 +207,8 @@ export const PROVIDER_PRESETS: Record<ProviderId, ProviderPreset> = {
     name: 'MiniMax',
     nameZh: 'MiniMax (国际版)',
     shortLabel: 'MiniMax',
-    defaultModel: 'MiniMax-M3',
+    defaultModel: 'MiniMax-M3.1-Flash',
+    registryModels: ['MiniMax-M3.1-Flash', 'MiniMax-M3'],
     supportsBaseUrl: false,
     supportsThinking: true,
     supportsListModels: false,
@@ -204,7 +221,8 @@ export const PROVIDER_PRESETS: Record<ProviderId, ProviderPreset> = {
     shortLabel: 'MiniMax-CN',
     description: 'China region version',
     descriptionZh: '中国区版本',
-    defaultModel: 'MiniMax-M3',
+    defaultModel: 'MiniMax-M3.1-Flash',
+    registryModels: ['MiniMax-M3.1-Flash', 'MiniMax-M3'],
     supportsBaseUrl: false,
     supportsThinking: true,
     supportsListModels: false,
@@ -314,6 +332,7 @@ export function toPiProvider(id: ProviderId): string {
  */
 const EXTRA_ENV_KEYS: Partial<Record<ProviderId, string>> = {
   deepseek: 'DEEPSEEK_API_KEY',
+  requesty: 'REQUESTY_API_KEY',
 };
 
 const DEFAULT_API_BY_PROVIDER: Partial<Record<ProviderId, string>> = {
@@ -323,6 +342,7 @@ const DEFAULT_API_BY_PROVIDER: Partial<Record<ProviderId, string>> = {
   groq: 'openai-completions',
   xai: 'openai-completions',
   openrouter: 'openai-completions',
+  requesty: 'openai-completions',
   mistral: 'openai-completions',
   deepseek: 'openai-completions',
   zai: 'openai-completions',
@@ -359,6 +379,7 @@ export function getApiKeyEnvVar(id: ProviderId): string | undefined {
 /** Read the actual API key from env for a provider */
 export function getApiKeyFromEnv(id: ProviderId): string | undefined {
   if (id === 'deepseek') return process.env.DEEPSEEK_API_KEY;
+  if (id === 'requesty') return process.env.REQUESTY_API_KEY;
   return loadPiAiRuntime()?.getEnvApiKey?.(toPiProvider(id) as KnownProvider);
 }
 
@@ -369,6 +390,10 @@ export function getApiKeyFromEnv(id: ProviderId): string | undefined {
 export function getDefaultBaseUrl(id: ProviderId): string {
   const preset = PROVIDER_PRESETS[id];
   if (preset.fixedBaseUrl) return preset.fixedBaseUrl;
+  // The ESM Pi catalog is not always synchronously loadable during fallback.
+  if (id === 'minimax') return 'https://api.minimax.io/anthropic';
+  if (id === 'minimax-cn') return 'https://api.minimaxi.com/anthropic';
+  if (id === 'openrouter') return 'https://openrouter.ai/api/v1';
   try {
     const models = loadPiAiRuntime()?.getModels?.(toPiProvider(id) as KnownProvider);
     return models?.[0]?.baseUrl ?? '';

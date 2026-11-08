@@ -20,7 +20,7 @@ export function initialLearningForm(loop: LearningLoop): LearningFormValues {
   };
 }
 
-const fieldClass = 'w-full rounded-lg border border-input bg-background px-3 py-2 font-sans text-sm leading-6 text-foreground placeholder:text-muted-foreground/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60';
+const fieldClass = 'w-full rounded-md border border-input bg-background px-3 py-2 font-sans text-sm leading-6 text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60';
 
 export default function EchoLearningForm({ mode, values, onChange, p }: {
   mode: LearningFormMode;
@@ -32,7 +32,7 @@ export default function EchoLearningForm({ mode, values, onChange, p }: {
     <label className="block space-y-2" key={name}>
       <span className="font-sans text-sm font-medium">{label}</span>
       <textarea name={name} rows={3} maxLength={4000} required value={values[name]} placeholder={placeholder}
-        className={fieldClass + ' resize-y'} onChange={(event) => onChange(name, event.target.value)} />
+        className={fieldClass + ' min-h-28 resize-y'} onChange={(event) => onChange(name, event.target.value)} />
     </label>
   );
   if (mode === 'reflect') return (
@@ -49,7 +49,7 @@ export default function EchoLearningForm({ mode, values, onChange, p }: {
       {field('check', p.check, p.checkPlaceholder)}
       <label className="block space-y-2">
         <span className="font-sans text-sm font-medium">{p.reviewOn}</span>
-        <Input type="date" name="reviewOn" required value={values.reviewOn} className="max-w-56 bg-background"
+        <Input type="date" name="reviewOn" required value={values.reviewOn} className="min-h-11 max-w-56 bg-background"
           onChange={(event) => onChange('reviewOn', event.target.value)} />
         <span className="block text-xs text-muted-foreground">{p.dateHint}</span>
       </label>
@@ -58,13 +58,15 @@ export default function EchoLearningForm({ mode, values, onChange, p }: {
   return (
     <div className="space-y-5">
       <p className="text-sm leading-6 text-muted-foreground">{p.practiceHint}</p>
-      <label className="block space-y-2">
-        <span className="font-sans text-sm font-medium">{p.outcome}</span>
-        <select name="outcome" required value={values.outcome} className={fieldClass} onChange={(event) => onChange('outcome', event.target.value)}>
-          <option value="">{p.chooseOutcome}</option>
-          {Object.entries(p.outcomes).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-        </select>
-      </label>
+      <fieldset className="space-y-3">
+        <legend className="text-sm font-medium">{p.outcome}</legend>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {Object.entries(p.outcomes).map(([value, label]) => <label key={value} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md border border-border px-3 py-3 text-sm transition-colors duration-150 hover:bg-muted has-[:checked]:border-[var(--amber)] has-[:checked]:bg-[var(--amber-subtle)]">
+            <input type="radio" name="outcome" required value={value} checked={values.outcome === value} onChange={() => onChange('outcome', value)} className="size-4 shrink-0 accent-[var(--amber)]" />
+            {label}
+          </label>)}
+        </div>
+      </fieldset>
       {field('observation', p.observation, p.observationPlaceholder)}
       {field('revisedRule', p.revisedRule, p.revisedRulePlaceholder)}
     </div>

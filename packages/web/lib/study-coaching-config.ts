@@ -1,6 +1,6 @@
 import { effectiveAiConfig } from '@/lib/settings';
 import { getDefaultBaseUrl } from '@/lib/agent/providers';
-const supported = new Set(['openai', 'groq', 'xai', 'openrouter', 'mistral', 'deepseek', 'zai', 'zai-cn', 'kimi-coding', 'cerebras', 'minimax', 'minimax-cn', 'huggingface', 'ollama', 'lm-studio', 'vllm']);
+const supported = new Set(['openai', 'groq', 'xai', 'openrouter', 'requesty', 'mistral', 'deepseek', 'zai', 'zai-cn', 'kimi-coding', 'cerebras', 'minimax', 'minimax-cn', 'huggingface', 'ollama', 'lm-studio', 'vllm']);
 const local = new Set(['ollama', 'lm-studio', 'vllm']);
 type ExpectedRuntime = { provider: string; model: string; endpoint?: string; temperature?: number };
 /** Returns credentials only to the server executor. Never serialize this result. */

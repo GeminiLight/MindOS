@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, Sparkles } from 'lucide-react';
 import type { VariantProps } from 'class-variance-authority';
-import { ECHO_PRIMARY_SEGMENT_ORDER, ECHO_SEGMENT_HREF, type EchoSegment } from '@/lib/echo-segments';
+import { ECHO_PRIMARY_SEGMENT_ORDER, ECHO_SEGMENT_HREF, type EchoSegment, type EchoDestination } from '@/lib/echo-segments';
 import { useLocale } from '@/lib/stores/locale-store';
 import type { Messages } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -42,7 +42,7 @@ function BackToEchoLink({ href, label, ariaLabel }: { href: string; label: strin
   );
 }
 
-function headerBackLink(segment: EchoSegment, p: EchoCopy): ReactNode {
+function headerBackLink(segment: EchoDestination, p: EchoCopy): ReactNode {
   if (segment === 'threads') {
     return <BackToEchoLink href={ECHO_SEGMENT_HREF.growth} label={p.backToInsightsLabel} ariaLabel={p.backToInsightsAriaLabel} />;
   }
@@ -58,7 +58,7 @@ export function EchoPageHeader({
   actions,
 }: {
   p: EchoCopy;
-  segment: EchoSegment;
+  segment: EchoDestination;
   title: string;
   lead: string;
   titleId: string;
@@ -67,7 +67,7 @@ export function EchoPageHeader({
   const backLink = headerBackLink(segment, p);
   const { t } = useLocale();
   const e = t.panels.echo;
-  const labels = { overview: e.overviewTitle, imprint: e.imprintTitle, growth: e.growthTitle, practice: e.practiceTitle, threads: p.threadsChatLabel };
+  const labels = { learning: t.echoLearning.workspace.title, overview: e.overviewTitle, imprint: e.imprintTitle, growth: e.growthTitle, practice: e.practiceTitle, threads: p.threadsChatLabel };
   return (
     <EchoHero
       pageTitle={title}

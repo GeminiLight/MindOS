@@ -50,7 +50,7 @@ export default function EchoCorrectionButton({ sessionId, messageIndex, text }: 
       {saved ? <div className="space-y-4" role="status">
         <p className="text-sm leading-6">{j.private}</p>
         <div className="flex flex-wrap gap-2">
-          <Link href={'/echo/growth?learning=' + saved} className="inline-flex min-h-11 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{j.captureReview}</Link>
+          <Link href={'/echo/learning?learning=' + saved} className="inline-flex min-h-11 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{j.captureReview}</Link>
           <Button className="min-h-11" variant="ghost" onClick={() => setOpen(false)}>{j.captureClose}</Button>
         </div>
       </div> : <form onSubmit={(event) => { event.preventDefault(); void save(); }} className="space-y-4">

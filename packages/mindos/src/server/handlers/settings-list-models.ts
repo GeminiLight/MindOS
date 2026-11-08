@@ -36,6 +36,7 @@ const DEFAULT_PROVIDER_IDS = new Set([
   'ollama',
   'lmstudio',
   'openrouter',
+  'requesty',
   'siliconflow',
 ]);
 
@@ -91,6 +92,11 @@ async function listModels(input: {
   baseUrl: string;
   services: SettingsListModelsServices;
 }): Promise<MindosServerResponse<{ ok: true; models: string[] } | { ok: false; error: string }>> {
+  if ((input.provider === 'minimax' || input.provider === 'minimax-cn')
+    && input.services.supportsListModels?.(input.provider) === false
+    && (!input.baseUrl || input.baseUrl === input.services.getDefaultBaseUrl?.(input.provider))) {
+    return json({ ok: true, models: await getRegistryModels(input.provider, input.services) });
+  }
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), input.services.timeoutMs ?? DEFAULT_TIMEOUT_MS);
   try {
@@ -177,7 +183,8 @@ async function fetchCompatModels(
 }
 
 async function getRegistryModels(provider: string, services: SettingsListModelsServices): Promise<string[]> {
-  return (await services.getRegistryModels?.(provider) ?? []).filter(Boolean).sort();
+  const models = (await services.getRegistryModels?.(provider) ?? []).filter(Boolean);
+  return provider === 'minimax' || provider === 'minimax-cn' ? models : models.sort();
 }
 
 async function defaultFetch(input: string, init: { headers: Record<string, string>; signal: AbortSignal }) {

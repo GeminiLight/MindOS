@@ -135,6 +135,8 @@ function clearCompatCacheForBaseUrl(baseUrl?: string): void {
 }
 
 async function getRegistryModels(provider: string): Promise<string[]> {
+  const preferred = providers.PROVIDER_PRESETS[provider as providers.ProviderId]?.registryModels;
+  if (preferred) return [...preferred];
   try {
     const { listPiBuiltinModels } = await import('@/lib/agent/pi-models');
     const models = await listPiBuiltinModels(providers.toPiProvider(provider as providers.ProviderId));

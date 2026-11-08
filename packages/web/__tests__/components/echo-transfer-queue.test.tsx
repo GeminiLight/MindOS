@@ -53,3 +53,17 @@ it('updates scheduled entries from server state while visible and ignores an old
     else Reflect.deleteProperty(document, 'visibilityState');
   }
 });
+
+it('omits an empty queue in the workspace but never hides pending practices or failures', async () => {
+ let practices: typeof row[] = []; let failed = false;
+ vi.stubGlobal('fetch', vi.fn(async () => { if (failed) throw new Error('offline'); return Response.json({ practices, unavailableCount: 0 }); }));
+ await act(async () => root.render(<EchoTransferQueue hideWhenEmpty />));
+ expect(host.querySelector('section')).toBeNull();
+ practices = [row];
+ await act(async () => window.dispatchEvent(new Event('mindos:transfer-updated')));
+ expect(host.querySelector('a')?.getAttribute('href')).toContain('/echo/learning?learning=');
+ practices = []; failed = true;
+ await act(async () => window.dispatchEvent(new Event('mindos:transfer-updated')));
+ expect(host.querySelector('[role=alert]')).not.toBeNull();
+ expect(host.querySelector('a')).not.toBeNull();
+});

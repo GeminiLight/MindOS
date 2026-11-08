@@ -95,6 +95,10 @@ detect → health → configure → launch → session → context
 | Codex / Claude Code | MindOS 拥有 detect / health / prompt bridge；外部 runtime 拥有 model、auth、permission、session、compact、execute |
 | ACP | MindOS 拥有 registry/detect 与 launch metadata；具体 adapter 拥有 auth、session、context window、execute |
 
+### MiniMax text models and Pi serialization
+
+The international and China-region MiniMax presets default to `MiniMax-M3.1-Flash`, with Flash followed by `MiniMax-M3` in the ordinary model list. Saved legacy models and custom IDs are not migrated automatically. The Web and standalone resolvers share `packages/mindos/src/agent/mindos-pi/minimax-model.ts`, which adds adaptive-thinking and empty-signature thinking-block replay compatibility for the pinned Pi release. Flash cannot disable thinking: ordinary completions omit effort and use the server-side default of max, while Pi clamps an agent-level off setting to minimal and sends low. M3 still supports both disabled and adaptive thinking. OpenRouter model availability and limits follow its own catalog. Protocol and effort behavior follow the [MiniMax Anthropic API documentation](https://platform.minimax.io/docs/api-reference/text-anthropic-api.md).
+
 ### Runtime Adapter Contract
 
 `AgentRuntimeDescriptor.adapterContract` 是 runtime lifecycle 的 adapter-facing 只读 contract。它不替代 `lifecycle` / `compatibility`，而是把“这个 runtime 如何接入 MindOS”拆成五个可被 Runtime Doctor、Compatibility Center、未来 Agent Pack 消费的面：

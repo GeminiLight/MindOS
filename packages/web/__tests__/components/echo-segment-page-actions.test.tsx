@@ -15,6 +15,8 @@ const consumeUIMessageStreamMock = vi.hoisted(() => vi.fn(async (_body, onUpdate
   return { role: 'assistant', content: '# 洞察\n\n## 模式\n\nGenerated insight.' };
 }));
 
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
+
 vi.mock('@/lib/stores/locale-store', () => ({
   useLocale: () => ({ locale: 'zh' as const, setLocale: () => {}, t: messages.zh }),
 }));

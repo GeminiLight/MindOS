@@ -13,6 +13,7 @@ const OPENAI_COMPATIBLE_PROVIDERS = new Set<ProviderId>([
   'groq',
   'xai',
   'openrouter',
+  'requesty',
   'mistral',
   'deepseek',
   'zai',

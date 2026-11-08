@@ -112,3 +112,11 @@ describe('EchoPanel sidebar navigation', () => {
     expect(html).not.toContain('Chats');
   });
 });
+
+
+it('makes learning directly discoverable and marks its workspace as current', () => {
+  routeState.pathname = '/echo/learning';
+  const html = renderToStaticMarkup(<EchoPanel active />);
+  expect(html).toMatch(/<a[^>]*aria-current="page"[^>]*href="\/echo\/learning"/);
+  expect(html).toContain('Learning');
+});

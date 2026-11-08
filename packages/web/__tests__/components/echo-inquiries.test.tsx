@@ -260,7 +260,7 @@ it('links an observation to a reframing decision and creates an unapproved metho
   await fill('check', 'Names conditions before comparing');
   await click('Save method proposal');
   expect(
-    host.querySelector('a[href^="/echo/growth?learning=learn-"]'),
+    host.querySelector('a[href^="/echo/learning?learning=learn-"]'),
   ).toBeTruthy();
 });
 
@@ -405,10 +405,10 @@ it('explicitly binds a test to an approved method and proposes a revision in the
       .review,
   ).toBeUndefined();
   expect(
-    host.querySelector(`a[href="/echo/growth?learning=${method.id}"]`),
+    host.querySelector(`a[href="/echo/learning?learning=${method.id}"]`),
   ).toBeTruthy();
   expect(document.activeElement?.getAttribute('href')).toBe(
-    `/echo/growth?learning=${method.id}`,
+    `/echo/learning?learning=${method.id}`,
   );
   await act(async () => root.render(<EchoLearningJoint loop={getLearningLoop(testMindRoot, method.id)!} p={messages.en.echoLearning} busy={false} save={async () => {}} />));
   const reverse = host.querySelector(`a[href="/echo/questions?inquiry=${id}#decision-1"]`);

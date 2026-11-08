@@ -127,6 +127,16 @@ function lookupCatalogCapabilities(input: ResolveModelCapabilitiesInput): Candid
   const endpoint = endpointIdentity(input.baseUrl);
   const modelId = input.modelId;
 
+  if ((input.protocol === 'minimax' || input.protocol === 'minimax-cn')
+    && (modelId === 'MiniMax-M3.1-Flash' || modelId === 'MiniMax-M3')) {
+    return {
+      contextWindow: 1_000_000,
+      ...(modelId === 'MiniMax-M3.1-Flash' ? { maxTokens: 524_288 } : {}),
+      reasoning: true,
+      source: 'catalog',
+    };
+  }
+
   if (endpoint?.provider === 'stepfun') {
     if (modelId === 'step-3.7-flash') {
       return {

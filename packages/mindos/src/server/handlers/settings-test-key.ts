@@ -46,6 +46,7 @@ const DEFAULT_PROVIDER_IDS = new Set([
   'ollama',
   'lmstudio',
   'openrouter',
+  'requesty',
   'siliconflow',
 ]);
 

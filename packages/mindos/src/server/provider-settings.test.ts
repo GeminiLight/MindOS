@@ -6,11 +6,14 @@ import {
 } from './provider-settings.js';
 
 describe('MindOS provider registry', () => {
-  it('lists MiniMax-M2.7 for both regional presets', () => {
-    const expectedModels = ['MiniMax-M3', 'MiniMax-M2.7', 'MiniMax-M2.5'];
+  it.each(['minimax', 'minimax-cn'])('defaults %s to Flash with only current text choices', (protocol) => {
+    expect(MINDOS_PROVIDER_PRESETS[protocol].defaultModel).toBe('MiniMax-M3.1-Flash');
+    expect(MINDOS_PROVIDER_PRESETS[protocol].registryModels).toEqual(['MiniMax-M3.1-Flash', 'MiniMax-M3']);
+  });
 
-    expect(MINDOS_PROVIDER_PRESETS.minimax.registryModels).toEqual(expectedModels);
-    expect(MINDOS_PROVIDER_PRESETS['minimax-cn'].registryModels).toEqual(expectedModels);
+  it.each(['MiniMax-M3', 'MiniMax-M2.7', 'MiniMax-M2.5', 'private-model'])('preserves saved model %s', (model) => {
+    const saved = { id: 'p_minimax', name: 'MiniMax', protocol: 'minimax', apiKey: '', model, baseUrl: 'https://custom.example/anthropic' };
+    expect(normalizeMindosProvider(saved)).toEqual(saved);
   });
 });
 

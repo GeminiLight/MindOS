@@ -42,6 +42,8 @@ export type MindosProviderModelCapability = {
 
 const PROVIDER_ID_PREFIX = 'p_';
 
+export const REQUESTY_DEFAULT_BASE_URL = 'https://router.requesty.ai/v1';
+
 export const MINDOS_PROVIDER_PRESETS: Record<string, MindosProviderPreset> = {
   anthropic: {
     name: 'Anthropic',
@@ -91,6 +93,14 @@ export const MINDOS_PROVIDER_PRESETS: Record<string, MindosProviderPreset> = {
     supportsListModels: true,
     apiType: 'openai-completions',
     envKeys: ['OPENROUTER_API_KEY'],
+  },
+  requesty: {
+    name: 'Requesty',
+    defaultModel: 'openai/gpt-4o-mini',
+    defaultBaseUrl: REQUESTY_DEFAULT_BASE_URL,
+    supportsListModels: true,
+    apiType: 'openai-completions',
+    envKeys: ['REQUESTY_API_KEY'],
   },
   mistral: {
     name: 'Mistral',
@@ -144,19 +154,21 @@ export const MINDOS_PROVIDER_PRESETS: Record<string, MindosProviderPreset> = {
   },
   minimax: {
     name: 'MiniMax',
-    defaultModel: 'MiniMax-M3',
+    defaultModel: 'MiniMax-M3.1-Flash',
+    defaultBaseUrl: 'https://api.minimax.io/anthropic',
     supportsListModels: false,
     apiType: 'anthropic-messages',
     envKeys: ['MINIMAX_API_KEY'],
-    registryModels: ['MiniMax-M3', 'MiniMax-M2.7', 'MiniMax-M2.5'],
+    registryModels: ['MiniMax-M3.1-Flash', 'MiniMax-M3'],
   },
   'minimax-cn': {
     name: 'MiniMax (China)',
-    defaultModel: 'MiniMax-M3',
+    defaultModel: 'MiniMax-M3.1-Flash',
+    defaultBaseUrl: 'https://api.minimaxi.com/anthropic',
     supportsListModels: false,
     apiType: 'anthropic-messages',
     envKeys: ['MINIMAX_API_KEY'],
-    registryModels: ['MiniMax-M3', 'MiniMax-M2.7', 'MiniMax-M2.5'],
+    registryModels: ['MiniMax-M3.1-Flash', 'MiniMax-M3'],
   },
   huggingface: {
     name: 'Hugging Face',

@@ -2,11 +2,11 @@
 
 import type { ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
-import { Footprints, FolderOpen, GitBranch, LayoutDashboard, Sprout, Waypoints } from 'lucide-react';
+import { BookOpen, Footprints, FolderOpen, GitBranch, LayoutDashboard, Sprout, Waypoints } from 'lucide-react';
 import PanelHeader from './PanelHeader';
 import { PanelPrimaryNav, PanelNavRow } from './PanelNavRow';
 import { useLocale } from '@/lib/stores/locale-store';
-import { ECHO_PRIMARY_SEGMENT_ORDER, ECHO_SEGMENT_HREF, type EchoSegment } from '@/lib/echo-segments';
+import { ECHO_PRIMARY_SEGMENT_ORDER, ECHO_SEGMENT_HREF, type EchoDestination } from '@/lib/echo-segments';
 
 interface EchoPanelProps {
   active: boolean;
@@ -19,10 +19,11 @@ export default function EchoPanel({ active }: EchoPanelProps) {
   const e = t.panels.echo;
   const pathname = usePathname() ?? '';
 
-  const rowBySegment: Partial<Record<EchoSegment, { icon: ReactNode; title: string }>> = {
+  const rowBySegment: Partial<Record<EchoDestination, { icon: ReactNode; title: string }>> = {
     overview: { icon: <LayoutDashboard size={14} />, title: e.overviewTitle },
     imprint: { icon: <Footprints size={14} />, title: e.imprintTitle },
     growth: { icon: <Sprout size={14} />, title: e.growthTitle },
+    learning: { icon: <BookOpen size={14} />, title: t.echoLearning.workspace.title },
     practice: { icon: <GitBranch size={14} />, title: e.practiceTitle },
   };
 
@@ -37,7 +38,8 @@ export default function EchoPanel({ active }: EchoPanelProps) {
           const row = rowBySegment[segment];
           if (!row) return null;
           const href = ECHO_SEGMENT_HREF[segment];
-          const isActive = pathname === href || pathname.startsWith(`${href}/`);
+          const isActive = pathname === href || pathname.startsWith(`${href}/`)
+            || (segment === 'learning' && (pathname === '/echo/questions' || pathname === '/echo/research' || pathname.startsWith('/echo/research/')));
           return (
             <PanelNavRow
               key={segment}

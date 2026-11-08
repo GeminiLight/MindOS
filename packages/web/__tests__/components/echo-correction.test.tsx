@@ -26,6 +26,6 @@ it('preserves a correction after a changed source error and saves only a reviewa
  expect((document.querySelector('[name=correctionBehavior]') as HTMLTextAreaElement).value).toBe('Check research design');
  fail=false;await click('Save proposal');await act(async()=>{await new Promise(resolve=>setTimeout(resolve,20));});
  expect(document.body.textContent).toContain('Method proposal saved');
- expect(document.querySelector('a[href="/echo/growth?learning=learn-test"]')).not.toBeNull();
+ expect(document.querySelector('a[href="/echo/learning?learning=learn-test"]')).not.toBeNull();
  expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({sessionId:'source',messageIndex:1,messageHash:expect.stringMatching(/^[a-f0-9]{64}$/)});
 });

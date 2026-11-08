@@ -723,7 +723,7 @@ export function InquiryWorkspace({
                                   }
                                 }}
                                 href={
-                                  '/echo/growth?learning=' + d.methodDraftId
+                                  '/echo/learning?learning=' + d.methodDraftId
                                 }
                                 className="inline-flex min-h-11 items-center rounded text-sm underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                               >

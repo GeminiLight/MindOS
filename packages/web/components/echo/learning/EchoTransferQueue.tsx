@@ -9,7 +9,7 @@ const copy = {
   en: { title: 'Continue a practice', empty: 'No pending practice. You can start an optional practice from a learning record.', due: 'Ready to return', continue: 'Continue where you left off', scheduled: 'Scheduled', sample: 'Illustrative practice', open: 'Continue practice', schedule: 'View return date', refresh: 'Refresh practices', loading: 'Checking saved practices…', error: 'Could not refresh. Previously loaded entries may be out of date.', partial: 'Some records could not be read. Your other practices are still available.', all: 'Show all', less: 'Show fewer', source: 'From record' },
   zh: { title: '继续一次练习', empty: '暂无待继续的练习。你可以从学习记录中自选开始。', due: '可以回来再试了', continue: '继续上次的步骤', scheduled: '等待回看', sample: '示例练习', open: '继续练习', schedule: '查看回看安排', refresh: '刷新练习', loading: '正在检查已保存的练习…', error: '暂时无法刷新。已显示的记录可能不是最新状态。', partial: '部分记录暂时无法读取；其他练习仍可继续。', all: '展开全部', less: '收起', source: '来自记录' },
 };
-export default function EchoTransferQueue({ loops = [] }: { loops?: LearningLoop[] }) {
+export default function EchoTransferQueue({ loops = [], hideWhenEmpty = false }: { loops?: LearningLoop[]; hideWhenEmpty?: boolean }) {
   const { locale } = useLocale(); const p = copy[locale];
   const [items, setItems] = useState<TransferSummary[]>([]);
   const [unavailable, setUnavailable] = useState(0); const [error, setError] = useState(false);
@@ -37,6 +37,7 @@ export default function EchoTransferQueue({ loops = [] }: { loops?: LearningLoop
     const timer = window.setInterval(() => { if (document.visibilityState === 'visible') void reload(); }, 60_000);
     return () => window.clearInterval(timer);
   }, [hasScheduled, reload]);
+  if (hideWhenEmpty && !items.length && !error && !unavailable) return null;
   const titles = new Map(loops.map(loop => [loop.id, loop.source.title]));
   return <section aria-labelledby="echo-transfer-queue-title" className="space-y-3 border-b border-border pb-5">
     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -54,7 +55,7 @@ export default function EchoTransferQueue({ loops = [] }: { loops?: LearningLoop
           <p className="break-words text-xs leading-5 text-muted-foreground">{item.title} · {p.sample}{item.dueAt ? ` · ${new Date(item.dueAt).toLocaleString(locale === 'zh' ? 'zh-CN' : 'en-US')}` : ''}</p>
           {titles.has(item.learningId) ? <p className="break-words text-xs leading-5 text-muted-foreground">{p.source} · {titles.get(item.learningId)}</p> : null}
         </div>
-        <a href={'/echo/growth?learning=' + encodeURIComponent(item.learningId) + '&practice=1#echo-transfer-' + encodeURIComponent(item.learningId)} className="inline-flex min-h-11 shrink-0 items-center rounded-lg border border-border px-3 text-sm font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{item.status === 'scheduled' ? p.schedule : p.open}</a>
+        <a href={'/echo/learning?learning=' + encodeURIComponent(item.learningId) + '&practice=1#echo-transfer-' + encodeURIComponent(item.learningId)} className="inline-flex min-h-11 shrink-0 items-center rounded-lg border border-border px-3 text-sm font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{item.status === 'scheduled' ? p.schedule : p.open}</a>
       </li>)}
     </ul> : null}
     {items.length > 5 ? <Button variant="ghost" className="min-h-11" onClick={() => setExpanded(value => !value)}>{expanded ? p.less : `${p.all} (${items.length})`}</Button> : null}
