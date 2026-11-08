@@ -232,7 +232,8 @@ describe('MindOS runtime product kernel contract', () => {
 
     expect(knowledge).toContain("from './knowledge/storage/index.js'");
     expect(knowledge).toContain("from './knowledge/spaces/index.js'");
-    expect(knowledge).toContain("from './knowledge/graph/index.js'");
+    // The unused regex LinkIndex was retired; link graphs live in server/link-index.ts.
+    expect(knowledge).not.toContain("from './knowledge/graph/index.js'");
     expect(knowledge).toContain("from './knowledge/audit/index.js'");
     expect(knowledge).toContain("from './knowledge/git/index.js'");
     expect(knowledge).toContain("from './knowledge/knowledge-ops/index.js'");

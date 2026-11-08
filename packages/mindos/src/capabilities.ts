@@ -54,8 +54,8 @@ export const mindosCapabilityContracts: readonly MindosCapabilityContract[] = [
     owner: '@geminilight/mindos',
     publicEntry: '@geminilight/mindos/knowledge',
     loadMode: 'core',
-    role: 'Local knowledge storage, spaces, graph, audit history, git history, and write operations.',
-    implementation: ['storage', 'spaces', 'graph', 'audit', 'git', 'knowledge-ops'],
+    role: 'Local knowledge storage, spaces, audit history, git history, and write operations.',
+    implementation: ['storage', 'spaces', 'audit', 'git', 'knowledge-ops'],
   },
   {
     domain: 'intelligence',

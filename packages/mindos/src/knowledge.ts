@@ -1,6 +1,5 @@
 export * from './knowledge/storage/index.js';
 export * from './knowledge/spaces/index.js';
-export * from './knowledge/graph/index.js';
 export * as audit from './knowledge/audit/index.js';
 export * as git from './knowledge/git/index.js';
 export {
