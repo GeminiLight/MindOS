@@ -1,6 +1,9 @@
 'use client';
 
 import Link from 'next/link';
+import { contextHref, type ContextPosition } from '@/lib/context-work/continuity';
+import { useContextPositions } from '@/lib/context-work/hooks';
+import { useViewsIndex } from '@/lib/views/hooks';
 import {useProjectDirectory} from '@/lib/views/use-project-directory';
 import {
   ArrowRight,
@@ -17,6 +20,7 @@ import { useLocale } from '@/lib/stores/locale-store';
 import {
   getLastOpenedStudioProject,
   getStudioProjectHref,
+  getStudioProjectSpaceRefs,
   localize,
   readLastOpenedStudioProjectId,
   readStudioProjects,
@@ -73,12 +77,14 @@ function StudioContinueOverview({
   copy,
   locale,
   latestSessionTitle,
+  position,
   sessionCount,
 }: {
   project: StudioProject | undefined;
   copy: OverviewCopy;
   locale: string;
   latestSessionTitle?: string;
+  position?: ContextPosition;
   sessionCount: number;
 }) {
   if (!project) {
@@ -129,13 +135,13 @@ function StudioContinueOverview({
           <div className="text-[11px] font-medium text-muted-foreground">{copy.continueHint}</div>
           <p className="mt-2 text-sm leading-relaxed text-foreground">{nextAction}</p>
           <Button
-            render={<Link href={getStudioProjectHref(project.id)} />}
+            render={<Link href={position ? contextHref(position) : getStudioProjectHref(project.id)} />}
             nativeButton={false}
             variant="outline"
             size="lg"
             className="mt-4 w-full"
           >
-            {copy.openProject}
+            {position ? (locale === 'zh' ? '回到上次的位置' : 'Return to last position') : copy.openProject}
             <ArrowRight size={15} />
           </Button>
         </div>
@@ -147,7 +153,7 @@ function StudioContinueOverview({
 export default function StudioOverviewContent() {
   const { locale } = useLocale();
   const copy = locale === 'zh' ? COPY.zh : COPY.en;
-  const [localProjects, setProjects] = useState<StudioProject[]>(() => readStudioProjects());
+  const [localProjects, setProjects] = useState<StudioProject[]>([]);
   const {projects}=useProjectDirectory(localProjects);
   const [lastOpenedProjectId, setLastOpenedProjectId] = useState<string | null>(null);
   const chatSessions = useSessions();
@@ -190,6 +196,12 @@ export default function StudioOverviewContent() {
     () => getLastOpenedStudioProject(projects, lastOpenedProjectId),
     [lastOpenedProjectId, projects],
   );
+  const index = useViewsIndex(Boolean(continueProject));
+  const positions = useContextPositions(index.error ? '' : index.data?.rootId ?? '');
+  const position = continueProject && positions.find((item) =>
+    item.kind === 'project' && item.id === continueProject.id
+    && getStudioProjectSpaceRefs(continueProject, locale).some((space) => space.path === item.folder),
+  );
   const continueSessionCount = continueProject
     ? projectSessionStats.get(continueProject.id)?.count ?? continueProject.sessions.length
     : 0;
@@ -212,6 +224,7 @@ export default function StudioOverviewContent() {
 
         <StudioContinueOverview
           project={continueProject}
+          position={position}
           copy={copy}
           locale={locale}
           latestSessionTitle={continueProject ? projectSessionStats.get(continueProject.id)?.latestTitle : undefined}

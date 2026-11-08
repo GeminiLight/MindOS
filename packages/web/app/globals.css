@@ -869,9 +869,10 @@ body {
   pointer-events: none;
 }
 
-/* Pending review must not cover a modal's actions. Hiding only the presentation
-   preserves unread/dismissal state and the existing activity-notice timeout. */
-body:has(:is([role="dialog"], [role="alertdialog"])[aria-modal="true"]) [data-changes-banner] {
+/* Pending review must leave modal and Context handoff actions reachable.
+   Hiding the presentation preserves unread state and the activity-notice timeout. */
+body:has(:is([role="dialog"], [role="alertdialog"])[aria-modal="true"]) [data-changes-banner],
+body:has(#context-handoff) [data-changes-banner] {
   visibility: hidden;
   pointer-events: none;
 }

@@ -954,6 +954,7 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
           initialAcpAgent={ap.askAcpAgent}
           initialAgentRuntime={ap.askAgentRuntime}
           initialNewSession={ap.askNewSession}
+          handoffOrigin={ap.askHandoffOrigin}
           openRequestId={ap.askOpenRequestId}
           contextRequest={ap.askContextRequest}
           onFirstMessage={handleFirstMessage}
@@ -988,6 +989,7 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
           initialAcpAgent={ap.askAcpAgent}
           initialAgentRuntime={ap.askAgentRuntime}
           initialNewSession={ap.askNewSession}
+          handoffOrigin={ap.askHandoffOrigin}
           openRequestId={ap.askOpenRequestId}
           contextRequest={ap.askContextRequest}
           onFirstMessage={handleFirstMessage}

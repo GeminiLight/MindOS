@@ -25,7 +25,7 @@ export class ViewsApiError extends Error {
     this.name = "ViewsApiError";
   }
 }
-async function request<T>(
+export async function contextRequest<T>(
   url: string,
   options: RequestInit = {},
   signal?: AbortSignal,
@@ -76,13 +76,13 @@ function query(values: Record<string, string | undefined>): string {
   return "/api/views?" + params;
 }
 export async function getViewsIndex(signal?: AbortSignal): Promise<ViewIndex> {
-  const data = await request<ViewIndex>("/api/views", {}, signal);
+  const data = await contextRequest<ViewIndex>("/api/views", {}, signal);
   if (!Array.isArray(data.views) || !Array.isArray(data.folders))
     throw new ViewsApiError("INVALID_RESPONSE");
   return data;
 }
 export const getView = (rootId: string, id: string, signal?: AbortSignal) =>
-  request<ViewCollection & { rootId: string }>(
+  contextRequest<ViewCollection & { rootId: string }>(
     query({ op: "read", rootId, id }),
     {},
     signal,
@@ -92,7 +92,7 @@ export const getViewPreview = (
   folder: string,
   signal?: AbortSignal,
 ) =>
-  request<ViewPreview & { rootId: string }>(
+  contextRequest<ViewPreview & { rootId: string }>(
     query({ op: "preview", rootId, folder }),
     {},
     signal,
@@ -104,7 +104,7 @@ export const getViewPerson = (
   path?: string,
   signal?: AbortSignal,
 ) =>
-  request<{ rootId: string; person: PersonDocument }>(
+  contextRequest<{ rootId: string; person: PersonDocument }>(
     query({ op: "person", rootId, id, personId, path }),
     {},
     signal,
@@ -115,7 +115,7 @@ export const getViewRaw = (
   path: string,
   signal?: AbortSignal,
 ) =>
-  request<{ rootId: string; path: string; content: string; revision: string }>(
+  contextRequest<{ rootId: string; path: string; content: string; revision: string }>(
     query({ op: "raw", rootId, id, path }),
     {},
     signal,
@@ -129,7 +129,7 @@ export const getViewMaterials = (
   locale: string,
   signal?: AbortSignal,
 ) =>
-  request<{
+  contextRequest<{
     rootId: string;
     revision: string;
     items: ViewMaterial[];
@@ -153,7 +153,7 @@ export async function mutateView<T>(
   rootId: string,
   body: Record<string, unknown>,
 ): Promise<T & { rootId: string }> {
-  const value = await request<T & { rootId: string }>("/api/views", {
+  const value = await contextRequest<T & { rootId: string }>("/api/views", {
     method: "POST",
     headers: { "Content-Type": "application/json", "X-MindOS-Source": "user" },
     body: JSON.stringify({ ...body, expectedRootId: rootId }),

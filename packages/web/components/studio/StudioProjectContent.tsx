@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import ProjectContextWorkspace from './context/ProjectContextWorkspace';
 import ProjectWorkPanel from './projects/ProjectWorkPanel';
 import {useProjectDirectory} from '@/lib/views/use-project-directory';
 import {
@@ -469,7 +470,7 @@ export default function StudioProjectContent({
   const push = useSmoothRouterPush();
   const { locale } = useLocale();
   const copy = locale === 'zh' ? COPY.zh : COPY.en;
-  const [localProjects, setProjects] = useState<StudioProject[]>(() => readStudioProjects());
+  const [localProjects, setProjects] = useState<StudioProject[]>([]);
   const directory=useProjectDirectory(localProjects);
   const projects=directory.projects;
   const [isCreating, setIsCreating] = useState(false);
@@ -480,6 +481,7 @@ export default function StudioProjectContent({
 
   useEffect(() => {
     const syncProjects = () => setProjects(readStudioProjects());
+    syncProjects();
     window.addEventListener(STUDIO_PROJECTS_UPDATED_EVENT, syncProjects);
     window.addEventListener('storage', syncProjects);
     return () => {
@@ -615,6 +617,7 @@ export default function StudioProjectContent({
           </h1>
         </header>
 
+        <ProjectContextWorkspace key={project.id} project={project} locale={locale} />
         <ProjectContextOverview
           project={project}
           projects={projects}

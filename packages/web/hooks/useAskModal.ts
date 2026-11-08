@@ -3,6 +3,7 @@
 import { useSyncExternalStore, useCallback } from 'react';
 import type { AskAddContextDetail } from '@/lib/ask-context-events';
 import type { AgentIdentity, AgentRuntimeIdentity } from '@/lib/types';
+import type { HandoffOrigin } from '@/lib/context-work/handoff-origin';
 
 /**
  * Lightweight pub/sub store for cross-component AskModal control.
@@ -15,7 +16,7 @@ export const ASK_HIDE_PANELS_EVENT = 'mindos:hide-ask-panels';
 export type AcpAgentSelection = AgentIdentity;
 export type AskAgentRuntimeSelection = AgentRuntimeIdentity;
 
-export type AskOpenOptions = { newSession?: boolean; context?: AskAddContextDetail };
+export type AskOpenOptions = { newSession?: boolean; context?: AskAddContextDetail; handoffOrigin?: HandoffOrigin };
 
 interface AskModalState {
   open: boolean;
@@ -25,6 +26,7 @@ interface AskModalState {
   agentRuntime: AskAgentRuntimeSelection | null;
   newSession: boolean;
   context: AskAddContextDetail | null;
+  handoffOrigin: HandoffOrigin | null;
   requestId: number;
 }
 
@@ -36,7 +38,8 @@ let state: AskModalState = {
   acpAgent: null,
   agentRuntime: null,
   newSession: false,
-    context: null,
+  context: null,
+  handoffOrigin: null,
   requestId,
 };
 const listeners = new Set<() => void>();
@@ -71,6 +74,7 @@ export function openAskModal(
     agentRuntime,
     newSession: Boolean(options.newSession),
     context: options.context ?? null,
+    handoffOrigin: options.handoffOrigin ?? null,
     requestId: ++requestId,
   };
   emit();
@@ -85,6 +89,7 @@ export function closeAskModal() {
     agentRuntime: null,
     newSession: false,
     context: null,
+    handoffOrigin: null,
     requestId,
   };
   emit();
@@ -100,6 +105,7 @@ export function useAskModal() {
     agentRuntime: snap.agentRuntime,
     newSession: snap.newSession,
     context: snap.context,
+    handoffOrigin: snap.handoffOrigin,
     requestId: snap.requestId,
     openWith: useCallback((
       message: string,

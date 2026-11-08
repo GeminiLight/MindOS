@@ -166,11 +166,12 @@ export default function StudioPanel({ active }: StudioPanelProps) {
   const contextActive = isStudioContextPath(pathname);
   const currentProjectId = getProjectIdFromPath(pathname);
   const projectsActive = isStudioProjectsPath(pathname) || currentProjectId !== null;
-  const [localProjects, setProjects] = useState<StudioProject[]>(() => readStudioProjects());
+  const [localProjects, setProjects] = useState<StudioProject[]>([]);
   const {projects}=useProjectDirectory(localProjects,active);
 
   useEffect(() => {
     const syncProjects = () => setProjects(readStudioProjects());
+    syncProjects();
     window.addEventListener(STUDIO_PROJECTS_UPDATED_EVENT, syncProjects);
     window.addEventListener('storage', syncProjects);
     return () => {

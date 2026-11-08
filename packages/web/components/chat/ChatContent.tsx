@@ -1,5 +1,7 @@
 'use client';
-import { focusIfAvailable } from '@/lib/focus-if-available';
+import { focusIfAvailable, focusPreparedDraft } from '@/lib/focus-if-available';
+import ContextOriginBar from './ContextOriginBar';
+import type { HandoffOrigin } from '@/lib/context-work/handoff-origin';
 import { TASK_DRAFT_EVENT, takeTaskDraft } from '@/lib/chat-task-draft';
 
 import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from 'react';
@@ -158,6 +160,7 @@ interface ChatContentProps {
   initialAgentRuntime?: AgentRuntimeIdentity | null;
   /** Start a fresh MindOS chat session for this opener request. */
   initialNewSession?: boolean;
+  handoffOrigin?: HandoffOrigin | null;
   /** Monotonic opener request id, used when the panel is already visible. */
   openRequestId?: number;
   /** Route-driven session selection (/chat/[sessionId]): the route already
@@ -180,7 +183,8 @@ interface ChatContentProps {
   onDockToPanel?: () => void;
 }
 
-export default function ChatContent({ visible, currentFile, initialMessage, initialAcpAgent, initialAgentRuntime, initialNewSession, openRequestId, initialSessionId, projectId, contextRequest, onFirstMessage, variant, initialAiConfigured, onClose, maximized, onMaximize, onDockToPanel }: ChatContentProps) {
+export default function ChatContent({ visible, currentFile, initialMessage, initialAcpAgent, initialAgentRuntime, initialNewSession, handoffOrigin, openRequestId, initialSessionId, projectId, contextRequest, onFirstMessage, variant, initialAiConfigured, onClose, maximized, onMaximize, onDockToPanel }: ChatContentProps) {
+  const [contextOrigin, setContextOrigin] = useState<{ origin: HandoffOrigin; sessionId: string | null } | null>(null);
   const isPanel = variant === 'panel';
   const isHome = variant === 'home';
   const isFocusMode = (isPanel || isHome) && maximized;
@@ -659,6 +663,13 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
       return;
     }
 
+    // Choosing who handles this unsent handoff should keep its prepared Context,
+    // even when that Agent has an unrelated conversation in its history.
+    if (currentIsEmpty && currentSession && contextOrigin?.sessionId === currentSession.id && inputValueRef.current.trim()) {
+      bindActiveSessionToRuntime(agent);
+      return;
+    }
+
     const target = sessionRef.current.sessions.find((item) => (
       (!projectId || (item.projectId || undefined) === projectId)
       && isSessionInRuntimeLane(item, agent)
@@ -676,7 +687,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
 
     sessionRef.current.resetSession(agent);
     clearTransientComposerState();
-  }, [bindActiveSessionToRuntime, chat.isLoadingRef, clearTransientComposerState, projectId, updateSelectedAgentRuntime]);
+  }, [bindActiveSessionToRuntime, chat.isLoadingRef, clearTransientComposerState, contextOrigin, projectId, updateSelectedAgentRuntime]);
 
   const offerComposerPrompt = useCallback((text: string, options: Omit<PendingPrompt, 'text'> = {}): boolean => {
     const incoming = text.trim();
@@ -984,9 +995,13 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
       // bind it while the existing draft is still the active work.
       pendingOpenAgentRef.current = preserveDraft ? null : preferredRuntime;
       if (openerRuntime && !preserveDraft) persistLastSelectedAgentRuntime(openerRuntime);
-      if (variant !== 'home' && !preserveDraft) setTimeout(() => focusIfAvailable(inputRef.current), 50);
+      if (variant !== 'home' && !preserveDraft) setTimeout(() => {
+        if (handoffOrigin && initialNewSession && initialMessage) focusPreparedDraft(inputRef.current, initialMessage);
+        else focusIfAvailable(inputRef.current);
+      }, 50);
       if (initialNewSession) {
         session.resetSession(preferredRuntime ?? undefined);
+        setContextOrigin(handoffOrigin ? { origin: handoffOrigin, sessionId: getActiveSessionId() } : null);
       } else if (initialSessionId) {
         // Route owns selection — initSessions' selection phase would move the
         // active session away from the route's loadSession. Metadata only.
@@ -1242,6 +1257,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
   );
 
   const handleResetSession = useCallback(() => {
+    setContextOrigin(null);
     // Concurrency: a running active session keeps streaming in the background;
     // New Chat just switches to a fresh session.
     const runtime = selectedAgentRuntimeRef.current;
@@ -1251,6 +1267,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
   }, [clearTransientComposerState, updateSelectedAgentRuntime]);
 
   const handleNewSessionActivation = useCallback((detail: AskPanelNewSessionDetail): boolean => {
+    setContextOrigin(null);
     // Project-scoped launchers, like Studio seed sessions, need to create the
     // same lane that /chat/new?projectId=... would create without replacing the
     // already-open Ask surface with the full-page route.
@@ -1680,6 +1697,10 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
         acpError={acpDetection.error}
         onRefreshNativeRuntimes={handleRefreshRuntimeState}
       />
+
+      {contextOrigin && contextOrigin.sessionId === session.activeSessionId && (
+        <ContextOriginBar origin={contextOrigin.origin} close={onClose} />
+      )}
 
       {showHistory && (
         <SessionHistoryPanel

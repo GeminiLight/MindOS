@@ -676,7 +676,7 @@ export default function StudioContent({
   const push = useSmoothRouterPush();
   const { locale } = useLocale();
   const copy = locale === 'zh' ? COPY.zh : COPY.en;
-  const [localProjects, setProjects] = useState<StudioProject[]>(() => readStudioProjects());
+  const [localProjects, setProjects] = useState<StudioProject[]>([]);
   const {projects}=useProjectDirectory(localProjects);
   const [isCreating, setIsCreating] = useState(false);
   const [view, setView] = useState<StudioOverviewView>('list');

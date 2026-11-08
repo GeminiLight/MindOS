@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useLayoutEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import { RIGHT_ASK_DEFAULT_WIDTH, RIGHT_ASK_MIN_WIDTH, RIGHT_ASK_MAX_WIDTH } from '@/components/RightAskPanel';
+import type { HandoffOrigin } from '@/lib/context-work/handoff-origin';
 import { useAskModal, ASK_HIDE_PANELS_EVENT, type AcpAgentSelection, type AskAgentRuntimeSelection } from './useAskModal';
 import {
   ASK_ADD_CONTEXT_EVENT,
@@ -24,6 +25,7 @@ export interface AskPanelState {
   askNewSession: boolean;
   askOpenRequestId: number;
   askContextRequest: AskContextRequest | null;
+  askHandoffOrigin: HandoffOrigin | null;
   toggleAskPanel: () => void;
   closeAskPanel: () => void;
   closeDesktopAskPopup: () => void;
@@ -54,6 +56,7 @@ export function useAskPanel(): AskPanelState {
   const [askAcpAgent, setAskAcpAgent] = useState<AcpAgentSelection | null>(null);
   const [askAgentRuntime, setAskAgentRuntime] = useState<AskAgentRuntimeSelection | null>(null);
   const [askNewSession, setAskNewSession] = useState(false);
+  const [askHandoffOrigin, setAskHandoffOrigin] = useState<HandoffOrigin | null>(null);
   const [askOpenRequestId, setAskOpenRequestId] = useState(0);
   const [askContextRequest, setAskContextRequest] = useState<AskContextRequest | null>(null);
   const lastNonFocusWidthRef = useRef(RIGHT_ASK_DEFAULT_WIDTH);
@@ -87,6 +90,7 @@ export function useAskPanel(): AskPanelState {
       setAskAcpAgent(null);
       setAskAgentRuntime(null);
       setAskNewSession(false);
+      setAskHandoffOrigin(null);
       setAskOpenRequestId((value) => value + 1);
       setAskContextRequest({
         id: ++contextRequestIdRef.current,
@@ -167,6 +171,7 @@ export function useAskPanel(): AskPanelState {
       setAskAcpAgent(askModal.acpAgent);
       setAskAgentRuntime(askModal.agentRuntime);
       setAskNewSession(askModal.newSession);
+      setAskHandoffOrigin(askModal.handoffOrigin);
       setAskOpenRequestId(askModal.requestId);
       if (askMode === 'popup' || window.innerWidth < 768) {
         setDesktopAskPopupOpen(true);
@@ -175,7 +180,7 @@ export function useAskPanel(): AskPanelState {
       }
       askModal.close();
     }
-  }, [askModal.open, askModal.context, askModal.initialMessage, askModal.source, askModal.acpAgent, askModal.agentRuntime, askModal.newSession, askModal.requestId, askModal.close, askMode, fullPageChat]);
+  }, [askModal.open, askModal.context, askModal.initialMessage, askModal.source, askModal.acpAgent, askModal.agentRuntime, askModal.newSession, askModal.requestId, askModal.handoffOrigin, askModal.close, askMode, fullPageChat]);
 
   const toggleAskPanel = useCallback(() => {
     if (fullPageChat) return;
@@ -187,6 +192,7 @@ export function useAskPanel(): AskPanelState {
           setAskAcpAgent(null);
           setAskAgentRuntime(null);
           setAskNewSession(false);
+          setAskHandoffOrigin(null);
           setAskOpenRequestId((value) => value + 1);
         }
         return !v;
@@ -199,6 +205,7 @@ export function useAskPanel(): AskPanelState {
           setAskAcpAgent(null);
           setAskAgentRuntime(null);
           setAskNewSession(false);
+          setAskHandoffOrigin(null);
           setAskOpenRequestId((value) => value + 1);
         }
         return !v;
@@ -267,7 +274,7 @@ export function useAskPanel(): AskPanelState {
 
   return {
     askPanelOpen, askPanelWidth, askMaximized, askMode, desktopAskPopupOpen,
-    askInitialMessage, askOpenSource, askAcpAgent, askAgentRuntime, askNewSession, askOpenRequestId, askContextRequest,
+    askInitialMessage, askOpenSource, askAcpAgent, askAgentRuntime, askNewSession, askOpenRequestId, askContextRequest, askHandoffOrigin,
     toggleAskPanel, closeAskPanel, closeDesktopAskPopup,
     handleAskWidthChange, handleAskWidthCommit, handleAskModeSwitch, toggleAskMaximized,
   };

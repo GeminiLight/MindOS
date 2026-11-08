@@ -15,6 +15,7 @@ vi.mock('@/lib/views/page-api',async()=>({...await vi.importActual('@/lib/views/
 const mockPush = vi.fn();
 
 vi.mock('next/navigation', () => ({
+  useSearchParams: () => new URLSearchParams(),
   useRouter: () => ({ push: mockPush, replace: vi.fn(), prefetch: vi.fn(), back: vi.fn() }),
 }));
 

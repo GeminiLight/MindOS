@@ -3,6 +3,7 @@
 import { useLocale } from '@/lib/stores/locale-store';
 import ChatContent from '@/components/chat/ChatContent';
 import type { AcpAgentSelection, AskAgentRuntimeSelection } from '@/hooks/useAskModal';
+import type { HandoffOrigin } from '@/lib/context-work/handoff-origin';
 import type { AskContextRequest } from '@/lib/ask-context-events';
 
 interface AskModalProps {
@@ -13,12 +14,13 @@ interface AskModalProps {
   initialAcpAgent?: AcpAgentSelection | null;
   initialAgentRuntime?: AskAgentRuntimeSelection | null;
   initialNewSession?: boolean;
+  handoffOrigin?: HandoffOrigin | null;
   openRequestId?: number;
   contextRequest?: AskContextRequest | null;
   onFirstMessage?: () => void;
 }
 
-export default function AskModal({ open, onClose, currentFile, initialMessage, initialAcpAgent, initialAgentRuntime, initialNewSession, openRequestId, contextRequest, onFirstMessage }: AskModalProps) {
+export default function AskModal({ open, onClose, currentFile, initialMessage, initialAcpAgent, initialAgentRuntime, initialNewSession, handoffOrigin, openRequestId, contextRequest, onFirstMessage }: AskModalProps) {
   const { t } = useLocale();
 
   if (!open) return null;
@@ -43,6 +45,7 @@ export default function AskModal({ open, onClose, currentFile, initialMessage, i
           initialAcpAgent={initialAcpAgent}
           initialAgentRuntime={initialAgentRuntime}
           initialNewSession={initialNewSession}
+            handoffOrigin={handoffOrigin}
           openRequestId={openRequestId}
           contextRequest={contextRequest}
           onFirstMessage={onFirstMessage}

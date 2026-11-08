@@ -15,6 +15,7 @@ const ENTER_SNAP_THRESHOLD = RIGHT_ASK_PANEL.FOCUS_SNAP_LEFT_GAP;
 const EXIT_SNAP_THRESHOLD = 16;
 
 import type { AcpAgentSelection, AskAgentRuntimeSelection } from '@/hooks/useAskModal';
+import type { HandoffOrigin } from '@/lib/context-work/handoff-origin';
 import type { AskContextRequest } from '@/lib/ask-context-events';
 
 interface RightAskPanelProps {
@@ -25,6 +26,7 @@ interface RightAskPanelProps {
   initialAcpAgent?: AcpAgentSelection | null;
   initialAgentRuntime?: AskAgentRuntimeSelection | null;
   initialNewSession?: boolean;
+  handoffOrigin?: HandoffOrigin | null;
   openRequestId?: number;
   contextRequest?: AskContextRequest | null;
   onFirstMessage?: () => void;
@@ -39,7 +41,7 @@ interface RightAskPanelProps {
 }
 
 export default function RightAskPanel({
-  open, onClose, currentFile, initialMessage, initialAcpAgent, initialAgentRuntime, initialNewSession, openRequestId, contextRequest, onFirstMessage,
+  open, onClose, currentFile, initialMessage, initialAcpAgent, initialAgentRuntime, initialNewSession, handoffOrigin, openRequestId, contextRequest, onFirstMessage,
   width, onWidthChange, onWidthCommit,
   maximized = false, onMaximize, sidebarOffset = 0,
   layoutMode = maximized ? 'focus' : 'docked',
@@ -145,6 +147,7 @@ export default function RightAskPanel({
             initialAcpAgent={initialAcpAgent}
             initialAgentRuntime={initialAgentRuntime}
             initialNewSession={initialNewSession}
+            handoffOrigin={handoffOrigin}
             openRequestId={openRequestId}
             contextRequest={contextRequest}
             onFirstMessage={onFirstMessage}
