@@ -312,7 +312,6 @@ MindOS/
 ├── packages/web/         # 本地知识工作台的 Next.js 前端
 ├── packages/desktop/     # Electron 桌面端与本地进程管理
 ├── packages/browser-extension/ # Web Clipper 浏览器扩展
-├── packages/retrieval/   # 可选检索 / 搜索 / 向量适配器
 ├── packages/mobile/      # Expo 移动端
 ├── skills/               # 随包发布的 MindOS Skills
 ├── templates/            # 知识库初始化模板

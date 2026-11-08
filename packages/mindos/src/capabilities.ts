@@ -96,7 +96,6 @@ const CLIENT_SHELL_IMPORTERS = [
   'packages/desktop',
   'packages/mobile',
   'packages/browser-extension',
-  'packages/desktop-tauri',
 ] as const;
 
 const PRODUCT_INTERNAL_FORBIDDEN_IMPORTERS = [

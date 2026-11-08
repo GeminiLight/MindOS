@@ -21,10 +21,10 @@ export function planChecks(files, manual = false) {
     // Documentation and the separately validated website do not import app code.
     if (/^(wiki|docs|landing)\//.test(file) || /^(README(?:_zh)?\.md|LICENSE|AGENTS\.md|CLAUDE\.md)$/.test(file)
       || file.startsWith('scripts/website/') || /^tests\/(landing-website\.test\.ts|e2e\/landing)/.test(file)) continue;
-    // Installer and Rust checks keep their own workflows, including native steps.
-    if (/^packages\/(desktop|desktop-tauri)\//.test(file)
+    // Installer checks keep their own workflows, including native steps.
+    if (/^packages\/desktop\//.test(file)
       || /^scripts\/[^/]*desktop[^/]*$/.test(file) || /^tests\/desktop-/.test(file)
-      || /^\.github\/workflows\/(test-desktop-install|build-desktop|build-tauri-desktop)\.yml$/.test(file)) continue;
+      || /^\.github\/workflows\/(test-desktop-install|build-desktop)\.yml$/.test(file)) continue;
     if (file.startsWith('scripts/ci/') || /^tests\/(ci-|actions-cost-policy|reliability-workflow|workflow-migration-contract)/.test(file)
       || /^\.github\/workflows\/(test-reliability|test-channel-cross-platform|cache-ci-dependencies)\.yml$/.test(file)) {
       contracts = true; continue;

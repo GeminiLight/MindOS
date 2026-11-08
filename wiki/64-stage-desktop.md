@@ -2,6 +2,8 @@
 
 # Stage 14 — 桌面安装包 (Desktop Installer)
 
+> **2026-11-09 更新**：Tauri 技术栈已放弃，`packages/desktop-tauri` 与 `build-tauri-desktop` workflow 已移除。桌面端只走 Electron（`packages/desktop`）。下文 Tauri Phase 2 方案仅作历史记录。
+
 ## 功能汇总
 
 | # | 功能 | 状态 | 备注 |

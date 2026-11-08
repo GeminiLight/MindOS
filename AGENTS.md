@@ -85,15 +85,15 @@
 
 ### Package 依赖边界
 
-- `packages/{web,desktop,mobile,browser-extension,desktop-tauri}/package.json` 只声明该 app/client 源码直接 `import @mindos/*` 的 workspace package，不声明“以后可能用”的包
+- `packages/{web,desktop,mobile,browser-extension}/package.json` 只声明该 app/client 源码直接 `import @mindos/*` 的 workspace package，不声明“以后可能用”的包
 - 间接依赖由被 import 的 package 自己声明；例如 Web import `@geminilight/mindos`，产品主包内部拥有 knowledge-ops / permissions / security 等能力
 - `packages/mindos/package.json.files` 是 npm 发布白名单，只包含 CLI/Web/MCP 运行时需要的包闭包，不等于 workspace 全量清单
 - `packages/web` 是唯一 Web 源码；npm 发布包不包含 `packages/mindos/packages/web` 源码副本，只包含 `packages/mindos/_standalone` 这种 Web runtime artifact
 - `packages/mindos/packages/`、`packages/mindos/_standalone/` 是 pack/publish 生成物，不是源码；正常开发后用 `pnpm run clean:product-stage` 清理，本地 `npm pack` 会通过 `postpack` 自动清理
 - 产品主包固定为 `packages/mindos`（`@geminilight/mindos`），foundation / knowledge 必须位于 `packages/mindos/src/*`，不再拆成 workspace package
 - 正式 `mindos` CLI 固定在 `packages/mindos/bin/*`，不再保留单独的 `packages/cli` 主入口 package；可复用逻辑沉到 `packages/mindos/src/*`
-- 当前保留的低层 domain 为 `retrieval`、`protocols`
-- `retrieval` 的核心 contracts / chunking / SearchEngine / VectorDatabase 抽象归 `@geminilight/mindos/retrieval`；`packages/retrieval/*` 只放 MeiliSearch / LanceDB / Express / chokidar 等可选 adapter/service，默认不进入 Web 直接依赖或主 runtime 闭包
+- 当前保留的低层 domain 为 `retrieval`（仅 `@geminilight/mindos/retrieval` 内的 contracts）、`protocols`
+- `retrieval` 的核心 contracts / chunking / SearchEngine / VectorDatabase 抽象归 `@geminilight/mindos/retrieval`；未被使用的 `packages/retrieval/*`（MeiliSearch / LanceDB / Express adapter）已于 2026-11-09 移除，需要外部检索后端时重新立项，不要恢复旧包
 - `protocols` 只做 transport host / SDK adapter，MCP/ACP/A2A 的业务规则归 `@geminilight/mindos`，避免协议包复制产品逻辑
 - 长期方向是 OpenCode 式 `@geminilight/mindos` 内聚核心业务；不要为“目录好看”新增细碎 package
 

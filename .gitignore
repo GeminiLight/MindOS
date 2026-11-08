@@ -99,7 +99,6 @@ image.png
 !packages/web/public/agent-icons/*.jpg
 !packages/mobile/assets/*.png
 !packages/desktop/src/icons/*.png
-!packages/desktop-tauri/src-tauri/icons/*.png
 .tmux.conf
 TMUX_DOC.md
 .mcp.json

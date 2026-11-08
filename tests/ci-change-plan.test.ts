@@ -26,7 +26,7 @@ describe('PR regression selection', () => {
     },
   );
   it('keeps desktop-specific work in its dedicated workflow', () => {
-    expect(planChecks(['packages/desktop/src/main.ts', 'packages/desktop-tauri/src-tauri/main.rs']).required).toBe(false);
+    expect(planChecks(['packages/desktop/src/main.ts', 'tests/desktop-installer.test.ts']).required).toBe(false);
   });
   it('checks workflow policy changes on Linux without a full runtime matrix', () => {
     expect(planChecks(['tests/ci-change-plan.test.ts', 'scripts/ci/change-plan.mjs'])).toMatchObject({

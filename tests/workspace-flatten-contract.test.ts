@@ -19,7 +19,6 @@ describe('OpenCode-style packages-only workspace layout', () => {
       'packages/desktop/package.json': '@mindos/desktop',
       'packages/mobile/package.json': '@mindos/mobile',
       'packages/browser-extension/package.json': '@mindos/browser-extension',
-      'packages/desktop-tauri/package.json': '@mindos/desktop-tauri',
     };
 
     for (const [manifest, packageName] of Object.entries(packageRoots)) {
@@ -34,6 +33,8 @@ describe('OpenCode-style packages-only workspace layout', () => {
       'apps/browser-extension',
       'apps/cli',
       'apps/desktop-tauri',
+      'packages/desktop-tauri',
+      'packages/retrieval',
       'packages/cli',
     ]) {
       expect(existsSync(resolve(root, oldRoot)), `${oldRoot} should not remain as a source root`).toBe(false);

@@ -42,7 +42,6 @@ packages/mobile/
 
 # Desktop (not part of npm package)
 packages/desktop/
-packages/desktop-tauri/
 
 # Dev / CI
 .github/

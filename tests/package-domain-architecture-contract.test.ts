@@ -4,10 +4,6 @@ import { describe, expect, it } from 'vitest';
 
 const root = resolve(__dirname, '..');
 
-const domains = {
-  retrieval: ['search', 'vector', 'indexer', 'api'],
-} as const;
-
 const internalizedDomains = ['foundation', 'knowledge', 'protocols'] as const;
 
 const topLevelWorkspacePackages = [
@@ -16,7 +12,6 @@ const topLevelWorkspacePackages = [
   'desktop',
   'mobile',
   'browser-extension',
-  'desktop-tauri',
 ] as const;
 
 function readText(path: string): string {
@@ -52,14 +47,9 @@ describe('package domain architecture contract', () => {
       ).toBe(true);
     }
 
-    for (const [domain, packageNames] of Object.entries(domains)) {
-      for (const packageName of packageNames) {
-        expect(
-          existsSync(resolve(root, 'packages', domain, packageName, 'package.json')),
-          `${packageName} should live under packages/${domain}/${packageName}`,
-        ).toBe(true);
-      }
-    }
+    // Unused retrieval adapters (MeiliSearch / LanceDB / Express) were retired;
+    // retrieval contracts live in @geminilight/mindos/retrieval only.
+    expect(existsSync(resolve(root, 'packages/retrieval'))).toBe(false);
   });
 
   it('lets pnpm discover the product main package and nested domain packages', () => {
@@ -86,20 +76,7 @@ describe('package domain architecture contract', () => {
     expect(webPackage.dependencies).not.toHaveProperty('@mindos/api');
   });
 
-  it('keeps retrieval adapters on MindOS core contracts instead of redefining product types', () => {
-    const adapterFiles = [
-      'packages/retrieval/search/src/types.ts',
-      'packages/retrieval/vector/src/types.ts',
-      'packages/retrieval/indexer/src/types.ts',
-      'packages/retrieval/indexer/src/chunker.ts',
-    ];
-
-    for (const file of adapterFiles) {
-      const source = readText(file);
-      expect(source, file).toContain('@geminilight/mindos/retrieval');
-      expect(source, file).not.toMatch(/^export interface /m);
-    }
-
+  it('keeps the product retrieval facade free of adapter backends', () => {
     const productFacade = readText('packages/mindos/src/retrieval.ts');
     expect(productFacade).not.toContain('@mindos/search');
     expect(productFacade).not.toContain('@mindos/vector');

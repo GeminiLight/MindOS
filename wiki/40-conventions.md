@@ -135,7 +135,7 @@ v1 使用 monorepo 后，测试按“归属边界”放置，不再把所有测�
 App 的 `package.json` 只声明源码直接 import 的 `@mindos/*` workspace package，不能把 package 当“目录索引”或未来占位。间接依赖由对应 package 自己声明。
 
 产品主包固定为 `packages/mindos`，包名 `@geminilight/mindos`。foundation / knowledge / server / client / plugin / tool / session / agent 已内聚到 `packages/mindos/src/*`，不再作为独立 workspace package。保留的低层 workspace package 必须位于 `packages/<domain>/<pkg>`，当前 domain 为：
-- `retrieval`：search / vector / indexer / api，可选 adapter/service 域；核心 retrieval types、chunking、SearchEngine / VectorDatabase contracts 归 `@geminilight/mindos/retrieval`，MeiliSearch / LanceDB / Express / chokidar backend 不进 Web 直接依赖或主 runtime 闭包
+- `retrieval`：核心 retrieval types、chunking、SearchEngine / VectorDatabase contracts 归 `@geminilight/mindos/retrieval`；旧的 `packages/retrieval/*` 可选 adapter（MeiliSearch / LanceDB / Express）已于 2026-11-09 移除，外部检索后端不进 Web 直接依赖或主 runtime 闭包
 - `protocols`：只保留外部 transport host / optional adapter；默认 ACP/MCP runtime 源码归 `packages/mindos/src/protocols/*`
 
 当前 Web 直接依赖边界：
@@ -143,7 +143,7 @@ App 的 `package.json` 只声明源码直接 import 的 `@mindos/*` workspace pa
 - `@geminilight/mindos`：产品 runtime facade，聚合 foundation / knowledge 能力，并声明 retrieval / protocols 归属边界
 - `@geminilight/mindos/server`：Web API route adapter 调用 product server handlers；新增 route 业务 shape 优先下沉到这里
 
-`@mindos/indexer` 不属于 Web 直接依赖；它是可选索引服务包，当前由 `@mindos/api` 索引链路使用。`packages/retrieval/*/src/types.ts` 不重新定义产品类型，只从 `@geminilight/mindos/retrieval` re-export。`packages/mindos/package.json.files` 是 npm 发布白名单，只包含 CLI/Web/MCP 运行时需要的 package 闭包，不等于 `pnpm-workspace.yaml` 的全量 workspace 清单。
+`packages/mindos/package.json.files` 是 npm 发布白名单，只包含 CLI/Web/MCP 运行时需要的 package 闭包，不等于 `pnpm-workspace.yaml` 的全量 workspace 清单。
 
 长期方向参考 OpenCode：核心业务收敛到 `@geminilight/mindos` 的内部模块；SDK/plugin/tool/session/agent 先作为 product subpath exports 稳定边界，只有出现明确第三方分发需求时才拆独立 package。不要继续为内部 util 或 Web-only singleton 创建细碎 package。
 

@@ -160,12 +160,7 @@ export function buildPrePushCommands(changedFiles) {
     { prefix: 'packages/mindos/', filter: '@geminilight/mindos', test: true, typecheck: 'type-check' },
     { prefix: 'packages/mobile/', filter: '@mindos/mobile', test: true, typecheck: 'type-check' },
     { prefix: 'packages/desktop/', filter: '@mindos/desktop', test: true, typecheck: 'type-check' },
-    { prefix: 'packages/desktop-tauri/', filter: '@mindos/desktop-tauri', test: false, typecheck: 'type-check' },
     { prefix: 'packages/browser-extension/', filter: '@mindos/browser-extension', test: false, typecheck: 'type-check' },
-    { prefix: 'packages/retrieval/api/', filter: '@mindos/api', test: true, typecheck: 'type-check' },
-    { prefix: 'packages/retrieval/indexer/', filter: '@mindos/indexer', test: true, typecheck: 'type-check' },
-    { prefix: 'packages/retrieval/search/', filter: '@mindos/search', test: true, typecheck: 'type-check' },
-    { prefix: 'packages/retrieval/vector/', filter: '@mindos/vector', test: true, typecheck: 'type-check' },
   ];
 
   for (const check of packageChecks) {

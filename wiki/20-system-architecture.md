@@ -46,8 +46,6 @@ mindos/
 │   ├── desktop/                # Electron 桌面客户端
 │   ├── mobile/                 # Expo 移动端
 │   ├── browser-extension/      # Web Clipper 浏览器扩展
-│   ├── desktop-tauri/          # Tauri spike
-│   ├── retrieval/              # search/vector/indexer/api（可选检索栈）
 │   └── protocols/              # acp/mcp-server 外部协议适配
 ├── skills/                     # Agent 工作流技能
 ├── templates/{en,zh}/          # 预设知识库模板
@@ -205,14 +203,7 @@ mindos/
 - `scripts/build-platform-packages.mjs` 生成 `@geminilight/mindos-<platform>` 包，并写入 `runtime-manifest.json`（product version、platform、entrypoints、health route、included artifacts）。
 - local `npm pack` 后 product `postpack` 会清理 staging output，避免 generated copies 被误当成源码。
 
-`packages/retrieval/*` 只保留可选 adapter / service：
-
-- `search`：MeiliSearch adapter。
-- `vector`：LanceDB adapter。
-- `indexer`：chokidar watch + search/vector backend 编排。
-- `api`：Express / WebSocket retrieval service。
-
-这些 adapter 依赖 `@geminilight/mindos/retrieval` 的核心 contracts；`packages/mindos` 不反向 import 它们。
+原 `packages/retrieval/*`（MeiliSearch / LanceDB / Express adapter）从未被任何 runtime 使用，已于 2026-11-09 移除；实际检索由 `packages/web/lib/core/hybrid-search.ts` 与 `packages/mindos/src/server/search/` 承担。`packages/desktop-tauri` spike 同日移除，桌面端只保留 Electron。
 
 #### 包内分层与依赖方向（2026-09-11）
 

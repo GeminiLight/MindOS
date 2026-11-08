@@ -312,7 +312,6 @@ MindOS/
 ├── packages/web/         # Next.js frontend for the local knowledge workbench
 ├── packages/desktop/     # Electron desktop client and local process management
 ├── packages/browser-extension/ # Web Clipper browser extension
-├── packages/retrieval/   # Optional retrieval/search/vector adapters
 ├── packages/mobile/      # Expo mobile app
 ├── skills/               # Packaged MindOS Skills for agents
 ├── templates/            # Starter knowledge-base templates

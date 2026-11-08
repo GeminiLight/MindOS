@@ -74,7 +74,6 @@ describe('OpenCode client and runtime boundary contract', () => {
       'packages/desktop/package.json',
       'packages/mobile/package.json',
       'packages/browser-extension/package.json',
-      'packages/desktop-tauri/package.json',
     ];
 
     for (const manifest of clientPackages) {
@@ -109,7 +108,6 @@ describe('OpenCode client and runtime boundary contract', () => {
       'packages/mobile/app',
       'packages/mobile/lib',
       'packages/browser-extension/src',
-      'packages/desktop-tauri/src',
     ]) {
       for (const file of listSourceFiles(dir)) {
         const source = readFileSync(file, 'utf-8');

@@ -20,7 +20,7 @@
 | `wiki/specs/spec-opencode-remaining-alignment.md` | ✅ 准确 | 2026-04-30 | 剩余对齐工作 |
 | `wiki/specs/spec-product-server-extraction.md` | ✅ 准确 | 2026-05-09 | Product Server 提取 |
 | `wiki/specs/spec-bun-single-binary-runtime.md` | ✅ 准确 | 2026-05-12 | Bun 单二进制运行时 |
-| `wiki/specs/spec-tauri-desktop-workflow.md` | ✅ 准确 | 2026-05-10 | Tauri Desktop 工作流 |
+| `wiki/specs/spec-tauri-desktop-workflow.md` | 🗄️ 已废弃 | 2026-11-09 | Tauri 栈已放弃，spike 已移除 |
 
 ---
 
@@ -64,8 +64,6 @@ packages/
 ├── desktop/        # Electron 桌面客户端
 ├── mobile/         # Expo 移动端
 ├── browser-extension/
-├── desktop-tauri/  # Tauri spike
-├── retrieval/      # MeiliSearch/LanceDB adapter (可选)
 └── protocols/      # acp/mcp-server 外部协议
 ```
 
