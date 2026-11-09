@@ -1,16 +1,13 @@
 /**
- * Table-driven parity tests for the Claude stream-json mapper
- * (spec-runtime-lane-correctness, item 4). The same fixture records are fed
- * through the CLI transport (JSON lines) and the Claude Agent SDK transport
- * (message objects); both must yield identical MindOS SSE sequences.
+ * Table-driven tests for the Claude stream-json mapper
+ * (spec-runtime-lane-correctness, item 4). Fixture records are fed through the
+ * CLI transport as JSON lines and must yield the expected MindOS SSE sequence.
  */
 import { describe, expect, it } from 'vitest';
 import {
   createClaudeCodeCliClient,
-  createClaudeCodeSdkClient,
   type ClaudeCodeCliEvent,
   type ClaudeCodeCliTransport,
-  type ClaudeCodeSdkModule,
 } from './index.js';
 import {
   createClaudeStreamJsonMapperState,
@@ -29,18 +26,6 @@ function createFakeClaudeTransport(lines: string[]): ClaudeCodeCliTransport {
   };
 }
 
-function createFakeClaudeSdk(messages: Record<string, unknown>[]): ClaudeCodeSdkModule {
-  return {
-    query() {
-      return {
-        async *[Symbol.asyncIterator]() {
-          for (const message of messages) yield message;
-        },
-      };
-    },
-  };
-}
-
 async function collect(iterable: AsyncIterable<ClaudeCodeCliEvent>): Promise<ClaudeCodeCliEvent[]> {
   const events: ClaudeCodeCliEvent[] = [];
   for await (const event of iterable) events.push(event);
@@ -49,11 +34,6 @@ async function collect(iterable: AsyncIterable<ClaudeCodeCliEvent>): Promise<Cla
 
 async function runThroughCli(records: Record<string, unknown>[]): Promise<ClaudeCodeCliEvent[]> {
   const client = createClaudeCodeCliClient(createFakeClaudeTransport(records.map((record) => JSON.stringify(record))));
-  return collect(client.startTurn({ prompt: 'hi', cwd: '/tmp/mind' }));
-}
-
-async function runThroughSdk(records: Record<string, unknown>[]): Promise<ClaudeCodeCliEvent[]> {
-  const client = createClaudeCodeSdkClient({ sdk: createFakeClaudeSdk(records) });
   return collect(client.startTurn({ prompt: 'hi', cwd: '/tmp/mind' }));
 }
 
@@ -220,14 +200,9 @@ const FIXTURES: Fixture[] = [
   },
 ];
 
-describe('Claude stream-json mapper parity (CLI transport vs Claude Agent SDK transport)', () => {
+describe('Claude stream-json mapper through the CLI transport', () => {
   it.each(FIXTURES)('$name', async ({ records, expected }) => {
-    const cliEvents = await runThroughCli(records);
-    const sdkEvents = await runThroughSdk(records);
-
-    expect(cliEvents).toEqual(expected);
-    expect(sdkEvents).toEqual(expected);
-    expect(sdkEvents).toEqual(cliEvents);
+    expect(await runThroughCli(records)).toEqual(expected);
   });
 
   it('ignores blank and non-JSON CLI lines without ending the turn', async () => {

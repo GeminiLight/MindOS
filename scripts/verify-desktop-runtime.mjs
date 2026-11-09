@@ -8,6 +8,8 @@ const args = parseArgs(process.argv.slice(2));
 const runtimeRoot = resolve(root, args.runtimeRoot ?? 'packages/desktop/resources/mindos-runtime');
 const mainBundle = resolve(root, args.mainBundle ?? 'packages/desktop/dist-electron/main/main.js');
 
+// Each built-in extension is checked at the entry its package declares in
+// `pi.extensions` (packages/desktop/src/builtin-extension-entries.test.ts).
 const requiredRuntimeFiles = [
   'package.json',
   'packages/web/.next/standalone/server.js',
@@ -18,10 +20,11 @@ const requiredRuntimeFiles = [
   'packages/web/.next/standalone/node_modules/@slack/web-api/package.json',
   'packages/web/.next/standalone/node_modules/discord.js/package.json',
   'packages/web/.next/standalone/node_modules/grammy/package.json',
-  'packages/web/.next/standalone/node_modules/pi-web-access/index.ts',
-  'packages/web/.next/standalone/node_modules/pi-subagents/src/extension/index.ts',
+  'packages/web/.next/standalone/node_modules/pi-web-access/dist/index.js',
+  'packages/web/.next/standalone/node_modules/pi-subagents/bundle/index.js',
   'packages/web/.next/standalone/node_modules/pi-subagents/agents',
   'packages/web/.next/standalone/node_modules/pi-mcp-adapter/index.ts',
+  'packages/web/.next/standalone/node_modules/pi-schedule-prompt/src/index.ts',
   'packages/web/.next/standalone/node_modules/pi-schedule-prompt/src/tool.ts',
   'packages/web/.next/standalone/node_modules/pi-schedule-prompt/src/storage.ts',
   'packages/web/.next/standalone/node_modules/pi-schedule-prompt/src/scheduler.ts',

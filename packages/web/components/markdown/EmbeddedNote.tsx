@@ -15,7 +15,7 @@ import {
   extractMarkdownSection,
   resolveWikiLinkTarget,
   type WikiLinkSubpath,
-} from '@geminilight/mindos/foundation';
+} from '@geminilight/mindos/foundation/markdown';
 import { encodePath } from '@/lib/utils';
 
 export type EmbeddedNoteVaultIndex = {

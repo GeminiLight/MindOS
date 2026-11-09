@@ -181,7 +181,7 @@ describe('/api/agent-runtimes', () => {
       expect.objectContaining({
         id: 'claude',
         kind: 'claude',
-        adapter: 'claude-sdk',
+        adapter: 'claude-cli',
         modelOwner: 'external',
         authOwner: 'external',
         permissionOwner: 'external',
@@ -207,7 +207,7 @@ describe('/api/agent-runtimes', () => {
           }),
         }),
         adapterContract: expect.objectContaining({
-          connection: expect.objectContaining({ kind: 'sdk', owner: 'mindos' }),
+          connection: expect.objectContaining({ kind: 'cli', owner: 'mindos' }),
           configuration: expect.objectContaining({ modelSelection: 'runtime-native' }),
           health: expect.objectContaining({ mode: 'mindos-native' }),
         }),
@@ -404,7 +404,7 @@ describe('/api/agent-runtimes', () => {
       runtime: expect.objectContaining({
         id: 'claude',
         kind: 'claude',
-        adapter: 'claude-sdk',
+        adapter: 'claude-cli',
         modelOwner: 'external',
         permissionOwner: 'external',
         status: 'available',
@@ -443,7 +443,7 @@ describe('/api/agent-runtimes', () => {
     });
   });
 
-  it('returns Claude Code CLI fallback bridge metadata when the SDK bridge is unavailable', async () => {
+  it('passes a host-reported Claude bridge through unchanged', async () => {
     mockResolveCommandPath.mockImplementation(async (command: string) => {
       if (command === 'claude') return '/usr/local/bin/claude';
       return null;
@@ -482,15 +482,12 @@ describe('/api/agent-runtimes', () => {
     });
   });
 
-  it('keeps the adapter contract aligned when Claude CLI fallback is inferred from diagnostics', async () => {
+  it('labels the Claude CLI bridge in core when the host health check reports none', async () => {
     mockResolveCommandPath.mockImplementation(async (command: string) => {
       if (command === 'claude') return '/usr/local/bin/claude';
       return null;
     });
-    mockCheckNativeRuntimeHealth.mockResolvedValue({
-      status: 'available',
-      diagnosticHints: ['Claude Code CLI is available; Claude Agent SDK bridge is unavailable, so MindOS will use CLI fallback. SDK missing'],
-    });
+    mockCheckNativeRuntimeHealth.mockResolvedValue({ status: 'available' });
     mockDetectLocalAcpAgents.mockResolvedValue({ installed: [], notInstalled: [] });
 
     const { GET } = await import('../../app/api/agent-runtimes/route');
@@ -504,13 +501,10 @@ describe('/api/agent-runtimes', () => {
       adapterContract: expect.objectContaining({
         connection: expect.objectContaining({
           kind: 'cli',
-          summary: 'MindOS uses the Claude Code CLI fallback when the SDK bridge is unavailable.',
+          summary: 'MindOS runs the local Claude Code CLI and lets Claude own execution semantics.',
         }),
       }),
-      runtimeBridge: expect.objectContaining({
-        kind: 'claude-cli',
-        fallback: true,
-      }),
+      runtimeBridge: { kind: 'claude-cli', label: 'Claude Code CLI' },
     });
   });
 
@@ -684,10 +678,7 @@ describe('/api/agent-runtimes', () => {
       if (command === 'claude') return '/usr/local/bin/claude';
       return null;
     });
-    mockCheckNativeRuntimeHealth.mockResolvedValue({
-      status: 'available',
-      diagnosticHints: ['Claude Code CLI is available; Claude Agent SDK bridge is unavailable, so MindOS will use CLI fallback. SDK missing'],
-    });
+    mockCheckNativeRuntimeHealth.mockResolvedValue({ status: 'available' });
     mockDetectLocalAcpAgents.mockResolvedValue({ installed: [], notInstalled: [] });
 
     const { GET: getRuntimes } = await import('../../app/api/agent-runtimes/route');
@@ -697,7 +688,7 @@ describe('/api/agent-runtimes', () => {
     const adapter = await (await getAdapterProjections(new Request('http://localhost/api/agent-runtimes/adapter-projections?runtime=claude'))).json();
 
     const claude = listed.runtimes.find((runtime: { id: string }) => runtime.id === 'claude');
-    expect(picker.runtime.runtimeBridge).toEqual({ kind: 'claude-cli', label: 'CLI fallback active', fallback: true, reason: 'SDK missing' });
+    expect(picker.runtime.runtimeBridge).toEqual({ kind: 'claude-cli', label: 'Claude Code CLI' });
     expect(claude.runtimeBridge).toEqual(picker.runtime.runtimeBridge);
     expect(claude.adapter).toBe('claude-cli');
     expect(adapter.projections[0]).toMatchObject({ runtimeId: 'claude', connection: { kind: 'cli' } });

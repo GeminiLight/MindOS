@@ -76,7 +76,7 @@ export function normalizeDiagnosticHints(value: unknown): string[] | undefined {
 }
 
 function isRuntimeBridgeKind(value: unknown): value is AgentRuntimeBridge['kind'] {
-  return value === 'codex-app-server' || value === 'claude-sdk' || value === 'claude-cli';
+  return value === 'codex-app-server' || value === 'claude-cli';
 }
 
 export function normalizeRuntimeBridge(value: unknown): AgentRuntimeBridge | undefined {
@@ -87,7 +87,7 @@ export function normalizeRuntimeBridge(value: unknown): AgentRuntimeBridge | und
     label: value.label.trim(),
     ...(typeof value.fallback === 'boolean' ? { fallback: value.fallback } : {}),
     ...(typeof value.reason === 'string' && value.reason.trim()
-      ? { reason: compactRuntimeFailureMessage(value.reason, { runtime: value.kind === 'claude-cli' || value.kind === 'claude-sdk' ? 'claude' : 'codex' }) }
+      ? { reason: compactRuntimeFailureMessage(value.reason, { runtime: value.kind === 'claude-cli' ? 'claude' : 'codex' }) }
       : {}),
   };
 }

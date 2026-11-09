@@ -83,7 +83,6 @@ export type AgentRuntimeAdapter =
   | 'codex-app-server'
   | 'codex-sdk'
   | 'claude-cli'
-  | 'claude-sdk'
   | 'acp';
 
 export type AgentRuntimeOwner = 'mindos' | 'external';
@@ -200,7 +199,7 @@ export type AgentRuntimeCompatibilityProfile = {
 };
 
 export type AgentRuntimeBridge = {
-  kind: 'codex-app-server' | 'claude-sdk' | 'claude-cli';
+  kind: 'codex-app-server' | 'claude-cli';
   label: string;
   fallback?: boolean;
   reason?: string;
@@ -210,7 +209,6 @@ export type AgentRuntimeAdapterConnectionKind =
   | 'internal'
   | 'stdio'
   | 'app-server'
-  | 'sdk'
   | 'cli'
   | 'unknown';
 

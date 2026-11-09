@@ -3,6 +3,7 @@
 import * as acp from '@agentclientprotocol/sdk';
 import { Readable, Writable } from 'node:stream';
 import crypto from 'node:crypto';
+import fs from 'node:fs';
 
 // Test knobs: FAKE_ACP_HANG lists RPC methods that must never answer
 // (initialize, authenticate, session/new, session/prompt, session/close);
@@ -10,11 +11,18 @@ import crypto from 'node:crypto';
 // client has called authenticate; FAKE_ACP_LOAD_SESSION=1 declares
 // `loadSession: true` and implements `session/load` so a pooled session can be
 // resumed (used to prove "one spawn across two turns" over real stdio).
+// FAKE_ACP_RESUME=1 / FAKE_ACP_FORK=1 advertise and implement `session/resume`
+// and `session/fork`; FAKE_ACP_CALL_LOG names a file that receives one line per
+// session-opening RPC, so tests can tell which method a reopen used.
 const HANG = new Set(
   (process.env.FAKE_ACP_HANG ?? '').split(',').map((entry) => entry.trim()).filter(Boolean),
 );
 const AUTH_REQUIRED = process.env.FAKE_ACP_AUTH_REQUIRED === '1';
 const LOAD_SESSION = process.env.FAKE_ACP_LOAD_SESSION === '1';
+const RESUME = process.env.FAKE_ACP_RESUME === '1';
+const FORK = process.env.FAKE_ACP_FORK === '1';
+const CALL_LOG = process.env.FAKE_ACP_CALL_LOG;
+const logCall = (line) => { if (CALL_LOG) fs.appendFileSync(CALL_LOG, `${line}\n`); };
 const hangForever = () => new Promise(() => {});
 
 class FakeAcpAgent {
@@ -32,6 +40,8 @@ class FakeAcpAgent {
         loadSession: LOAD_SESSION,
         sessionCapabilities: {
           close: {},
+          ...(RESUME ? { resume: {} } : {}),
+          ...(FORK ? { fork: {} } : {}),
         },
       },
       ...(AUTH_REQUIRED ? { authMethods: [{ id: 'fake-login', name: 'Fake login' }] } : {}),
@@ -71,19 +81,30 @@ class FakeAcpAgent {
 
   async loadSession(params) {
     if (HANG.has('session/load')) return hangForever();
-    const sessionId = params.sessionId;
-    // Re-establish a session created earlier on this same (pooled) process; if
-    // the process respawned, recreate minimal state so the resume succeeds.
-    if (!this.sessions.has(sessionId)) {
-      this.sessions.set(sessionId, {
-        cwd: params.cwd,
-        mode: 'default',
-        model: 'cheap',
-        thought: 'low',
-        pendingPrompt: null,
-      });
-    }
-    const state = this.sessions.get(sessionId);
+    logCall(`load ${params.sessionId}`);
+    return this.reopen(params);
+  }
+
+  async resumeSession(params) {
+    if (HANG.has('session/resume')) return hangForever();
+    logCall(`resume ${params.sessionId}`);
+    return this.reopen(params);
+  }
+
+  async unstable_forkSession(params) {
+    if (HANG.has('session/fork')) return hangForever();
+    const sessionId = `fork-${crypto.randomBytes(8).toString('hex')}`;
+    logCall(`fork ${params.sessionId} -> ${sessionId}`);
+    const source = this.sessions.get(params.sessionId);
+    this.sessions.set(sessionId, { ...(source ?? this.freshState(params.cwd)), cwd: params.cwd, pendingPrompt: null });
+    return { sessionId, ...this.sessionControls(this.sessions.get(sessionId)) };
+  }
+
+  freshState(cwd) {
+    return { cwd, mode: 'default', model: 'cheap', thought: 'low', pendingPrompt: null };
+  }
+
+  sessionControls(state) {
     return {
       modes: {
         availableModes: [
@@ -94,6 +115,13 @@ class FakeAcpAgent {
       },
       configOptions: this.configOptions(state),
     };
+  }
+
+  reopen(params) {
+    // Re-establish a session created earlier on this same (pooled) process; if
+    // the process respawned, recreate minimal state so the reopen succeeds.
+    if (!this.sessions.has(params.sessionId)) this.sessions.set(params.sessionId, this.freshState(params.cwd));
+    return this.sessionControls(this.sessions.get(params.sessionId));
   }
 
   async setSessionMode(params) {

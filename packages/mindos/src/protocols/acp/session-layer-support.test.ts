@@ -25,7 +25,7 @@ const SUPPORT_EVIDENCE: Record<keyof typeof ACP_SESSION_LAYER_SUPPORT, string | 
   requestPermission: null,
   // Not implemented by the session layer today.
   userInput: null,
-  fork: null,
+  fork: 'forkSession',
   deleteSession: null,
 };
 
@@ -48,7 +48,7 @@ describe('ACP session layer support table', () => {
   });
 
   it('does not export session functions for capabilities the table marks unsupported', () => {
-    for (const name of ['forkSession', 'deleteSession', 'askUserQuestion']) {
+    for (const name of ['deleteSession', 'askUserQuestion']) {
       expect((acp as Record<string, unknown>)[name], `${name} exists; update ACP_SESSION_LAYER_SUPPORT`).toBeUndefined();
     }
   });

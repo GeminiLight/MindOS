@@ -645,7 +645,7 @@ const STRATA = [
 const LANES = [
   { name: 'mindos-pi', primary: false, how: '进程内 · Pi 1.5 session', cover: '内置 agent，可直接调用知识库工具', state: '稳定：本次已升级到 Pi 1.5.0' },
   { name: 'acp', primary: true, how: 'spawn 子进程 + JSON-RPC', cover: '40+ 个外部 agent：Gemini、Qwen、Kimi、OpenCode …', state: '主方向：Phase 1 已补齐 diff、用量、计划、图片、错误' },
-  { name: 'claude', primary: false, how: 'Claude Agent SDK 或直启 claude CLI', cover: '仅 Claude Code', state: '待迁移；直启 CLI 保留为订阅登录兜底' },
+  { name: 'claude', primary: false, how: '直启 claude CLI（不内嵌 SDK）', cover: '仅 Claude Code', state: '保留为 ACP 之外的兜底' },
   { name: 'codex', primary: false, how: '自研 Codex app-server 客户端', cover: '仅 Codex', state: '待迁移；codex-acp 底层是同一个 App Server' },
 ];
 

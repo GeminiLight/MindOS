@@ -119,7 +119,6 @@ describe('OpenCode-style platform runtime packages', () => {
     const script = readText('scripts/build-platform-packages.mjs');
 
     for (const dependency of [
-      '@anthropic-ai/claude-agent-sdk',
       '@anthropic-ai/sdk',
       '@earendil-works/pi-agent-core',
       '@earendil-works/pi-ai',

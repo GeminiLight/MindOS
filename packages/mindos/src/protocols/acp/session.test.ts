@@ -671,7 +671,7 @@ describe('ACP Session (SDK-based)', () => {
     it('throws when agent does not support loadSession', async () => {
       (findAcpAgent as ReturnType<typeof vi.fn>).mockResolvedValueOnce(MOCK_ENTRY);
       mockInitialize.mockResolvedValueOnce({ agentCapabilities: { loadSession: false } });
-      await expect(loadSession('test-agent', 'ses-1')).rejects.toThrow('does not support session/load');
+      await expect(loadSession('test-agent', 'ses-1')).rejects.toThrow('does not support session/resume or session/load');
     });
 
     it('loads session when agent supports it', async () => {

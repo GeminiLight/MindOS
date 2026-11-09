@@ -11,7 +11,6 @@ import {
   buildAgentRuntimeEnv,
   readPlatformEnvironmentValue,
   resolveAgentRuntimeEnvOverlay,
-  resolveClaudeCodeSdkNativeBinaryPath
 } from './index.js';
 
 describe('agent runtime adapters: environment detection', () => {
@@ -176,33 +175,5 @@ describe('agent runtime adapters: environment detection', () => {
 
     expect(result.overlay).toEqual({ GEMINI_API_KEY: 'shell-gemini' });
     expect(result.injectedKeys).toEqual(['GEMINI_API_KEY']);
-  });
-
-  it('detects whether the Claude Agent SDK platform native binary is installed', () => {
-    const result = resolveClaudeCodeSdkNativeBinaryPath({
-      platform: 'darwin',
-      arch: 'arm64',
-      requireResolve: (id) => {
-        if (id === '@anthropic-ai/claude-agent-sdk-darwin-arm64/claude') return '/sdk/claude';
-        throw new Error('not found');
-      },
-      exists: (filePath) => filePath === '/sdk/claude',
-    });
-
-    expect(result).toMatchObject({
-      platformKey: 'darwin-arm64',
-      path: '/sdk/claude',
-    });
-
-    const missing = resolveClaudeCodeSdkNativeBinaryPath({
-      platform: 'darwin',
-      arch: 'arm64',
-      requireResolve: () => {
-        throw new Error('not found');
-      },
-      exists: () => false,
-    });
-    expect(missing.path).toBeUndefined();
-    expect(missing.reason).toContain('darwin-arm64');
   });
 });

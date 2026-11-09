@@ -1,5 +1,5 @@
 import type { Root } from 'mdast';
-import { parseInlineTags } from '@geminilight/mindos/foundation';
+import { parseInlineTags } from '@geminilight/mindos/foundation/markdown';
 
 /**
  * Render Obsidian inline tags (`#tag`) as chips.

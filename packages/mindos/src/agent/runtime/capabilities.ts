@@ -152,7 +152,7 @@ export const ACP_SESSION_LAYER_SUPPORT: AcpSessionLayerSupport = {
   mcpInheritance: true,
   configOptions: true,
   userInput: false,
-  fork: false,
+  fork: true,
   deleteSession: false,
 };
 
@@ -235,7 +235,10 @@ export function acpCapabilitiesFromHandshake(
   declared: AcpDeclaredCapabilities | undefined,
   observed: AcpSessionLayerSupport = ACP_SESSION_LAYER_SUPPORT,
 ): { capabilities: AgentRuntimeCapabilities; harnessCapabilities: AgentRuntimeHarnessCapabilities } {
-  const loadSession = observed.loadSession && declared?.loadSession === true;
+  // Reopening goes through `session/resume` when declared, else `session/load`.
+  const loadSession = observed.loadSession && (
+    declared?.loadSession === true || isAcpCapabilitySupported(declared?.sessionCapabilities?.resume)
+  );
   const listSessions = observed.listSessions && isAcpCapabilitySupported(declared?.sessionCapabilities?.list);
   const fork = observed.fork && isAcpCapabilitySupported(declared?.sessionCapabilities?.fork);
   const archive = observed.deleteSession && isAcpCapabilitySupported(declared?.sessionCapabilities?.delete);

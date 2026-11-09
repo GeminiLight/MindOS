@@ -528,7 +528,7 @@ These selected MindOS files are unchanged since the last turn, so their full con
 |---|---|---|
 | MindOS Pi | MindOS Pi registered tools/extensions：KB tools、subagent、ask-user-question、pi-web-access 等 | `createMindosAgentPermissionPolicy()` 根据 `permissionMode` 生成 Pi policy |
 | Codex | Codex adapter / SDK / app-server | 由 Codex runtime adapter 映射并执行权限模型 |
-| Claude Code | Claude CLI / SDK bridge | 由 Claude adapter 和 permission prompt bridge 处理 |
+| Claude Code | Claude CLI（`--permission-prompt-tool`） | 由 Claude adapter 和 permission prompt bridge 处理 |
 | ACP | ACP session tools | 由 ACP adapter 与 runtime binding 控制 |
 
 工具 schema 本身不需要写进 system prompt。Pi runtime 通过注册的 `ToolDefinition` / extension registry 把工具交给模型；prompt 只保留必要的高层能力说明。

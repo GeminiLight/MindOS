@@ -86,11 +86,11 @@
       "required": true,
       "files": [
         {
-          "path": "packages/web/.next/standalone/node_modules/pi-web-access/index.ts",
+          "path": "packages/web/.next/standalone/node_modules/pi-web-access/dist/index.js",
           "type": "file"
         },
         {
-          "path": "packages/web/.next/standalone/node_modules/pi-subagents/src/extension/index.ts",
+          "path": "packages/web/.next/standalone/node_modules/pi-subagents/bundle/index.js",
           "type": "file"
         },
         {
@@ -99,6 +99,10 @@
         },
         {
           "path": "packages/web/.next/standalone/node_modules/pi-mcp-adapter/index.ts",
+          "type": "file"
+        },
+        {
+          "path": "packages/web/.next/standalone/node_modules/pi-schedule-prompt/src/index.ts",
           "type": "file"
         },
         {

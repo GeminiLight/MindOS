@@ -6,6 +6,13 @@ import { loadSqliteDriver } from '../../../../foundation/storage/sqlite-driver.j
 import { browseNativeSessions } from './native-browser.js';
 const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
+function writeClaudeSession(homeDir: string, id: string, cwd: string, prompts: string[], minute: number) {
+  const dir = join(homeDir, '.claude', 'projects', cwd.replace(/[^A-Za-z0-9_-]/g, '-'));
+  mkdirSync(dir, { recursive: true });
+  const at = new Date(Date.UTC(2026, 0, 1, 0, minute)).toISOString();
+  const lines = prompts.map(text => JSON.stringify({ type: 'user', message: { role: 'user', content: text }, cwd, sessionId: id, timestamp: at }));
+  writeFileSync(join(dir, `${id}.jsonl`), lines.join('\n') + '\n');
+}
 function fixture() {
   const homeDir = mkdtempSync(join(tmpdir(), 'mindos-native-browser-')); roots.push(homeDir);
   const dbPath = join(homeDir, '.local/share/opencode/opencode.db'); mkdirSync(join(dbPath, '..'), { recursive: true });
@@ -43,20 +50,6 @@ describe('native session discovery', () => {
     await expect(browseNativeSessions({ runtimeId: 'opencode', homeDir })).rejects.toThrow(/OpenCode/);
     await expect(browseNativeSessions({ runtimeId: 'claude', cursor: '-1' })).rejects.toThrow(/cursor/i);
   });
-  it('uses Claude SDK metadata for global pages and the original cwd for history', async () => {
-    const calls: unknown[] = [];
-    const sdk = {
-      listSessions: async (options: unknown) => { calls.push(options); return [{ sessionId: 'c1', summary: 'First', lastModified: 2, cwd: '/original' }, { sessionId: 'c2', summary: 'Second', lastModified: 1 }]; },
-      getSessionInfo: async () => ({ sessionId: 'c1', summary: 'First', lastModified: 2, cwd: '/original' }),
-      getSessionMessages: async (_id: string, options: unknown) => { calls.push(options); return [{ type: 'user', message: { role: 'user', content: 'hello' } }]; },
-    };
-    const page = await browseNativeSessions({ runtimeId: 'claude', limit: 1 }, sdk);
-    expect(page.sessions[0]).toMatchObject({ id: 'c1', cwd: '/original' });
-    expect(page.nextCursor).toBe('1'); expect(calls[0]).toEqual({ limit: 2, offset: 0 });
-    const history = await browseNativeSessions({ runtimeId: 'claude', sessionId: 'c1' }, sdk);
-    expect(history.sessions[0].turns).toEqual([{ role: 'user', content: 'hello' }]);
-    expect(calls[1]).toEqual({ dir: '/original' });
-  });
   it('reads only the selected OpenCode conversation with its original directory', async () => {
     const { homeDir, dbPath } = fixture(); const db = loadSqliteDriver().open(dbPath);
     db.exec(`CREATE TABLE session (id TEXT, directory TEXT, title TEXT, time_created INTEGER, time_updated INTEGER);
@@ -72,14 +65,42 @@ describe('native session discovery', () => {
     expect(page.sessions[0]).toMatchObject({ id: 'selected', cwd: '/original', turns: [{ role: 'user', content: 'Continue this plan' }] });
     await expect(browseNativeSessions({ runtimeId: 'opencode', homeDir, sessionId: 'deleted' })).rejects.toMatchObject({ status: 404 });
   });
-  it('finds older Claude matches before applying the page and reports deleted history', async () => {
-    const sdk = {
-      listSessions: async () => Array.from({ length: 105 }, (_, i) => ({ sessionId: String(i), summary: i === 104 ? '预算' : 'Other', lastModified: 200 - i })),
-      getSessionInfo: async () => undefined,
-      getSessionMessages: async () => [],
-    };
-    expect((await browseNativeSessions({ runtimeId: 'claude', query: '预算', limit: 30 }, sdk)).sessions.map(s => s.id)).toEqual(['104']);
-    await expect(browseNativeSessions({ runtimeId: 'claude', sessionId: 'deleted' }, sdk)).rejects.toMatchObject({ status: 404 });
+  it('pages Claude history from transcript files without reading whole conversations', async () => {
+    const { homeDir } = fixture();
+    for (let i = 0; i < 35; i++) writeClaudeSession(homeDir, `c${i}`, i % 2 ? '/a' : '/b', [`Plan ${i}`, 'follow-up'], i);
+    let cursor: string | undefined; const ids: string[] = [];
+    do {
+      const page = await browseNativeSessions({ runtimeId: 'claude', homeDir, limit: 10, cursor });
+      ids.push(...page.sessions.map(s => s.id));
+      expect(page.sessions.every(s => s.turns === undefined)).toBe(true);
+      cursor = page.nextCursor ?? undefined;
+    } while (cursor);
+    expect(ids).toHaveLength(35); expect(new Set(ids).size).toBe(35);
+    expect(ids[0]).toBe('c34');
   });
-
+  it('opens one Claude conversation with its original directory', async () => {
+    const { homeDir } = fixture();
+    writeClaudeSession(homeDir, 'c1', '/original', ['hello', 'and then'], 1);
+    writeClaudeSession(homeDir, 'c2', '/other', ['unrelated'], 2);
+    const history = await browseNativeSessions({ runtimeId: 'claude', homeDir, sessionId: 'c1' });
+    expect(history.sessions).toHaveLength(1);
+    expect(history.sessions[0]).toMatchObject({ id: 'c1', cwd: '/original' });
+    expect(history.sessions[0].turns?.map(t => t.content)).toEqual(['hello', 'and then']);
+  });
+  it('finds older Claude matches before applying the page and reports deleted history', async () => {
+    const { homeDir } = fixture();
+    for (let i = 0; i < 40; i++) writeClaudeSession(homeDir, String(i), '/a', [i === 0 ? '预算 review' : 'Other'], 100 + i);
+    expect((await browseNativeSessions({ runtimeId: 'claude', homeDir, query: '预算', limit: 30 })).sessions.map(s => s.id)).toEqual(['0']);
+    await expect(browseNativeSessions({ runtimeId: 'claude', homeDir, sessionId: 'deleted' })).rejects.toMatchObject({ status: 404 });
+  });
+  it('scopes Claude history to the requested project directory', async () => {
+    const { homeDir } = fixture();
+    writeClaudeSession(homeDir, 'in', '/项目/a', ['mine'], 1);
+    writeClaudeSession(homeDir, 'out', '/项目/b', ['theirs'], 2);
+    expect((await browseNativeSessions({ runtimeId: 'claude', homeDir, cwd: '/项目/a' })).sessions.map(s => s.id)).toEqual(['in']);
+  });
+  it('returns an empty Claude page when Claude Code was never used', async () => {
+    const { homeDir } = fixture();
+    expect(await browseNativeSessions({ runtimeId: 'claude', homeDir })).toEqual({ sessions: [], nextCursor: null });
+  });
 });

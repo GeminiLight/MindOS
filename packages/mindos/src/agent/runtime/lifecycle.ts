@@ -183,7 +183,7 @@ export function nativeRuntimeLifecycle(
         owner: 'external',
         required: true,
         sources: ['turn-runner', bridgeSource],
-        summary: `${name} executes the turn through its native CLI/SDK bridge; MindOS normalizes the stream into product events.`,
+        summary: `${name} executes the turn through its own local runtime; MindOS normalizes the stream into product events.`,
       },
       interrupt: capabilities.supportsInterrupt
         ? {

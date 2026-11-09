@@ -222,11 +222,11 @@ describe('route table: agent runtime host extensions', () => {
         detectLocalAcpAgents: async () => ({ installed: [], notInstalled: [] }),
         resolveRuntimeCommand: async (command: string) => (command === 'claude' || command === 'codex' ? `/usr/local/bin/${command}` : null),
         resolveRuntimeCommandCandidates: async () => [],
-        // A host health check that only describes the bridge in prose: the typed field must still come out of core.
+        // A host health check that reports no bridge: the typed field must still come out of core.
         checkNativeRuntimeHealth: async ({ runtime }) => (runtime === 'claude'
           ? {
             status: 'available' as const,
-            diagnosticHints: ['Claude Code CLI is available; Claude Agent SDK bridge is unavailable, so MindOS will use CLI fallback. SDK missing'],
+            diagnosticHints: ['Claude Code CLI is available.'],
           }
           : { status: 'error' as const, reason: ['Error: codex exploded', 'at findCodexExecutable (file:///opt/codex.js:1:1)', 'Node.js v22.0.0'].join('\n') }),
       },
@@ -237,7 +237,7 @@ describe('route table: agent runtime host extensions', () => {
     const adapter = await (await app.fetch(new Request('http://localhost/api/agent-runtimes/adapter-projections?runtime=claude'))).json();
     const readiness = await (await app.fetch(new Request('http://localhost/api/agent-runtimes/readiness?runtime=claude'))).json();
 
-    const expectedBridge = { kind: 'claude-cli', label: 'CLI fallback active', fallback: true, reason: 'SDK missing' };
+    const expectedBridge = { kind: 'claude-cli', label: 'Claude Code CLI' };
     expect(picker.runtime).toMatchObject({ adapter: 'claude-cli', runtimeBridge: expectedBridge });
     expect(picker.runtime.adapterContract.connection.kind).toBe('cli');
     const listed = list.runtimes.find((runtime: { id: string }) => runtime.id === 'claude');

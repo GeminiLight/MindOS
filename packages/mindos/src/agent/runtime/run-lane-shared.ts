@@ -7,7 +7,6 @@ import type {
   ClaudeCodeCliClient,
   ClaudeCodeCliPermissionPrompt,
 } from './claude-code-cli.js';
-import type { ClaudeCodeSdkModule } from './claude-code-sdk.js';
 import type {
   CodexAppServerClient,
   CodexAppServerServerRequest,
@@ -41,8 +40,6 @@ export type MindosNativeAgentTurnServices = {
   }): CodexAppServerClient | Promise<CodexAppServerClient>;
   createClaudeClient?(options: { cwd: string; signal?: AbortSignal }): ClaudeCodeCliClient | Promise<ClaudeCodeCliClient>;
   createClaudeCliClient?(options: { cwd: string; signal?: AbortSignal; command?: string; env?: NodeJS.ProcessEnv }): ClaudeCodeCliClient | Promise<ClaudeCodeCliClient>;
-  createClaudeSdkClient?(options: { cwd: string; signal?: AbortSignal; command: string; env?: NodeJS.ProcessEnv }): ClaudeCodeCliClient | Promise<ClaudeCodeCliClient>;
-  loadClaudeSdk?(): ClaudeCodeSdkModule | Promise<ClaudeCodeSdkModule>;
   createClaudePermissionPrompt?(options: {
     cwd: string;
     signal?: AbortSignal;

@@ -132,7 +132,6 @@ export function nativeDescriptor(input: {
       id: input.id,
       command: input.source?.resolvedCommand?.cmd,
       commandSource: input.source?.resolvedCommand?.source,
-      bridgeKind,
     }),
     ...(runtimeBridge ? { runtimeBridge } : {}),
     description: definition.description,

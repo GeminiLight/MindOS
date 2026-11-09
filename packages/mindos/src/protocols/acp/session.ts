@@ -215,40 +215,106 @@ async function createSessionFromEntryReserved(
 }
 
 /**
- * Load/resume an existing session on an agent. Goes through the same
- * admission control as create; the local id is fresh, `agentSessionId`
- * carries the agent-side id being resumed.
+ * Reopen an existing agent-side session. Goes through the same admission
+ * control as create; the local id is fresh, `agentSessionId` carries the
+ * agent-side id being reopened.
  */
 export async function loadSession(
   agentId: string,
   existingSessionId: string,
   options?: AcpSessionOptions,
 ): Promise<AcpSession> {
-  const entry = await resolveAgentEntry(agentId, options);
-  return withReservedSlot(entry.id, () => loadSessionReserved(entry, existingSessionId, options));
+  return loadSessionFromEntry(await resolveAgentEntry(agentId, options), existingSessionId, options);
 }
 
-async function loadSessionReserved(
+/** {@link loadSession} for a known registry entry (skips registry lookup). */
+export function loadSessionFromEntry(
   entry: AcpRegistryEntry,
   existingSessionId: string,
   options?: AcpSessionOptions,
 ): Promise<AcpSession> {
+  return withReservedSlot(entry.id, () => openExistingSessionReserved(entry, existingSessionId, 'reopen', options));
+}
+
+/**
+ * Branch an agent-side session into a new one (`session/fork`). The returned
+ * session is live on its own connection; the source session is left untouched.
+ */
+export async function forkSession(
+  agentId: string,
+  sourceSessionId: string,
+  options?: AcpSessionOptions,
+): Promise<AcpSession> {
+  return forkSessionFromEntry(await resolveAgentEntry(agentId, options), sourceSessionId, options);
+}
+
+/** {@link forkSession} for a known registry entry (skips registry lookup). */
+export function forkSessionFromEntry(
+  entry: AcpRegistryEntry,
+  sourceSessionId: string,
+  options?: AcpSessionOptions,
+): Promise<AcpSession> {
+  return withReservedSlot(entry.id, () => openExistingSessionReserved(entry, sourceSessionId, 'fork', options));
+}
+
+type ExistingSessionMethod = 'session/resume' | 'session/load' | 'session/fork';
+
+/**
+ * `session/resume` restores a session without replaying its history, so it is
+ * preferred; `session/load` (which streams the whole history back) remains for
+ * agents that only offer that.
+ */
+function chooseExistingSessionMethod(
+  intent: 'reopen' | 'fork',
+  capabilities: AcpSession['agentCapabilities'],
+): ExistingSessionMethod | null {
+  if (intent === 'fork') return isAcpCapabilitySupported(capabilities?.sessionCapabilities?.fork) ? 'session/fork' : null;
+  if (isAcpCapabilitySupported(capabilities?.sessionCapabilities?.resume)) return 'session/resume';
+  return capabilities?.loadSession ? 'session/load' : null;
+}
+
+/**
+ * Codex cannot fork a thread that is still open in another app-server process:
+ * the fork opens, then its first turn fails because the thread's encrypted
+ * reasoning cannot be read. So release idle local sessions holding the source
+ * first (the agent-side session stays; the next turn on it resumes). A turn in
+ * flight is never killed for a fork.
+ */
+async function releaseLocalHoldersOfForkSource(agentId: string, sourceSessionId: string): Promise<void> {
+  const holders = findSessionsByAgentSessionId(agentId, sourceSessionId);
+  if (holders.some((holder) => holder.state === 'active')) {
+    throw new Error('Cannot fork this session while a turn is still running on it. Wait for the turn to finish.');
+  }
+  for (const holder of holders) await closeSession(holder.id, { closeAgentSession: false });
+}
+
+async function openExistingSessionReserved(
+  entry: AcpRegistryEntry,
+  existingSessionId: string,
+  intent: 'reopen' | 'fork',
+  options?: AcpSessionOptions,
+): Promise<AcpSession> {
+  if (intent === 'fork') await releaseLocalHoldersOfForkSource(entry.id, existingSessionId);
   const startedAt = Date.now();
   const loadCwd = options?.cwd ?? process.cwd();
   const initialized = await initializeAcpConnection(entry, options, startedAt);
   const { conn, agentCapabilities, authMethods, timeouts } = initialized;
 
-  if (!agentCapabilities?.loadSession) {
+  const method = chooseExistingSessionMethod(intent, agentCapabilities);
+  if (!method) {
+    const message = intent === 'fork'
+      ? `Agent ${entry.id} does not support session/fork`
+      : `Agent ${entry.id} does not support session/resume or session/load`;
     rememberAcpHandshakeHealth({
       agentId: entry.id,
       status: 'failed',
       stage: 'session-load',
       startedAt,
-      message: `Agent ${entry.id} does not support session/load`,
+      message,
       capabilities: agentCapabilities,
     });
     killAgent(conn.process);
-    throw new Error(`Agent ${entry.id} does not support session/load`);
+    throw new Error(message);
   }
 
   let modes: AcpMode[] | undefined;
@@ -256,25 +322,32 @@ async function loadSessionReserved(
   let currentModeId: string | undefined;
   const mcpInheritance = resolveSessionMcpInheritance(options, agentCapabilities);
   let loadedInfo: AcpSessionInfo = { sessionId: existingSessionId };
+  let agentSessionId = existingSessionId;
 
   try {
+    const request = { sessionId: existingSessionId, cwd: loadCwd, mcpServers: mcpInheritance.servers };
     const loadResult = await openAcpSessionWithAuth({
       entry,
       initialized,
-      label: 'session/load',
+      label: method,
       signal: options?.signal,
       startedAt,
-      run: () => conn.connection.loadSession({
-        sessionId: existingSessionId,
-        cwd: loadCwd,
-        mcpServers: mcpInheritance.servers,
-      }),
+      run: async () => {
+        if (method === 'session/fork') {
+          const forked = await conn.connection.unstable_forkSession(request);
+          agentSessionId = forked.sessionId;
+          return forked;
+        }
+        return method === 'session/resume'
+          ? conn.connection.resumeSession(request)
+          : conn.connection.loadSession(request);
+      },
     });
     modes = parseModes(loadResult.modes);
     currentModeId = parseCurrentModeId(loadResult.modes);
     configOptions = parseConfigOptions(loadResult.configOptions);
     currentModeId ??= currentModeFromConfig(configOptions);
-    loadedInfo = normalizeAcpSessionInfo(loadResult, existingSessionId);
+    loadedInfo = normalizeAcpSessionInfo(loadResult, agentSessionId);
   } catch (err) {
     killAgent(conn.process);
     if (isAbortedBy(options?.signal, err) || err instanceof AcpAuthenticationError) throw err;
@@ -286,19 +359,22 @@ async function loadSessionReserved(
       message: (err as Error).message,
       capabilities: agentCapabilities,
     });
-    throw new Error(`session/load failed: ${(err as Error).message}`);
+    throw new Error(`${method} failed: ${(err as Error).message}`);
   }
 
-  // The agent-side session now lives on this connection: release any local
-  // session still bound to it, keeping the agent's session (it is being resumed).
-  for (const previous of findSessionsByAgentSessionId(entry.id, existingSessionId)) {
-    await closeSession(previous.id, { closeAgentSession: false });
+  // A reopened agent-side session now lives on this connection: release any
+  // local session still bound to it, keeping the agent's session. A fork is a
+  // new session, so the source's local sessions stay as they are.
+  if (intent === 'reopen') {
+    for (const previous of findSessionsByAgentSessionId(entry.id, existingSessionId)) {
+      await closeSession(previous.id, { closeAgentSession: false });
+    }
   }
 
   const session: AcpSession = {
     id: newLocalSessionId(entry.id),
     agentId: entry.id,
-    agentSessionId: existingSessionId,
+    agentSessionId,
     state: 'idle',
     cwd: options?.cwd,
     createdAt: new Date().toISOString(),

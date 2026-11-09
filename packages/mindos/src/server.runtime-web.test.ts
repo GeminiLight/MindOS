@@ -856,9 +856,6 @@ describe('MindOS server contract: runtime, agent turn stream, static web', () =>
   it('marks Claude unavailable when only the old SDK sentinel is provided', async () => {
     const result = await checkClaudeRuntimeHealth({
       binaryPath: 'sdk:@anthropic-ai/claude-agent-sdk',
-      importSdk: async () => {
-        throw new Error('should not import SDK without a local CLI path');
-      },
       checkCliVersion: async () => {
         throw new Error('should not check CLI without a local CLI path');
       },
@@ -873,49 +870,26 @@ describe('MindOS server contract: runtime, agent turn stream, static web', () =>
     });
   });
 
-  it('keeps Claude available through a real CLI path when the SDK bridge is available', async () => {
+  it('reports Claude ready through the local CLI once claude --version succeeds', async () => {
     const result = await checkClaudeRuntimeHealth({
       binaryPath: '/Users/tester/.local/bin/claude',
-      importSdk: async () => ({ query: () => ({}) }),
-      checkCliVersion: async () => ({ status: 'available' }),
+      checkCliVersion: async () => ({ status: 'available', diagnosticHints: ['claude 2.1.0'] }),
     });
 
-    expect(result).toMatchObject({
+    expect(result).toEqual({
       status: 'available',
-      runtimeBridge: {
-        kind: 'claude-sdk',
-        label: 'SDK bridge active',
-      },
-      diagnosticHints: [
-        'Claude Agent SDK bridge is available and will use the local Claude Code CLI at /Users/tester/.local/bin/claude.',
-      ],
+      runtimeBridge: { kind: 'claude-cli', label: 'Claude Code CLI' },
+      diagnosticHints: ['claude 2.1.0'],
     });
   });
 
-  it('keeps Claude available through CLI fallback when the SDK bridge is unavailable', async () => {
+  it('passes a failing claude --version through as the Claude health result', async () => {
     const result = await checkClaudeRuntimeHealth({
       binaryPath: '/Users/tester/.local/bin/claude',
-      importSdk: async () => {
-        throw new Error('SDK missing');
-      },
-      checkCliVersion: async () => {
-        return { status: 'available' };
-      },
+      checkCliVersion: async () => ({ status: 'error', reason: 'claude exited with code 1' }),
     });
 
-    expect(result).toMatchObject({
-      status: 'available',
-      runtimeBridge: {
-        kind: 'claude-cli',
-        label: 'CLI fallback active',
-        fallback: true,
-        reason: 'SDK missing',
-      },
-      diagnosticHints: expect.arrayContaining([
-        expect.stringContaining('Claude Code CLI is available at /Users/tester/.local/bin/claude'),
-        expect.stringContaining('SDK missing'),
-      ]),
-    });
+    expect(result).toEqual({ status: 'error', reason: 'claude exited with code 1' });
   });
 
   it('keeps local native runtime detection independent when ACP detection times out', async () => {
@@ -954,7 +928,7 @@ describe('MindOS server contract: runtime, agent turn stream, static web', () =>
           expect.objectContaining({
             id: 'claude',
             kind: 'claude',
-            adapter: 'claude-sdk',
+            adapter: 'claude-cli',
             status: 'missing',
             availability: expect.objectContaining({
               reason: expect.stringContaining('Claude Code executable was not detected'),

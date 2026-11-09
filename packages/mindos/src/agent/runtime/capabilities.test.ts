@@ -71,11 +71,21 @@ describe('acpCapabilitiesFromHandshake', () => {
       supportsResume: true,
       supportsListSessions: true,
       supportsAttachExisting: true,
-      // Declared, but the session layer does not implement fork / delete yet.
-      supportsFork: false,
+      supportsFork: true,
+      // Declared, but the session layer does not implement delete.
       supportsArchive: false,
     });
     expect(harnessCapabilities.session).toBe('native-thread');
+  });
+
+  it('counts session/resume as resumable for agents that do not declare loadSession', () => {
+    const { capabilities } = acpCapabilitiesFromHandshake({ sessionCapabilities: { resume: {}, list: {} } });
+    expect(capabilities).toMatchObject({ supportsResume: true, supportsAttachExisting: true });
+  });
+
+  it('does not claim fork for an agent that does not declare it', () => {
+    const { capabilities } = acpCapabilitiesFromHandshake({ loadSession: true, sessionCapabilities: { list: {} } });
+    expect(capabilities.supportsFork).toBe(false);
   });
 
   it('derives MCP support from declared transports plus session inheritance', () => {

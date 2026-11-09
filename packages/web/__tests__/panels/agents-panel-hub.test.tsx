@@ -96,7 +96,7 @@ vi.mock('@/hooks/useNativeRuntimeDetection', () => ({
         id: 'claude',
         name: 'Claude Code',
         kind: 'claude',
-        adapter: 'claude-sdk',
+        adapter: 'claude-cli',
         modelOwner: 'external',
         authOwner: 'external',
         permissionOwner: 'external',

@@ -20,7 +20,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react';
 import ReactMarkdown, { type Components, type Options as ReactMarkdownOptions } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { buildWikiLinkBasenameMap, resolveWikiLinkTarget } from '@geminilight/mindos/foundation';
+import { buildWikiLinkBasenameMap, resolveWikiLinkTarget } from '@geminilight/mindos/foundation/markdown';
 import { EmbeddedNote, parseEmbedSubpath } from '@/components/markdown/EmbeddedNote';
 import { shouldHandleSmoothNavigation, useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 import { fetchAllFilePaths } from '@/lib/client-cache';

@@ -56,7 +56,6 @@ describe('MindOS runtime product kernel contract', () => {
     expect(manifest.scripts?.build).toBe('tsc && node ../../scripts/copy-mindos-agent-assets.mjs && node ../../scripts/build-cli-bundles.mjs && pnpm run build:protocols');
     expect(manifest.scripts?.['build:protocols']).toBe('node ../../scripts/build-product-protocols.mjs');
     expect(Object.keys(manifest.dependencies ?? {}).sort()).toEqual([
-      '@anthropic-ai/claude-agent-sdk',
       '@anthropic-ai/sdk',
       '@earendil-works/pi-agent-core',
       '@earendil-works/pi-ai',
@@ -81,7 +80,6 @@ describe('MindOS runtime product kernel contract', () => {
       'picomatch',
       'zod',
     ]);
-    expect(manifest.dependencies).toHaveProperty('@anthropic-ai/claude-agent-sdk', '0.3.170');
     expect(manifest.devDependencies).not.toHaveProperty('@anthropic-ai/claude-agent-sdk');
     expect(Object.keys(manifest.exports ?? {}).sort()).toEqual([
       '.',
@@ -128,6 +126,9 @@ describe('MindOS runtime product kernel contract', () => {
       './client',
       './client-types',
       './foundation',
+      // Browser-safe slices of foundation; the barrel itself is server-side.
+      './foundation/canvas',
+      './foundation/markdown',
       './foundation/security/redaction',
       './intelligence',
       './knowledge',

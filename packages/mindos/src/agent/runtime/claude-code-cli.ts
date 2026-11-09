@@ -8,7 +8,7 @@ import {
   getClaudeStreamJsonStringField,
   mapClaudeStreamJsonRecordToSseEvents,
 } from './claude-stream-json-mapper.js';
-import type { MindosSelectedSkill } from '../selected-skills.js';
+import { mindosSelectedSkillNames, type MindosSelectedSkill } from '../selected-skills.js';
 import type { MindosRuntimeAttachment } from './attachments.js';
 import { toHostChildEnv } from '../../foundation/pi-agent-dir/index.js';
 
@@ -154,8 +154,21 @@ export function createClaudeCodeCliStdioTransport(options: {
   };
 }
 
+/**
+ * Claude Code has no flag for "use this skill"; skills are invoked by their
+ * slash command. Prefix the ones the user selected but did not type, so a skill
+ * picked from the MindOS UI reaches the CLI the same way a typed one does.
+ */
+export function withClaudeSkillCommands(prompt: string, selectedSkills: MindosSelectedSkill[] | undefined): string {
+  const missing = mindosSelectedSkillNames(selectedSkills).filter((name) => (
+    !new RegExp(`(^|\\s)/${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?=\\s|$)`).test(prompt)
+  ));
+  return missing.length > 0 ? `${missing.map((name) => `/${name}`).join(' ')} ${prompt}` : prompt;
+}
+
 function buildClaudeCodeCliArgs(input: {
   prompt: string;
+  selectedSkills?: MindosSelectedSkill[];
   sessionId?: string;
   model?: string;
   effort?: 'low' | 'medium' | 'high' | 'xhigh';
@@ -183,6 +196,6 @@ function buildClaudeCodeCliArgs(input: {
     // `--` stops flag parsing: a prompt that begins with a dash must reach
     // the CLI as the positional prompt, never as an option.
     '--',
-    input.prompt,
+    withClaudeSkillCommands(input.prompt, input.selectedSkills),
   ];
 }

@@ -26,8 +26,9 @@ const EXTRACTION_ROOT_PACKAGES = ['pdfjs-dist', 'mammoth', 'word-extractor'];
 
 const STATIC_PRODUCT_RUNTIME_ROOT_PACKAGES = [
   ...EXTRACTION_ROOT_PACKAGES,
-  // pi-subagents is loaded from TypeScript source through jiti. Keeping only
-  // it and its runtime-required peer host avoids pulling unrelated built-in
+  // pi-subagents is loaded from the entry its package declares in
+  // pi.extensions (a prebuilt bundle since 0.87; TypeScript source before, via
+  // jiti). Keeping only it and its runtime-required peer host avoids pulling unrelated built-in
   // extensions into each platform binary. Although pi-coding-agent is declared
   // as an optional peer, pi-subagents imports runtime values from it.
   'pi-subagents',
@@ -133,7 +134,9 @@ export function pruneStandaloneToExtractionRuntime(standaloneDir) {
 export function assertBuiltinAgentExtensionRuntime(standaloneDir) {
   const nodeModules = nodeModulesDir(standaloneDir) ?? resolve(standaloneDir, '__node_modules');
   const required = [
-    resolve(nodeModules, 'pi-subagents', 'src', 'extension', 'index.ts'),
+    // 0.87 ships a prebuilt bundle named in pi.extensions; the TypeScript
+    // source entry this used to require no longer exists.
+    resolve(nodeModules, 'pi-subagents', 'bundle', 'index.js'),
     resolve(nodeModules, 'pi-subagents', 'agents'),
     resolve(nodeModules, '@earendil-works', 'pi-coding-agent', 'dist', 'index.js'),
     resolve(nodeModules, '@earendil-works', 'pi-coding-agent', 'dist', 'utils', 'changelog.js'),

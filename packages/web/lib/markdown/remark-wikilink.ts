@@ -1,5 +1,5 @@
 import type { Root } from 'mdast';
-import { parseWikiLinksInLine } from '@geminilight/mindos/foundation';
+import { parseWikiLinksInLine } from '@geminilight/mindos/foundation/markdown';
 
 /**
  * Render Obsidian `[[wiki links]]` in the reading view.

@@ -50,7 +50,7 @@ export async function listClaudeSessions(
     for (const file of files) {
       if (!file.isFile() || !file.name.endsWith('.jsonl')) continue;
       const filePath = join(projectPath, file.name);
-      const recordsFromFile = await readJsonl(filePath);
+      const recordsFromFile = await readJsonl(filePath, options.metadataOnly);
       const fileSessionId = file.name.replace(/\.jsonl$/, '');
       const sessionId = firstStringField(recordsFromFile, 'sessionId')
         ?? firstStringField(recordsFromFile, 'session_id')
@@ -74,13 +74,18 @@ export async function listClaudeSessions(
         preview: lastUserMessage && lastUserMessage !== firstUserMessage ? lastUserMessage.content.slice(0, 120) : undefined,
         cwd,
         createdAt: firstTimestamp ?? fileStat?.birthtimeMs,
-        updatedAt: newestTimestampField(recordsFromFile, 'timestamp') ?? fileStat?.mtimeMs,
+        // A metadata read stops after the first records, so only the file's
+        // mtime knows when the conversation last changed.
+        updatedAt: (options.metadataOnly ? fileStat?.mtimeMs : undefined)
+          ?? newestTimestampField(recordsFromFile, 'timestamp')
+          ?? fileStat?.mtimeMs,
         messages,
+        metadataOnly: options.metadataOnly,
         transcriptSource: 'claude-code',
       }));
     }
   }
-  return sortAndLimit(records, options.limit);
+  return sortAndLimit(records, options.limit, options);
 }
 
 export const CLAUDE_SESSION_TRANSCRIPT_ADAPTER: RuntimeSessionTranscriptAdapter = {

@@ -106,20 +106,16 @@ export function nativeAdapterContract(input: {
   id: NativeRuntimeId;
   command?: string;
   commandSource?: AgentRuntimeResolvedCommandSource;
-  bridgeKind?: 'codex-app-server' | 'claude-sdk' | 'claude-cli';
 }): AgentRuntimeAdapterContract {
   const isCodex = input.id === 'codex';
-  const isCliFallback = input.bridgeKind === 'claude-cli';
   return {
     schemaVersion: 1,
     connection: {
-      kind: isCodex ? 'app-server' : isCliFallback ? 'cli' : 'sdk',
+      kind: isCodex ? 'app-server' : 'cli',
       owner: 'mindos',
       summary: isCodex
         ? 'MindOS connects to the local Codex app-server and lets Codex own execution semantics.'
-        : isCliFallback
-          ? 'MindOS uses the Claude Code CLI fallback when the SDK bridge is unavailable.'
-          : 'MindOS uses the Claude Code SDK bridge and lets Claude own execution semantics.',
+        : 'MindOS runs the local Claude Code CLI and lets Claude own execution semantics.',
       ...(input.command ? { command: input.command } : {}),
       ...(input.command && input.commandSource ? { commandSource: input.commandSource } : {}),
     },
@@ -136,7 +132,7 @@ export function nativeAdapterContract(input: {
       owner: 'mindos',
       summary: isCodex
         ? 'MindOS probes Codex app-server availability and provider/login environment before offering the runtime.'
-        : 'MindOS probes Claude Code availability and bridge readiness before offering the runtime.',
+        : 'MindOS probes the local Claude Code CLI before offering the runtime.',
       ...(input.command ? { command: input.command } : {}),
       timeoutMs: 20_000,
     },
@@ -159,7 +155,7 @@ export function nativeAdapterContract(input: {
       authRequired: true,
       summary: isCodex
         ? 'Codex exposes runtime-native streaming and auth through its app-server and CLI profile rather than generic ACP metadata.'
-        : 'Claude Code exposes runtime-native streaming and auth through its SDK/CLI bridge rather than generic ACP metadata.',
+        : 'Claude Code exposes runtime-native streaming and auth through its CLI stream-json output rather than generic ACP metadata.',
     }),
   };
 }

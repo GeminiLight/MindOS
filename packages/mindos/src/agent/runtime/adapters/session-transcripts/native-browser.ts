@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { loadSqliteDriver } from '../../../../foundation/storage/sqlite-driver.js';
-import { parseClaudeMessagesFromRecords, parseOpenCodeTextRows, type OpenCodeTextRow } from './normalizer.js';
+import { parseOpenCodeTextRows, type OpenCodeTextRow } from './normalizer.js';
 import type { ExternalRuntimeSessionRecord } from './types.js';
 import { getRuntimeSessionTranscriptAdapter } from './registry.js';
 
@@ -23,23 +23,8 @@ export interface NativeSessionPage {
   sessions: ExternalRuntimeSessionRecord[];
   nextCursor: string | null;
 }
-interface ClaudeSessionInfo {
-  sessionId: string;
-  summary: string;
-  lastModified: number;
-  cwd?: string;
-  createdAt?: number;
-  firstPrompt?: string;
-}
-interface ClaudeSessionReader {
-  listSessions(options: { dir?: string; offset?: number; limit?: number }): Promise<ClaudeSessionInfo[]>;
-  getSessionInfo(id: string, options?: { dir?: string }): Promise<ClaudeSessionInfo | undefined>;
-  getSessionMessages(id: string, options?: { dir?: string }): Promise<unknown[]>;
-}
-
 export async function browseNativeSessions(
   options: NativeSessionBrowserOptions,
-  claudeReader?: ClaudeSessionReader,
 ): Promise<NativeSessionPage> {
   const offset = options.cursor ? Number(options.cursor) : 0;
   if (!Number.isSafeInteger(offset) || offset < 0 || (options.cursor && !/^\d+$/.test(options.cursor))) {
@@ -47,41 +32,12 @@ export async function browseNativeSessions(
   }
   const limit = options.limit ?? 30;
   if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new NativeSessionBrowserError('Session page limit must be between 1 and 100.', 400);
-  if (options.runtimeId === 'claude' || options.runtimeId === 'claude-code') {
-    const sdk = claudeReader ?? await import('@anthropic-ai/claude-agent-sdk');
-    if (options.sessionId) {
-      const info = await sdk.getSessionInfo(options.sessionId, options.cwd ? { dir: options.cwd } : undefined);
-      if (!info) throw new NativeSessionBrowserError('Claude session no longer exists or cannot be read. Refresh the list.', 404);
-      const messages = await sdk.getSessionMessages(info.sessionId, info.cwd ? { dir: info.cwd } : undefined);
-      const turns = parseClaudeMessagesFromRecords(messages as Record<string, unknown>[]);
-      return { sessions: [{ ...claudeEntry(info), turns, messageCount: turns.length }], nextCursor: null };
-    }
-    const dir = options.cwd ? { dir: options.cwd } : {};
-    const query = options.query?.trim().toLowerCase();
-    // The SDK already indexes lightweight metadata. Search must precede the
-    // page window, otherwise an older matching session would remain invisible.
-    const candidates = query
-      ? (await sdk.listSessions(dir)).filter(s => [s.summary, s.firstPrompt, s.cwd, s.sessionId].some(v => v?.toLowerCase().includes(query))).slice(offset, offset + limit + 1)
-      : await sdk.listSessions({ ...dir, offset, limit: limit + 1 });
-    return {
-      sessions: candidates.slice(0, limit).map(claudeEntry),
-      nextCursor: candidates.length > limit ? String(offset + limit) : null,
-    };
-  }
   if (options.runtimeId === 'opencode') return browseOpenCode(options, offset, limit);
   const adapter = getRuntimeSessionTranscriptAdapter(options.runtimeId);
   if (!adapter || adapter.status !== 'supported') throw new NativeSessionBrowserError('This runtime does not expose a native session browser.', 501);
   const sessions = await adapter.listSessions({ ...options, offset, limit: limit + 1, metadataOnly: !options.sessionId });
   if (options.sessionId && sessions.length === 0) throw new NativeSessionBrowserError('Session no longer exists or cannot be read. Refresh the list.', 404);
   return { sessions: sessions.slice(0, limit), nextCursor: !options.sessionId && sessions.length > limit ? String(offset + limit) : null };
-}
-
-function claudeEntry(info: ClaudeSessionInfo): ExternalRuntimeSessionRecord {
-  return {
-    id: info.sessionId, title: info.summary, preview: info.firstPrompt,
-    cwd: info.cwd, updatedAt: info.lastModified, createdAt: info.createdAt,
-    source: 'native-transcript', transcriptSource: 'claude-code',
-  };
 }
 
 function browseOpenCode(options: NativeSessionBrowserOptions, offset: number, limit: number): NativeSessionPage {

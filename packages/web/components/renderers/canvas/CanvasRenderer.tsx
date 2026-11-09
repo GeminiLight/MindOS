@@ -19,7 +19,7 @@ import {
   type CanvasEdge,
   type CanvasNode,
   type CanvasNodeSide,
-} from '@geminilight/mindos/foundation';
+} from '@geminilight/mindos/foundation/canvas';
 import {
   VaultIndexProvider,
   VaultMarkdown,

@@ -92,7 +92,7 @@ export const NATIVE_RUNTIME_DEFINITIONS: readonly NativeRuntimeDefinition[] = [
     id: 'claude',
     mcpAgentKey: 'claude-code',
     description: 'Local Claude Code runtime. Model, permission, and session behavior are owned by Claude Code.',
-    defaultBridge: 'claude-sdk',
+    defaultBridge: 'claude-cli',
     capabilities: claudeCapabilities,
     harnessCapabilities: claudeHarnessCapabilities,
     diagnostics: {

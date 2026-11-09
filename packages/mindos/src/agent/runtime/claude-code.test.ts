@@ -14,7 +14,6 @@ import {
   type CodexAppServerTransport,
   type ClaudeCodeCliClient,
   type ClaudeCodeCliTransport,
-  type ClaudeCodeSdkModule,
   type MindOSSSEvent
 } from './index.js';
 
@@ -112,23 +111,6 @@ function createFakeClaudeTransport(lines: string[]): ClaudeCodeCliTransport & { 
   };
 }
 
-function createFakeClaudeSdk(
-  messages: Record<string, unknown>[] | ((params: Parameters<ClaudeCodeSdkModule['query']>[0]) => AsyncIterable<Record<string, unknown>>),
-): ClaudeCodeSdkModule & { params: Parameters<ClaudeCodeSdkModule['query']>[0] | null } {
-  return {
-    params: null,
-    query(params) {
-      this.params = params;
-      if (typeof messages === 'function') return messages(params);
-      return {
-        async *[Symbol.asyncIterator]() {
-          for (const message of messages) yield message;
-        },
-      };
-    },
-  };
-}
-
 afterEach(() => {
   vi.useRealTimers();
 });
@@ -197,478 +179,96 @@ describe('agent runtime adapters: Claude Code', () => {
     });
   });
 
-  it('uses Claude Agent SDK bridge with a detected local CLI path and returns the session binding', async () => {
+  it('runs the detected local claude CLI with the runtime env and returns the session binding', async () => {
     const events: MindOSSSEvent[] = [];
-    const sdk = createFakeClaudeSdk([
-      { type: 'system', subtype: 'init', session_id: 'claude-sdk-session', cwd: '/tmp/mind' },
-      { type: 'assistant', message: { content: [{ type: 'text', text: 'Hello from SDK' }] }, session_id: 'claude-sdk-session' },
-      { type: 'result', subtype: 'success', session_id: 'claude-sdk-session', is_error: false, result: '' },
+    const transport = createFakeClaudeTransport([
+      JSON.stringify({ type: 'system', subtype: 'init', session_id: 'claude-cli-session', cwd: '/tmp/mind' }),
+      JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'Hello from CLI' }] }, session_id: 'claude-cli-session' }),
+      JSON.stringify({ type: 'result', subtype: 'success', session_id: 'claude-cli-session', is_error: false, result: '' }),
     ]);
+    let captured: { cwd: string; command?: string; env?: NodeJS.ProcessEnv } | null = null;
 
     const result = await runMindosNativeAgentTurn({
       runtime: { kind: 'claude', id: 'claude', name: 'Claude Code', binaryPath: '/usr/local/bin/claude' },
       cwd: '/tmp/mind',
       prompt: 'Review this.',
-      selectedSkills: [{ name: 'doc-review', source: 'user-selected' }],
       modelOverride: 'claude-sonnet-4-20250514',
       reasoningEffort: 'high',
       runtimeEnv: { PATH: '/usr/bin', CLAUDE_CODE_OAUTH_TOKEN: 'runtime-token' } as NodeJS.ProcessEnv,
       send: (event) => events.push(event),
       services: {
-        loadClaudeSdk: () => sdk,
-      },
-    });
-
-    expect(sdk.params).toMatchObject({
-      prompt: 'Review this.',
-      options: {
-        cwd: '/tmp/mind',
-        outputFormat: 'stream-json',
-        model: 'claude-sonnet-4-20250514',
-        effort: 'high',
-        permissionMode: 'default',
-        skills: ['doc-review'],
-        pathToClaudeCodeExecutable: '/usr/local/bin/claude',
-        env: {
-          PATH: '/usr/bin',
-          CLAUDE_CODE_OAUTH_TOKEN: 'runtime-token',
+        createClaudeCliClient: (options) => {
+          captured = options;
+          return createClaudeCodeCliClient(transport);
         },
       },
     });
-    expect(typeof sdk.params?.options?.canUseTool).toBe('function');
-    expect(result).toEqual({ externalSessionId: 'claude-sdk-session' });
+
+    expect(captured).toMatchObject({
+      cwd: '/tmp/mind',
+      command: '/usr/local/bin/claude',
+      env: { PATH: '/usr/bin', CLAUDE_CODE_OAUTH_TOKEN: 'runtime-token' },
+    });
+    expect(transport.argv).toEqual([
+      '--print', '--output-format', 'stream-json', '--verbose',
+      '--permission-mode', 'default',
+      '--model', 'claude-sonnet-4-20250514',
+      '--effort', 'high',
+      '--', 'Review this.',
+    ]);
+    expect(result).toEqual({ externalSessionId: 'claude-cli-session' });
     expect(events).toEqual([
       { type: 'status', visible: true, runtime: 'claude', message: 'Starting Claude Code locally.' },
-      { type: 'runtime_binding', runtime: 'claude', externalSessionId: 'claude-sdk-session', cwd: '/tmp/mind' },
+      { type: 'runtime_binding', runtime: 'claude', externalSessionId: 'claude-cli-session', cwd: '/tmp/mind' },
       { type: 'status', visible: true, runtime: 'claude', message: 'Claude Code is connected and working in this chat.' },
-      { type: 'text_delta', delta: 'Hello from SDK' },
+      { type: 'text_delta', delta: 'Hello from CLI' },
       { type: 'done' },
     ]);
   });
 
-  it('passes runtime image attachments to the Claude Agent SDK prompt stream', async () => {
-    const sdk = createFakeClaudeSdk([
-      { type: 'result', subtype: 'success', session_id: 'claude-sdk-attachments', is_error: false },
-    ]);
-
+  it('invokes a selected skill through its slash command, which the CLI resolves natively', async () => {
+    const transport = createFakeClaudeTransport([JSON.stringify({ type: 'result', subtype: 'success', session_id: 's' })]);
     await runMindosNativeAgentTurn({
       runtime: { kind: 'claude', id: 'claude', name: 'Claude Code', binaryPath: '/usr/local/bin/claude' },
       cwd: '/tmp/mind',
-      prompt: 'Review the uploaded image and file.',
-      attachments: [
-        {
-          kind: 'uploaded_file',
-          name: 'notes.md',
-          content: '# Notes',
-          mimeType: 'text/markdown',
-          size: 7,
-          dataBase64: 'IyBOb3Rlcw==',
-        },
-        {
-          kind: 'image',
-          name: 'diagram.png',
-          mimeType: 'image/png',
-          data: 'aW1nLWJ5dGVz',
-        },
-      ],
+      prompt: 'Review this.',
+      selectedSkills: [{ name: 'doc-review', source: 'user-selected' }],
       send: () => {},
-      services: {
-        loadClaudeSdk: () => sdk,
-      },
+      services: { createClaudeClient: () => createClaudeCodeCliClient(transport) },
     });
+    expect(transport.argv?.at(-1)).toBe('/doc-review Review this.');
+  });
 
-    expect(typeof sdk.params?.prompt).not.toBe('string');
-    const messages: Record<string, unknown>[] = [];
-    for await (const message of sdk.params?.prompt as AsyncIterable<Record<string, unknown>>) {
-      messages.push(message);
-    }
-    const content = (messages[0] as {
-      message: { content: Array<Record<string, unknown>> };
-    }).message.content;
-
-    expect(content[0]).toEqual({
-      type: 'image',
-      source: {
-        type: 'base64',
-        media_type: 'image/png',
-        data: 'aW1nLWJ5dGVz',
-      },
+  it('does not repeat a skill the user already invoked by name', async () => {
+    const transport = createFakeClaudeTransport([JSON.stringify({ type: 'result', subtype: 'success', session_id: 's' })]);
+    await runMindosNativeAgentTurn({
+      runtime: { kind: 'claude', id: 'claude', name: 'Claude Code', binaryPath: '/usr/local/bin/claude' },
+      cwd: '/tmp/mind',
+      prompt: '/doc-review the intro',
+      selectedSkills: [{ name: 'doc-review', source: 'user-selected' }],
+      send: () => {},
+      services: { createClaudeClient: () => createClaudeCodeCliClient(transport) },
     });
-    expect(content[1]).toMatchObject({
-      type: 'text',
-      text: expect.stringContaining('Review the uploaded image and file.'),
-    });
-    expect(content[1]?.text).toContain('## Runtime Attachment Files');
-    expect(content[1]?.text).toContain('notes.md');
-    expect(content[1]?.text).toContain('diagram.png');
+    expect(transport.argv?.at(-1)).toBe('/doc-review the intro');
   });
 
   it('does not start Claude Code without a detected local CLI path', async () => {
     const events: MindOSSSEvent[] = [];
-    const loadClaudeSdk = vi.fn(async () => createFakeClaudeSdk([]));
+    const createClaudeCliClient = vi.fn();
 
     const result = await runMindosNativeAgentTurn({
       runtime: { kind: 'claude', id: 'claude', name: 'Claude Code' },
       cwd: '/tmp/mind',
       prompt: 'Review this.',
       send: (event) => events.push(event),
-      services: {
-        loadClaudeSdk,
-      },
+      services: { createClaudeCliClient },
     });
 
-    expect(loadClaudeSdk).not.toHaveBeenCalled();
+    expect(createClaudeCliClient).not.toHaveBeenCalled();
     expect(result.error?.message).toContain('requires a local claude executable');
     expect(events).toContainEqual({
       type: 'error',
-      message: expect.stringContaining('MindOS does not bundle the Claude Agent SDK native runtime'),
-    });
-  });
-
-  it('passes a detected Claude Code CLI path to the Claude Agent SDK', async () => {
-    const sdk = createFakeClaudeSdk([
-      { type: 'result', subtype: 'success', session_id: 'claude-sdk-cli-path', is_error: false },
-    ]);
-
-    await runMindosNativeAgentTurn({
-      runtime: { kind: 'claude', id: 'claude', name: 'Claude Code', binaryPath: '/Users/tester/.local/bin/claude' },
-      cwd: '/tmp/mind',
-      prompt: 'Use SDK with explicit CLI path.',
-      send: () => {},
-      services: {
-        loadClaudeSdk: () => sdk,
-      },
-    });
-
-    expect(sdk.params?.options).toMatchObject({
-      pathToClaudeCodeExecutable: '/Users/tester/.local/bin/claude',
-    });
-  });
-
-  it('redacts secrets from Claude Agent SDK tool events', async () => {
-    const events: MindOSSSEvent[] = [];
-    const sdk = createFakeClaudeSdk([
-      {
-        type: 'assistant',
-        message: {
-          content: [{
-            type: 'tool_use',
-            id: 'toolu-sdk-secret',
-            name: 'Bash',
-            input: {
-              command: 'curl -H "Authorization: Bearer sk-sdk-secret-1234567890" https://example.test?token=abc123',
-              env: { API_KEY: 'sk-sdk-secret-abcdefghijkl' },
-            },
-          }],
-        },
-        session_id: 'claude-sdk-secret',
-      },
-      {
-        type: 'user',
-        message: {
-          content: [{
-            type: 'tool_result',
-            tool_use_id: 'toolu-sdk-secret',
-            content: 'token=abc123secret',
-          }],
-        },
-        session_id: 'claude-sdk-secret',
-      },
-      { type: 'result', subtype: 'success', session_id: 'claude-sdk-secret', is_error: false },
-    ]);
-
-    await runMindosNativeAgentTurn({
-      runtime: { kind: 'claude', id: 'claude', name: 'Claude Code', binaryPath: '/usr/local/bin/claude' },
-      cwd: '/tmp/mind',
-      prompt: 'Run secret command.',
-      send: (event) => events.push(event),
-      services: {
-        loadClaudeSdk: () => sdk,
-      },
-    });
-
-    expect(events).toEqual([
-      { type: 'status', visible: true, runtime: 'claude', message: 'Starting Claude Code locally.' },
-      { type: 'runtime_binding', runtime: 'claude', externalSessionId: 'claude-sdk-secret', cwd: '/tmp/mind' },
-      { type: 'status', visible: true, runtime: 'claude', message: 'Claude Code is connected and working in this chat.' },
-      {
-        type: 'tool_start',
-        toolCallId: 'toolu-sdk-secret',
-        toolName: 'Bash',
-        args: {
-          command: 'curl -H "Authorization: Bearer [redacted]" https://example.test?token=[redacted]',
-          env: { API_KEY: '[redacted]' },
-        },
-        runtime: 'claude',
-      },
-      {
-        type: 'tool_end',
-        toolCallId: 'toolu-sdk-secret',
-        output: 'token=[redacted]',
-        isError: false,
-        runtime: 'claude',
-      },
-      { type: 'done' },
-    ]);
-  });
-
-  it('does not create the CLI permission prompt when Claude Agent SDK is available', async () => {
-    const sdk = createFakeClaudeSdk([
-      { type: 'result', subtype: 'success', session_id: 'claude-sdk-no-cli-prompt', is_error: false },
-    ]);
-    let promptCreated = false;
-
-    await runMindosNativeAgentTurn({
-      runtime: { kind: 'claude', id: 'claude', name: 'Claude Code', binaryPath: '/usr/local/bin/claude' },
-      cwd: '/tmp/mind',
-      prompt: 'Use SDK only.',
-      send: () => {},
-      services: {
-        loadClaudeSdk: () => sdk,
-        createClaudePermissionPrompt: () => {
-          promptCreated = true;
-          return {
-            toolName: 'mcp__mindos_runtime_permission__mindos_runtime_permission',
-            mcpConfig: '{"mcpServers":{}}',
-          };
-        },
-      },
-    });
-
-    expect(promptCreated).toBe(false);
-  });
-
-  it('passes Claude Agent SDK permission prompts through the MindOS runtime permission bridge', async () => {
-    let permissionResult: unknown;
-    let capturedRequest: unknown;
-    const sdk = createFakeClaudeSdk((params) => ({
-      async *[Symbol.asyncIterator]() {
-        const canUseTool = params.options?.canUseTool as (
-          toolName: string,
-          input: Record<string, unknown>,
-          options: Record<string, unknown>,
-        ) => Promise<unknown>;
-        permissionResult = await canUseTool('Bash', {
-          command: 'rm Profile.md',
-          description: 'Delete a note',
-        }, {
-          signal: new AbortController().signal,
-          toolUseID: 'toolu-sdk-permission',
-          title: 'Claude Code wants to run rm Profile.md',
-          displayName: 'Run shell command',
-          description: 'Claude Code will run a shell command.',
-          suggestions: [{
-            rules: [{ toolName: 'Bash', ruleContent: 'rm Profile.md' }],
-            behavior: 'allow',
-            destination: 'session',
-          }],
-        });
-        yield { type: 'result', subtype: 'success', session_id: 'claude-sdk-permission', is_error: false };
-      },
-    }));
-
-    await runMindosNativeAgentTurn({
-      runtime: { kind: 'claude', id: 'claude', name: 'Claude Code', binaryPath: '/usr/local/bin/claude' },
-      cwd: '/tmp/mind',
-      prompt: 'Delete it.',
-      selectedSkills: [{ name: 'doc-review', source: 'user-selected' }],
-      send: () => {},
-      services: {
-        loadClaudeSdk: () => sdk,
-        requestRuntimePermission: async (request) => {
-          capturedRequest = request;
-          return { decision: 'acceptForSession' };
-        },
-      },
-    });
-
-    expect(capturedRequest).toMatchObject({
-      runtime: 'claude',
-      toolCallId: 'toolu-sdk-permission',
-      toolName: 'Bash',
-      reason: 'Claude Code wants to run rm Profile.md',
-      options: [
-        { id: 'accept', label: 'Allow once' },
-        { id: 'acceptForSession', label: 'Allow for session' },
-        { id: 'decline', label: 'Deny' },
-      ],
-    });
-    expect(permissionResult).toMatchObject({
-      behavior: 'allow',
-      updatedInput: {
-        command: 'rm Profile.md',
-        description: 'Delete a note',
-      },
-      updatedPermissions: [{
-        rules: [{ toolName: 'Bash', ruleContent: 'rm Profile.md' }],
-        behavior: 'allow',
-        destination: 'session',
-      }],
-      decisionClassification: 'user_permanent',
-    });
-  });
-
-  it('passes Claude Agent SDK AskUserQuestion prompts through the MindOS question bridge', async () => {
-    let questionResult: unknown;
-    let capturedRequest: unknown;
-    const sdk = createFakeClaudeSdk((params) => ({
-      async *[Symbol.asyncIterator]() {
-        const canUseTool = params.options?.canUseTool as (
-          toolName: string,
-          input: Record<string, unknown>,
-          options: Record<string, unknown>,
-        ) => Promise<unknown>;
-        questionResult = await canUseTool('AskUserQuestion', {
-          questions: [{
-            header: 'Delete note?',
-            question: 'Should Claude Code delete Profile.md?',
-            options: [
-              { label: 'Delete', description: 'Delete the note.' },
-              { label: 'Keep', description: 'Keep the note.' },
-            ],
-          }],
-        }, {
-          signal: new AbortController().signal,
-          toolUseID: 'toolu-sdk-question',
-          title: 'Claude Code needs a choice',
-        });
-        yield { type: 'result', subtype: 'success', session_id: 'claude-sdk-question', is_error: false };
-      },
-    }));
-
-    await runMindosNativeAgentTurn({
-      runtime: { kind: 'claude', id: 'claude', name: 'Claude Code', binaryPath: '/usr/local/bin/claude' },
-      cwd: '/tmp/mind',
-      prompt: 'Ask first.',
-      send: () => {},
-      services: {
-        loadClaudeSdk: () => sdk,
-        requestUserQuestion: async (request) => {
-          capturedRequest = request;
-          return {
-            answers: [{
-              questionIndex: 0,
-              question: 'Should Claude Code delete Profile.md?',
-              kind: 'option',
-              answer: 'Delete',
-            }],
-          };
-        },
-      },
-    });
-
-    expect(capturedRequest).toMatchObject({
-      runtime: 'claude',
-      toolCallId: 'toolu-sdk-question',
-      questions: [{
-        header: 'Delete note?',
-        question: 'Should Claude Code delete Profile.md?',
-      }],
-    });
-    expect(questionResult).toMatchObject({
-      behavior: 'allow',
-      updatedInput: {
-        questions: [{
-          header: 'Delete note?',
-          question: 'Should Claude Code delete Profile.md?',
-          multiSelect: false,
-        }],
-        answers: {
-          'Should Claude Code delete Profile.md?': 'Delete',
-        },
-      },
-      decisionClassification: 'user_temporary',
-    });
-  });
-
-  it('falls back to the Claude Code CLI when the Claude Agent SDK is unavailable before the turn starts', async () => {
-    const events: MindOSSSEvent[] = [];
-    const transport = createFakeClaudeTransport([
-      JSON.stringify({ type: 'result', subtype: 'success', session_id: 'claude-cli-fallback' }),
-    ]);
-    let capturedCliOptions: { cwd: string; signal?: AbortSignal; command?: string } | null = null;
-
-    const result = await runMindosNativeAgentTurn({
-      runtime: { kind: 'claude', id: 'claude', name: 'Claude Code', binaryPath: '/opt/homebrew/bin/claude' },
-      cwd: '/tmp/mind',
-      prompt: 'Fallback.',
-      send: (event) => events.push(event),
-      services: {
-        loadClaudeSdk: async () => {
-          throw new Error('SDK missing');
-        },
-        createClaudeCliClient: (options) => {
-          capturedCliOptions = options;
-          return createClaudeCodeCliClient(transport);
-        },
-      },
-    });
-
-    expect(capturedCliOptions).toMatchObject({
-      cwd: '/tmp/mind',
-      command: '/opt/homebrew/bin/claude',
-    });
-    expect(transport.argv).toEqual([
-      '--print',
-      '--output-format',
-      'stream-json',
-      '--verbose',
-      '--permission-mode',
-      'default',
-      '--',
-      'Fallback.',
-    ]);
-    expect(result).toEqual({ externalSessionId: 'claude-cli-fallback' });
-    expect(events).toContainEqual({
-      type: 'status',
-      visible: true,
-      runtime: 'claude',
-      message: 'Claude Agent SDK is unavailable; using Claude Code CLI fallback. SDK missing',
-    });
-  });
-
-  it('falls back to the Claude Code CLI when the Claude Agent SDK native binary fails during turn start', async () => {
-    const events: MindOSSSEvent[] = [];
-    const sdk = createFakeClaudeSdk(() => throwingAsyncIterable(
-      new Error('Native CLI binary for darwin-arm64 not found. Reinstall @anthropic-ai/claude-agent-sdk without --omit=optional, or set options.pathToClaudeCodeExecutable.'),
-    ));
-    const transport = createFakeClaudeTransport([
-      JSON.stringify({ type: 'system', subtype: 'init', session_id: 'claude-cli-after-sdk-failure' }),
-      JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'CLI fallback ok' }] } }),
-      JSON.stringify({ type: 'result', subtype: 'success', session_id: 'claude-cli-after-sdk-failure' }),
-    ]);
-    let capturedCliOptions: { cwd: string; signal?: AbortSignal; command?: string; env?: NodeJS.ProcessEnv } | null = null;
-
-    const result = await runMindosNativeAgentTurn({
-      runtime: { kind: 'claude', id: 'claude', name: 'Claude Code', binaryPath: '/Users/tester/.local/bin/claude' },
-      cwd: '/tmp/mind',
-      prompt: 'Fallback after SDK start.',
-      runtimeEnv: { PATH: '/usr/bin', CLAUDE_CODE_OAUTH_TOKEN: 'runtime-token' } as NodeJS.ProcessEnv,
-      send: (event) => events.push(event),
-      services: {
-        loadClaudeSdk: async () => sdk,
-        createClaudeCliClient: (options) => {
-          capturedCliOptions = options;
-          return createClaudeCodeCliClient(transport);
-        },
-      },
-    });
-
-    expect(capturedCliOptions).toMatchObject({
-      cwd: '/tmp/mind',
-      command: '/Users/tester/.local/bin/claude',
-      env: expect.objectContaining({ CLAUDE_CODE_OAUTH_TOKEN: 'runtime-token' }),
-    });
-    expect(result).toEqual({ externalSessionId: 'claude-cli-after-sdk-failure' });
-    expect(events).toContainEqual({
-      type: 'status',
-      visible: true,
-      runtime: 'claude',
-      message: expect.stringContaining('using Claude Code CLI fallback'),
-    });
-    expect(events).toContainEqual({
-      type: 'text_delta',
-      delta: 'CLI fallback ok',
+      message: expect.stringContaining('Install Claude Code and restart MindOS'),
     });
   });
 
@@ -802,24 +402,6 @@ describe('agent runtime adapters: Claude Code', () => {
       '--',
     ]);
     expect(argv.at(-1)).toBe('Plan the migration.');
-
-    const sdk = createFakeClaudeSdk([
-      { type: 'result', subtype: 'success', session_id: 'claude-sdk-plan', is_error: false, result: '' },
-    ]);
-
-    await runMindosNativeAgentTurn({
-      runtime: { kind: 'claude', id: 'claude', name: 'Claude Code', binaryPath: '/usr/local/bin/claude' },
-      cwd: '/tmp/mind',
-      prompt: 'Plan SDK migration.',
-      permissionMode: 'read',
-      agentMode: 'plan',
-      send: () => {},
-      services: {
-        loadClaudeSdk: () => sdk,
-      },
-    });
-
-    expect(sdk.params?.options?.permissionMode).toBe('plan');
   });
 
   it('maps interactive MindOS modes to Claude Code CLI permission modes', async () => {
@@ -855,33 +437,6 @@ describe('agent runtime adapters: Claude Code', () => {
         expected,
       ]);
       expect(argv.at(-1)).toBe(`Run with ${permissionMode}.`);
-    }
-  });
-
-  it('maps interactive MindOS modes to Claude Agent SDK permission modes', async () => {
-    const cases = [
-      { permissionMode: 'ask', expected: 'default' },
-      { permissionMode: 'auto', expected: 'auto' },
-      { permissionMode: 'full', expected: 'bypassPermissions' },
-    ] as const;
-
-    for (const { permissionMode, expected } of cases) {
-      const sdk = createFakeClaudeSdk([
-        { type: 'result', subtype: 'success', session_id: `claude-sdk-${permissionMode}`, is_error: false, result: '' },
-      ]);
-
-      await runMindosNativeAgentTurn({
-        runtime: { kind: 'claude', id: 'claude', name: 'Claude Code', binaryPath: '/usr/local/bin/claude' },
-        cwd: '/tmp/mind',
-        prompt: `Run SDK with ${permissionMode}.`,
-        permissionMode,
-        send: () => {},
-        services: {
-          loadClaudeSdk: () => sdk,
-        },
-      });
-
-      expect(sdk.params?.options?.permissionMode).toBe(expected);
     }
   });
 
@@ -1286,72 +841,6 @@ describe('agent runtime adapters: Claude Code', () => {
     });
   });
 
-  it('hard-times out a Claude Agent SDK query when the SDK iterator ignores abort and close', async () => {
-    vi.useFakeTimers();
-    const interrupt = vi.fn(async () => {});
-    const close = vi.fn();
-    const iteratorReturn = vi.fn(() => new Promise<IteratorResult<Record<string, unknown>>>(() => {}));
-    const sdk = createFakeClaudeSdk(() => {
-      let nextCount = 0;
-      const iterator: AsyncIterator<Record<string, unknown>> = {
-        next() {
-          nextCount += 1;
-          if (nextCount === 1) {
-            return Promise.resolve({
-              value: { type: 'system', subtype: 'init', session_id: 'claude-sdk-timeout' },
-              done: false,
-            });
-          }
-          return new Promise<IteratorResult<Record<string, unknown>>>(() => {});
-        },
-        return: iteratorReturn,
-      };
-      return {
-        interrupt,
-        close,
-        [Symbol.asyncIterator]() {
-          return iterator;
-        },
-      };
-    });
-    const events: MindOSSSEvent[] = [];
-
-    const resultPromise = runMindosNativeAgentTurn({
-      runtime: { kind: 'claude', id: 'claude', name: 'Claude Code', binaryPath: '/usr/local/bin/claude' },
-      cwd: '/tmp/mind',
-      prompt: 'Hang in SDK.',
-      timeoutMs: 100,
-      send: (event) => events.push(event),
-      services: {
-        loadClaudeSdk: () => sdk,
-      },
-    });
-
-    await vi.advanceTimersByTimeAsync(100);
-    const result = await resultPromise;
-
-    expect(result.error).toMatchObject({
-      message: 'Native runtime timed out after 1s.',
-      code: 'TIMEOUT',
-    });
-    expect(result.externalSessionId).toBe('claude-sdk-timeout');
-    expect(interrupt).toHaveBeenCalled();
-    expect(close).toHaveBeenCalled();
-    expect(iteratorReturn).toHaveBeenCalled();
-    expect(events).toContainEqual({
-      type: 'runtime_binding',
-      runtime: 'claude',
-      externalSessionId: 'claude-sdk-timeout',
-      cwd: '/tmp/mind',
-      status: 'failed',
-      reason: 'Native runtime timed out after 1s.',
-    });
-    expect(events).toContainEqual({
-      type: 'error',
-      message: 'Claude Code native runtime error: Native runtime timed out after 1s.',
-    });
-    expect(events).not.toContainEqual({ type: 'done' });
-  });
 });
 
 describe('Claude native lane terminal failure reporting', () => {
@@ -1379,29 +868,6 @@ describe('Claude native lane terminal failure reporting', () => {
     expect(events.filter((event) => event.type === 'error')).toEqual([{ type: 'error', message: 'Credit balance is too low' }]);
     expect(events).not.toContainEqual({ type: 'done' });
     expect(events.some((event) => event.type === 'runtime_binding' && event.status === 'failed')).toBe(false);
-  });
-
-  it('returns result.error when the Claude Agent SDK result is_error', async () => {
-    const events: MindOSSSEvent[] = [];
-    const sdk = createFakeClaudeSdk([
-      { type: 'system', subtype: 'init', session_id: 'claude-sdk-err', cwd: '/tmp/mind' },
-      { type: 'result', subtype: 'error_during_execution', session_id: 'claude-sdk-err', is_error: true, errors: ['Rate limit reached for this account'] },
-    ]);
-
-    const result = await runMindosNativeAgentTurn({
-      runtime: { kind: 'claude', id: 'claude', name: 'Claude Code', binaryPath: '/usr/local/bin/claude' },
-      cwd: '/tmp/mind',
-      prompt: 'Review this.',
-      send: (event) => events.push(event),
-      services: {
-        loadClaudeSdk: () => sdk,
-      },
-    });
-
-    expect(result.error?.message).toBe('Rate limit reached for this account');
-    expect(result.externalSessionId).toBe('claude-sdk-err');
-    expect(events.filter((event) => event.type === 'error')).toEqual([{ type: 'error', message: 'Rate limit reached for this account' }]);
-    expect(events).not.toContainEqual({ type: 'done' });
   });
 
   it('keeps a successful Claude turn free of errors', async () => {

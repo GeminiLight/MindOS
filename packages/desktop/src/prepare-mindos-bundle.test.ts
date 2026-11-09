@@ -359,26 +359,28 @@ describe('materializeStandaloneAssets', () => {
   it('materializes TS-only built-in extension packages when Next did not trace them', () => {
     const appDir = makeTemp('mindos-app-runtime-extension-seeds-');
     writeStandaloneApp(appDir, [
-      '.next/standalone/node_modules/pi-web-access/index.ts',
+      '.next/standalone/node_modules/pi-web-access/dist/index.js',
     ]);
 
     const tracedExtension = path.join(appDir, '.next', 'standalone', 'node_modules', 'pi-web-access');
     rmSync(tracedExtension, { recursive: true, force: true });
 
+    // The real 0.47 layout: the entry is a prebuilt dist/ named in pi.extensions.
     const sourceExtension = path.join(appDir, 'node_modules', 'pi-web-access');
-    mkdirSync(sourceExtension, { recursive: true });
+    mkdirSync(path.join(sourceExtension, 'dist'), { recursive: true });
     writeFileSync(path.join(sourceExtension, 'package.json'), JSON.stringify({
       name: 'pi-web-access',
-      version: '0.10.7',
+      version: '0.47.0',
+      pi: { extensions: ['./dist'] },
     }));
-    writeFileSync(path.join(sourceExtension, 'index.ts'), 'export default function webAccess() {}');
+    writeFileSync(path.join(sourceExtension, 'dist', 'index.js'), 'export default function webAccess() {}');
 
     materializeStandaloneAssets(appDir, {
       runtimeDependencySeeds: ['pi-web-access'],
     });
 
     expect(existsSync(path.join(tracedExtension, 'package.json'))).toBe(true);
-    expect(readFileSync(path.join(tracedExtension, 'index.ts'), 'utf-8')).toBe('export default function webAccess() {}');
+    expect(readFileSync(path.join(tracedExtension, 'dist', 'index.js'), 'utf-8')).toBe('export default function webAccess() {}');
   });
 
   it('prunes pi-web-access demo media from standalone runtime bundles', () => {

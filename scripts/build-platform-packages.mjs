@@ -29,7 +29,6 @@ const productRoot = resolve(root, 'packages', 'mindos');
 // Every external imported by that tree must therefore live inside the archive;
 // packages installed next to the npm platform package are not visible there.
 const CLI_RUNTIME_ROOT_DEPENDENCIES = [
-  '@anthropic-ai/claude-agent-sdk',
   '@anthropic-ai/sdk',
   '@earendil-works/pi-agent-core',
   '@earendil-works/pi-ai',

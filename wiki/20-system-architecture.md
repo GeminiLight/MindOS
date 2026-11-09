@@ -434,7 +434,7 @@ Web 的 `packages/web/app/api/file/route.ts` 只保留 Next.js adapter：读取 
 |------|--------|---------|------|
 | `mindos-pi` | — | 进程内，pi 1.5 session | 内置 agent，可直接调知识库工具 |
 | `acp` | 约 5.4 千行 | spawn 子进程 + JSON-RPC | 40+ 个外部 agent（Gemini / Qwen / Kimi / OpenCode …） |
-| `claude` | 约 1 千行 | Claude Agent SDK，或直启 `claude` CLI | 仅 Claude Code |
+| `claude` | 约 0.7 千行 | 直启 `claude --print`（不内嵌 SDK） | 仅 Claude Code |
 | `codex` | 约 4.5 千行 | 自研 Codex app-server 客户端 | 仅 Codex |
 
 **为什么有三条外部 lane、以及方向是什么：**
@@ -445,7 +445,9 @@ Web 的 `packages/web/app/api/file/route.ts` 只保留 Next.js adapter：读取 
 
 **并行开关已具备**：`agent-descriptor-table.ts` 里 `claude` 指向 `@agentclientprotocol/claude-agent-acp`、`codex-acp` 指向 `@agentclientprotocol/codex-acp`，用户可直接在 ACP agent 列表里选用，与自研 lane 并存。剩余是实机对照与下线决策。
 
-**一个保留理由**：Claude 订阅登录在 adapter 下有已知问题（claude-agent-acp #517 / #658），所以直启 `claude` CLI 这条路必须留作兜底。
+**2026-11-09 实机对照**：两个 adapter 在改文件、审批、diff、用量、切模型、取消、跨进程 resume、会话列表、fork 上全部可用，Claude 订阅登录下也能跑。ACP 客户端重开会话优先 `session/resume`（不回放历史）、回退 `session/load`，并有 `forkSession`；Codex 不能 fork 仍在别的进程里打开的线程，所以 fork 前先释放持有源会话的空闲本地 session。ACP 本身没有 archive。
+
+**不内嵌 SDK**：MindOS 不再依赖 `@anthropic-ai/claude-agent-sdk`。`claude` lane 只直启用户自己安装的 `claude --print`，作为 ACP 之外的兜底——Anthropic 若收紧 SDK 走订阅额度（claude-agent-acp #658），只有直启 CLI 不受影响。选中的 skill 以 `/skill-name` 前缀传给 CLI；原生会话浏览读 `~/.claude/projects`。
 
 ### 11. Agent 支持体系
 

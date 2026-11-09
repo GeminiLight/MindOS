@@ -357,7 +357,7 @@ async function authenticateAcpConnection(
 export async function openAcpSessionWithAuth<T>(input: {
   entry: AcpRegistryEntry;
   initialized: InitializedAcpConnection;
-  label: 'session/new' | 'session/load';
+  label: 'session/new' | 'session/load' | 'session/resume' | 'session/fork';
   signal?: AbortSignal;
   startedAt: number;
   run: () => Promise<T>;

@@ -141,9 +141,9 @@ describe('product npm publish contract', () => {
     expect(pkg.scripts?.build).toBe('tsc && node ../../scripts/copy-mindos-agent-assets.mjs && node ../../scripts/build-cli-bundles.mjs && pnpm run build:protocols');
     expect(pkg.scripts?.['build:protocols']).toBe('node ../../scripts/build-product-protocols.mjs');
     expect(pkg.scripts?.['type-check']).toBe('tsc --noEmit');
-    // The published CLI owns the resident automation executor, so native
-    // Claude and Pi SDKs are part of the product runtime closure.
-    expect(pkg.dependencies).toHaveProperty('@anthropic-ai/claude-agent-sdk', '0.3.170');
+    // Claude Code runs as the user's own CLI or through ACP; MindOS does not
+    // embed the Claude Agent SDK or its per-platform native binaries.
+    expect(pkg.dependencies).not.toHaveProperty('@anthropic-ai/claude-agent-sdk');
     expect(pkg.devDependencies).not.toHaveProperty('@anthropic-ai/claude-agent-sdk');
   });
 
@@ -373,8 +373,10 @@ describe('product npm publish contract', () => {
     expect(runtimeHealthContract).toContain('"docx-runtime"');
     expect(runtimeHealthContract).toContain('"builtin-agent-extensions"');
     expect(runtimeHealthContract).toContain('"mindos-extension-sources"');
-    expect(runtimeHealthContract).toContain('pi-web-access/index.ts');
-    expect(runtimeHealthContract).toContain('pi-subagents/src/extension/index.ts');
+    // Checked at the entries the packages declare in pi.extensions
+    // (packages/desktop/src/builtin-extension-entries.test.ts).
+    expect(runtimeHealthContract).toContain('pi-web-access/dist/index.js');
+    expect(runtimeHealthContract).toContain('pi-subagents/bundle/index.js');
     expect(runtimeHealthContract).toContain('pi-schedule-prompt/src/tool.ts');
     expect(runtimeHealthContract).toContain('@juicesharp/rpiv-ask-user-question/index.ts');
     expect(runtimeHealthContract).toContain('lib/agent/kb-extension.ts');

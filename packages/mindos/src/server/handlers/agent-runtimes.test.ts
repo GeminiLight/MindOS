@@ -43,8 +43,6 @@ vi.mock('node:child_process', async (importOriginal) => {
   };
 });
 
-vi.mock('@anthropic-ai/claude-agent-sdk', () => ({ query: () => undefined }));
-
 const { createMindosApp } = await import('../app.js');
 const { createDefaultMindosHttpServices } = await import('../services.js');
 const { handleAgentRuntimesGet } = await import('./agent-runtimes.js');

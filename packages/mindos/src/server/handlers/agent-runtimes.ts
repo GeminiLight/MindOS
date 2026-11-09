@@ -16,9 +16,6 @@ import {
   buildAgentRuntimeEnv,
 } from '../../agent/runtime/runtime-env.js';
 import {
-  type ClaudeCodeSdkModule,
-} from '../../agent/runtime/claude-code-sdk.js';
-import {
   compactRuntimeDiagnosticHints,
   compactRuntimeFailureMessage,
 } from '../../agent/runtime/runtime-errors.js';
@@ -364,21 +361,26 @@ export async function defaultCheckNativeRuntimeHealth(input: NativeRuntimeHealth
   return checkClaudeRuntimeHealth({ binaryPath: input.agent.binaryPath, timeoutMs });
 }
 
+export const CLAUDE_CLI_BRIDGE: AgentRuntimeBridge = { kind: 'claude-cli', label: 'Claude Code CLI' };
+
+/**
+ * Claude Code runs as the user's own `claude` CLI; MindOS embeds no SDK, so a
+ * working `claude --version` is the whole readiness check.
+ */
 export async function checkClaudeRuntimeHealth(input: {
   binaryPath: string;
   timeoutMs?: number;
-  importSdk?: () => Promise<unknown>;
   checkCliVersion?: (binaryPath: string, timeoutMs: number) => Promise<NativeRuntimeHealthResult>;
 }): Promise<NativeRuntimeHealthResult> {
   const timeoutMs = input.timeoutMs ?? NATIVE_HEALTH_TIMEOUT_MS;
   const binaryPath = input.binaryPath;
-  const importSdk = input.importSdk ?? (() => import('@anthropic-ai/claude-agent-sdk'));
   const checkCliVersion = input.checkCliVersion ?? ((path, ms) => checkProcessVersion(path, ['--version'], ms, 'claude'));
 
+  // `sdk:` paths were written by releases that embedded the Claude Agent SDK.
   if (!binaryPath.trim() || binaryPath.startsWith('sdk:')) {
     return {
       status: 'error',
-      reason: 'Claude Code requires a local claude executable on the MindOS server PATH. MindOS does not bundle the Claude Agent SDK native runtime.',
+      reason: 'Claude Code requires a local claude executable on the MindOS server PATH.',
       diagnosticHints: [
         'Install Claude Code locally and restart MindOS so the server process can resolve the claude command.',
       ],
@@ -387,58 +389,7 @@ export async function checkClaudeRuntimeHealth(input: {
 
   const cliHealth = await checkCliVersion(binaryPath, timeoutMs);
   if (cliHealth.status !== 'available') return cliHealth;
-
-  try {
-    const sdk = await withTimeout(
-      importSdk(),
-      timeoutMs,
-      `Claude Agent SDK health check timed out after ${timeoutMs}ms.`,
-    ) as Partial<ClaudeCodeSdkModule>;
-    if (typeof sdk.query === 'function') {
-      return {
-        status: 'available',
-        runtimeBridge: {
-          kind: 'claude-sdk',
-          label: 'SDK bridge active',
-        },
-        diagnosticHints: [
-          ...(cliHealth.diagnosticHints ?? []),
-          `Claude Agent SDK bridge is available and will use the local Claude Code CLI at ${binaryPath}.`,
-        ],
-      };
-    }
-    return {
-      status: 'available',
-      runtimeBridge: {
-        kind: 'claude-cli',
-        label: 'CLI fallback active',
-        fallback: true,
-        reason: 'Claude Agent SDK bridge did not expose query().',
-      },
-      diagnosticHints: [
-        ...(cliHealth.diagnosticHints ?? []),
-        `Claude Code CLI is available at ${binaryPath}; Claude Agent SDK bridge did not expose query(), so MindOS will use CLI fallback.`,
-      ],
-    };
-  } catch (error) {
-    const reason = compactRuntimeFailureMessage(error instanceof Error ? error.message : String(error), {
-      runtime: 'claude',
-      fallback: 'Claude Agent SDK bridge is unavailable.',
-    });
-    return {
-      status: 'available',
-      runtimeBridge: {
-        kind: 'claude-cli',
-        label: 'CLI fallback active',
-        fallback: true,
-        reason,
-      },
-      diagnosticHints: [
-        ...(cliHealth.diagnosticHints ?? []),
-        `Claude Code CLI is available at ${binaryPath}; Claude Agent SDK bridge is unavailable, so MindOS will use CLI fallback. ${reason}`,
-      ],
-    };
-  }
+  return { ...cliHealth, runtimeBridge: CLAUDE_CLI_BRIDGE };
 }
 
 /** One cached probe of a native runtime; `env` is the settings-derived runtime env the Codex thread routes reuse. */
@@ -518,22 +469,7 @@ function withNativeRuntimeBridge(
   if (health.runtimeBridge) return { runtimeBridge: health.runtimeBridge };
   if (health.status !== 'available') return {};
   if (runtime === 'codex') return { runtimeBridge: { kind: 'codex-app-server', label: 'App server active' } };
-  const joinedHints = (health.diagnosticHints ?? []).join(' ');
-  if (/Claude Agent SDK bridge is available/i.test(joinedHints)) {
-    return { runtimeBridge: { kind: 'claude-sdk', label: 'SDK bridge active' } };
-  }
-  if (/CLI fallback|will use CLI fallback|SDK bridge is unavailable|did not expose query/i.test(joinedHints)) {
-    const reasonMatch = joinedHints.match(/fallback\.\s*(.+)$/i);
-    return {
-      runtimeBridge: {
-        kind: 'claude-cli',
-        label: 'CLI fallback active',
-        fallback: true,
-        ...(reasonMatch?.[1] ? { reason: reasonMatch[1] } : {}),
-      },
-    };
-  }
-  return {};
+  return { runtimeBridge: CLAUDE_CLI_BRIDGE };
 }
 
 async function detectClaudeNativeRuntimeDefinition(
