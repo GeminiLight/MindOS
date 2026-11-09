@@ -4,11 +4,11 @@ Generated from scripts/website/content.mjs. Do not edit this snapshot by hand.
 
 ## en
 
-MindOS — Human–Agent Co-evolution, Built on Shared Context
+MindOS — A local knowledge workspace for you and your agents
 
-A local-first, open-source knowledge workspace for human–agent co-evolution. Share context across AI agents, review their work, and turn experience into reusable knowledge.
+A local-first, open-source knowledge workspace. Share one context across every AI agent you use, review what they did, and turn that experience into rules they follow next time.
 
-You think here. Agents act on it. Evolve together.
+You think here. Agents act on it. Knowing and doing grow together.
 
 
 
@@ -248,11 +248,11 @@ Complete a task. Keep one reviewed lesson.
 
 ## zh-Hans
 
-MindOS｜人类与 Agent 共同演进的本地知识工作台
+MindOS｜你和 Agent 共用一份上下文的本地知识工作台
 
-MindOS 是面向 Human–Agent Co-evolution 的本地优先开源知识工作台。共享上下文，审阅 Agent 行动，将复盘经验沉淀为下一次协作的知识。
+MindOS 是本地优先的开源知识工作台。一份上下文供所有 AI Agent 共用，它们做过的事可审阅，经你确认后沉淀为下次照做的规则。
 
-你在此思考。 Agent 依此行动。 共同进化。
+你在此思考。 Agent 依此行动。 知行相生。
 
 
 
