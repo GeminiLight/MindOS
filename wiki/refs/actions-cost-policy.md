@@ -71,6 +71,10 @@ BASE_IMAGE=python:3.11-slim .github/local-sync-runner/run.sh      # 用本机已
 
 随后在公开仓手动运行 [Test Desktop Installation](https://github.com/GeminiLight/MindOS/actions/runs/42587369645)，三个平台都在 `pnpm install --frozen-lockfile` 失败：`pnpm-workspace.yaml` 的 `patchedDependencies` 引用了 `patches/pi-schedule-prompt@0.4.1.patch`，而 `patches/` 不在 `.syncinclude` 中。也就是说，这次同步带过去的公开仓是**无法安装的**。已把 `patches` 加入白名单，并新增 `tests/sync-include-completeness.test.ts`：工作区引用的每个补丁文件都必须落在会被同步的路径中。
 
+修复（#416）后用 `run.sh` 再次同步，公开仓 main 更新到 #416（`efbaa71c`），补丁文件已在公开仓中。重跑 [Test Desktop Installation](https://github.com/GeminiLight/MindOS/actions/runs/42588608775)：ubuntu-latest、windows-latest、macos-15 **全部通过**，包括 `pnpm install`、desktop 全部测试、发布完整性测试、typecheck、构建，Windows 上还有安装器所有权与旧数据迁移测试、安装钩子编译。这是 desktop 在 Windows / Linux 上第一次有执行级验证。
+
+那次运行也暴露了 `run.sh` 的一个缺陷：同步已经成功，脚本却在打印公开仓提交时因一次网络超时被 `set -e` 中断，没有完成后面的清理核对。现在汇报阶段的 API 调用都会重试三次，失败时只提示去网页确认，不再中断。
+
 ### 公开仓根契约
 
 私有源仓和公开镜像共用 Linux 回归任务。公开镜像继续运行产品、打包和已发布工作流的通用断言，只跳过需要私有规格、基准和同步配置的断言。根 ESLint 配置通过白名单同步。私有源仓仍运行全部契约；CI 用仓库身份判断私有源仓，缺少私有文件会失败。
