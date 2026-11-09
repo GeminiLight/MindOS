@@ -1,8 +1,9 @@
 import { readFileSync } from 'fs';
 import path from 'path';
 import { describe, expect, it } from 'vitest';
+// The process layer is three files since the split; these rules cover all of it.
 
-const source = readFileSync(path.join(__dirname, 'process-manager.ts'), 'utf-8');
+const source = ['process-manager.ts', 'process-kill.ts', 'process-cleanup.ts'].map((f) => readFileSync(path.join(__dirname, f), 'utf-8')).join('\n');
 
 function fnBody(startMarker: string, endMarker: string): string {
   const start = source.indexOf(startMarker);

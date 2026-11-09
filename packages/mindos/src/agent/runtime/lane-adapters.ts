@@ -22,6 +22,7 @@ import {
   materializeMindosRuntimeAttachments,
   type MindosRuntimeAttachment,
   type MindosRuntimeMaterializedAttachments,
+  getMindosRuntimeAttachmentImages,
 } from './attachments.js';
 import { runMindosNativeAgentTurn } from './run.js';
 import type {
@@ -251,6 +252,11 @@ export function acpPermissionResponseFromRuntimeResult(
 type AcpLaneHandle = {
   materialized: MindosRuntimeMaterializedAttachments;
   prompt: string;
+  /**
+   * Inline image data for agents that accept it. The prompt text keeps carrying
+   * the file paths regardless, so an agent without image support is unaffected.
+   */
+  images: Array<{ data: string; mimeType: string }>;
 };
 
 export function createAcpRuntimeLane(
@@ -268,7 +274,11 @@ export function createAcpRuntimeLane(
         materialized.attachments,
         { includeImages: true },
       );
-      const handle: AcpLaneHandle = { materialized, prompt };
+      const images = getMindosRuntimeAttachmentImages(materialized.attachments)
+        .flatMap((image) => (image.data && image.mimeType
+          ? [{ data: image.data, mimeType: image.mimeType }]
+          : []));
+      const handle: AcpLaneHandle = { materialized, prompt, images };
       return {
         kind: 'acp',
         runtimeId: config.agent.id,
@@ -325,6 +335,7 @@ export function createAcpRuntimeLane(
         agentId: config.agent.id,
         cwd: config.cwd,
         prompt: handle.prompt,
+        ...(handle.images.length > 0 ? { images: handle.images } : {}),
         signal: turn.signal,
         permissionRunId: sink.permissionRunId,
         createSession: async (agentId, options) => {

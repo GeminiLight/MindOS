@@ -10,7 +10,7 @@ import net from 'net';
 export function isPortInUse(port: number): Promise<boolean> {
   return new Promise((resolve) => {
     const server = net.createServer();
-    server.once('error', (err: NodeJS.ErrnoException) => {
+    server.once('error', () => {
       // EADDRINUSE = port taken; EACCES = no permission (treat as taken)
       resolve(true);
     });

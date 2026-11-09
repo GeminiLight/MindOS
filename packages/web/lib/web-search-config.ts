@@ -1,20 +1,40 @@
 /**
  * Read/write web search config at ~/.mindos/web-search.json.
  *
- * ~/.mindos/web-search.json is the single source of truth for all web search config.
+ * ~/.mindos/web-search.json is the single source of truth for all web search
+ * config. pi-web-access (third party) reads its config from
+ * `$PI_CODING_AGENT_DIR/web-search.json`, and MindOS points that variable at
+ * its own ~/.mindos/pi (see `installMindosPiAgentDir`). So the file is
+ * exposed there — inside ~/.mindos. MindOS never writes the user's ~/.pi.
  *
- * pi-web-access (third-party) hardcodes ~/.pi/web-search.json, so we maintain
- * a symlink ~/.pi/web-search.json → ~/.mindos/web-search.json transparently.
- * Users never need to know about ~/.pi/ — all docs and UI point to ~/.mindos/.
+ * Earlier releases exposed it by replacing ~/.pi/web-search.json with a
+ * symlink to the MindOS file. That rewired the user's standalone Pi, and when
+ * their file failed to parse it was deleted without being migrated.
+ * `syncPiWebSearchConfig` gives such a link back as a plain file.
  */
 
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { getMindosPiAgentDir } from '@geminilight/mindos/foundation';
 
-const MINDOS_CONFIG_PATH = path.join(os.homedir(), '.mindos', 'web-search.json');
-/** Internal: pi-web-access reads from here. Kept in sync via symlink. */
-const PI_CONFIG_PATH = path.join(os.homedir(), '.pi', 'web-search.json');
+const FILE_NAME = 'web-search.json';
+
+// Resolved per call, not at import: the home directory is process state, and
+// fixing it at module load made the paths impossible to reason about in tests.
+function mindosConfigPath(): string {
+  return path.join(os.homedir(), '.mindos', FILE_NAME);
+}
+
+/** Where pi-web-access looks, given the agent dir MindOS installs. */
+function exposedConfigPath(): string {
+  return path.join(getMindosPiAgentDir(os.homedir()), FILE_NAME);
+}
+
+/** Only ever inspected to undo what earlier releases left there. */
+function legacyUserPiPath(): string {
+  return path.join(os.homedir(), '.pi', FILE_NAME);
+}
 
 export interface WebSearchExtConfig {
   provider?: string;        // 'auto' | 'exa' | 'perplexity' | 'gemini'
@@ -27,69 +47,86 @@ export interface WebSearchExtConfig {
 /** Read config from ~/.mindos/web-search.json */
 export function readWebSearchConfig(): WebSearchExtConfig {
   try {
-    if (!fs.existsSync(MINDOS_CONFIG_PATH)) return {};
-    return JSON.parse(fs.readFileSync(MINDOS_CONFIG_PATH, 'utf-8'));
+    const file = mindosConfigPath();
+    if (!fs.existsSync(file)) return {};
+    return JSON.parse(fs.readFileSync(file, 'utf-8'));
   } catch {
     return {};
   }
 }
 
-/** Write config to ~/.mindos/web-search.json and sync symlink for pi-web-access. */
+/** Write config to ~/.mindos/web-search.json and expose it to pi-web-access. */
 export function writeWebSearchConfig(config: WebSearchExtConfig): void {
-  const dir = path.dirname(MINDOS_CONFIG_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-
-  fs.writeFileSync(MINDOS_CONFIG_PATH, JSON.stringify(config, null, 2) + '\n');
-  ensurePiSymlink();
+  const file = mindosConfigPath();
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(config, null, 2) + '\n');
+  syncPiWebSearchConfig();
 }
 
 /**
- * Ensure ~/.pi/web-search.json is a symlink to ~/.mindos/web-search.json.
- *
- * Call this at startup so pi-web-access (which hardcodes ~/.pi/) reads
- * the same config that MindOS manages at ~/.mindos/.
- * If ~/.pi/web-search.json is a real file, its content is merged into
- * ~/.mindos/web-search.json before being replaced by the symlink.
+ * Make the MindOS config visible where pi-web-access reads, and give back any
+ * link earlier releases left in the user's ~/.pi. Cheap and idempotent, so it
+ * runs at every session start: a config saved before this upgrade must reach
+ * pi-web-access without waiting for the user's next save.
  */
-export function ensurePiSymlink(): void {
+export function syncPiWebSearchConfig(): void {
+  releaseLegacyUserPiLink();
+  exposeToPiWebAccess();
+}
+
+function exposeToPiWebAccess(): void {
+  const source = mindosConfigPath();
+  const target = exposedConfigPath();
   try {
-    const piDir = path.dirname(PI_CONFIG_PATH);
-    if (!fs.existsSync(piDir)) fs.mkdirSync(piDir, { recursive: true });
+    if (!fs.existsSync(source)) return;
+    fs.mkdirSync(path.dirname(target), { recursive: true });
 
-    // Already a correct symlink?
     try {
-      if (fs.readlinkSync(PI_CONFIG_PATH) === MINDOS_CONFIG_PATH) return;
+      if (fs.readlinkSync(target) === source) return;
     } catch {
-      // Not a symlink or doesn't exist — continue
+      // Not a symlink, or absent.
     }
-
-    // If a real file exists at ~/.pi/, migrate its content then replace with symlink
-    if (fs.existsSync(PI_CONFIG_PATH)) {
-      const stat = fs.lstatSync(PI_CONFIG_PATH);
-      if (!stat.isSymbolicLink()) {
-        try {
-          const piData = JSON.parse(fs.readFileSync(PI_CONFIG_PATH, 'utf-8'));
-          const mindosData = readWebSearchConfig();
-          const merged = { ...piData, ...mindosData };
-          const mindosDir = path.dirname(MINDOS_CONFIG_PATH);
-          if (!fs.existsSync(mindosDir)) fs.mkdirSync(mindosDir, { recursive: true });
-          fs.writeFileSync(MINDOS_CONFIG_PATH, JSON.stringify(merged, null, 2) + '\n');
-        } catch { /* ignore parse errors during migration */ }
-      }
-      fs.unlinkSync(PI_CONFIG_PATH);
-    }
-
-    // On Windows, symlinks require admin privileges or Developer Mode.
-    // Fall back to copying the file instead.
+    // Everything at `target` is MindOS-owned (it lives in ~/.mindos), so it
+    // can be replaced without asking.
+    fs.rmSync(target, { force: true });
     try {
-      fs.symlinkSync(MINDOS_CONFIG_PATH, PI_CONFIG_PATH);
+      fs.symlinkSync(source, target);
     } catch {
-      // Symlink failed (Windows without admin/dev mode) — copy file as fallback
-      try {
-        fs.copyFileSync(MINDOS_CONFIG_PATH, PI_CONFIG_PATH);
-      } catch { /* non-fatal */ }
+      // Windows without admin rights or Developer Mode cannot create symlinks.
+      // A copy works too: every save calls back into here and refreshes it.
+      fs.copyFileSync(source, target);
     }
   } catch {
-    // Non-fatal: worst case pi-web-access uses its own default (Exa MCP fallback)
+    // Non-fatal: pi-web-access falls back to its own default provider.
+  }
+}
+
+/**
+ * Earlier releases replaced ~/.pi/web-search.json with a symlink to the MindOS
+ * file. Only that exact link is ours to undo; a real file, or a link pointing
+ * anywhere else, belongs to the user and is never touched. The link is turned
+ * back into a plain file holding what the user's Pi was reading through it, so
+ * their standalone Pi keeps working and stops following MindOS edits.
+ */
+function releaseLegacyUserPiLink(): void {
+  const legacy = legacyUserPiPath();
+  const source = mindosConfigPath();
+  try {
+    if (fs.readlinkSync(legacy) !== source) return;
+  } catch {
+    return; // Not a symlink, or absent: not ours.
+  }
+  try {
+    if (!fs.existsSync(source)) {
+      fs.unlinkSync(legacy); // Dangling link to a MindOS file that is gone.
+      return;
+    }
+    // Write beside it, then rename over the link: rename replaces the link
+    // itself, atomically, so the user's Pi never sees a missing file.
+    const temp = `${legacy}.mindos-release-${process.pid}`;
+    fs.writeFileSync(temp, fs.readFileSync(source));
+    fs.renameSync(temp, legacy);
+  } catch {
+    // Non-fatal: leaving the old link in place is no worse than before.
   }
 }

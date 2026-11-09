@@ -21,6 +21,7 @@ import type {
   AcpSessionSnapshot,
 } from './types.js';
 import { isAcpCapabilitySupported } from './types.js';
+import { buildAcpPromptBlocks, type AcpPromptImage } from './prompt-blocks.js';
 import { killAgent } from './subprocess.js';
 import { findAcpAgent } from './registry.js';
 import { resolveConfiguredAcpAgentEntry } from './agent-descriptors.js';
@@ -80,6 +81,8 @@ export type AcpPromptOptions = {
   timeoutMs?: number;
   /** Cancels the agent turn (best effort) and rejects the prompt when aborted. */
   signal?: AbortSignal;
+  /** Attached images; only sent to agents that declared `promptCapabilities.image`. */
+  images?: readonly AcpPromptImage[];
 };
 
 /* ── Public API — Session Lifecycle ───────────────────────────────────── */
@@ -479,7 +482,7 @@ async function runPrompt(
     const cancelAgentTurn = () => cancelAgentPromptBestEffort(conn, wireSessionId);
     const result = await callAcpRpc(() => conn.connection.prompt({
       sessionId: wireSessionId,
-      prompt: [{ type: 'text', text }] satisfies AcpContentBlock[],
+      prompt: buildAcpPromptBlocks(text, options.images, session.agentCapabilities?.promptCapabilities),
     }), {
       label: 'Prompt',
       timeoutMs,

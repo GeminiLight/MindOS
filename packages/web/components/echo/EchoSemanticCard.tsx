@@ -8,6 +8,7 @@ import {
   ChevronDown,
   ClipboardCheck,
   GitBranch,
+  Handshake,
   Leaf,
   MessageSquareText,
   NotebookText,
@@ -18,7 +19,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-export type EchoSemanticCardKind = 'digest' | 'moment' | 'pattern' | 'judgment' | 'playbook' | 'practice';
+export type EchoSemanticCardKind = 'digest' | 'moment' | 'pattern' | 'judgment' | 'agreement' | 'playbook' | 'practice';
 
 type EchoCardTone = {
   accent: string;
@@ -56,6 +57,15 @@ const CARD_TONES: Record<EchoSemanticCardKind, EchoCardTone> = {
     dot: 'bg-[var(--tool-search)]',
     wash: 'bg-[color-mix(in_srgb,var(--tool-search)_7%,transparent)]',
     icon: <ClipboardCheck size={13} strokeWidth={1.8} aria-hidden />,
+  },
+  // Agreements carry the brand colour on purpose: they are the only promotion
+  // kind that changes how every agent behaves once approved.
+  agreement: {
+    accent: 'bg-[var(--amber)]',
+    chip: 'border-[var(--amber)]/25 bg-[var(--amber)]/10 text-[var(--amber-text)]',
+    dot: 'bg-[var(--amber)]',
+    wash: 'bg-[color-mix(in_srgb,var(--amber)_7%,transparent)]',
+    icon: <Handshake size={13} strokeWidth={1.8} aria-hidden />,
   },
   playbook: {
     accent: 'bg-[var(--tool-read)]',

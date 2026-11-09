@@ -17,7 +17,6 @@ export default function CapabilityMarketplaceContent() {
   const marketplaceEntries = [
     { title: copy.skillMarket, description: copy.skillMarketDesc, href: '/explore/skills', icon: Zap },
     { title: copy.mcpServers, description: copy.mcpServersDesc, href: '/explore/mcp', icon: Server },
-    { title: copy.pluginMarket, description: copy.pluginMarketDesc, href: '/explore/plugins', icon: Blocks },
     { title: copy.useCases, description: copy.useCasesDesc, href: '/explore', icon: Lightbulb },
   ];
 

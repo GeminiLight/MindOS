@@ -60,3 +60,57 @@ describe('desktop IPC trust boundary', () => {
     })).toBe(false);
   });
 });
+
+describe('boot shell is never a trusted renderer', () => {
+  /*
+    The main window now hosts the boot shell (connect.html over
+    mindos-connect://) before any server exists, so the *same window* that will
+    later be trusted is, during startup, showing a page that must not reach
+    uninstall, core updates or the Obsidian editor.
+
+    Nothing was added to keep it out — the existing managed-loopback rule
+    already excludes it. These pin that, so a future relaxation of the URL
+    check cannot silently open the boot shell up.
+  */
+  const BOOT_URL = 'mindos-connect://bundle/src/connect.html?shell=boot';
+
+  it('rejects a sender on the bundled connect scheme', () => {
+    expect(isTrustedLocalRenderer({
+      currentMode: 'local',
+      currentWebPort: 3456,
+      senderMatchesMainWindow: true,
+      senderUrl: BOOT_URL,
+      mainWindowUrl: BOOT_URL,
+    })).toBe(false);
+  });
+
+  it('rejects it even once a web port exists but the window has not navigated', () => {
+    // The window between "services are up" and "loadURL(product)" resolving.
+    expect(isTrustedLocalRenderer({
+      currentMode: 'local',
+      currentWebPort: 39456,
+      senderMatchesMainWindow: true,
+      senderUrl: BOOT_URL,
+      mainWindowUrl: 'http://127.0.0.1:39456/',
+    })).toBe(false);
+  });
+
+  it('rejects a boot shell that is the main window during remote startup', () => {
+    expect(isTrustedLocalRenderer({
+      currentMode: 'remote',
+      senderMatchesMainWindow: true,
+      senderUrl: BOOT_URL,
+      mainWindowUrl: BOOT_URL,
+    })).toBe(false);
+  });
+
+  it('trusts the same window once it is on the managed loopback origin', () => {
+    expect(isTrustedLocalRenderer({
+      currentMode: 'local',
+      currentWebPort: 39456,
+      senderMatchesMainWindow: true,
+      senderUrl: 'http://127.0.0.1:39456/setup',
+      mainWindowUrl: 'http://127.0.0.1:39456/setup',
+    })).toBe(true);
+  });
+});

@@ -15,6 +15,7 @@ function record(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 function pathKey(value: unknown): string {
+  // eslint-disable-next-line no-control-regex -- rejecting control characters is the point of this check
   if (typeof value !== 'string' || value.length > 1024 || /[\\:\x00-\x1f\x7f]/.test(value)
     || value.split('/').length > 64 || value.split('/').some(part => !part || part.startsWith('.'))) throw invalid();
   return value;
@@ -36,6 +37,7 @@ export function createObsidianVaultClient(options: Options) {
     const data = await readObsidianJson(response, 120 * 1024 * 1024, deadline, 'Plugin Vault');
     if (!response.ok) throw new Error(`Plugin Vault request failed (${response.status}).`);
     if (data.vaultId !== vaultId || data.pluginFingerprint !== fingerprint || typeof data.name !== 'string'
+      // eslint-disable-next-line no-control-regex -- rejecting control characters is the point of this check
       || !data.name || data.name.length > 256 || /[\x00-\x1f\x7f]/.test(data.name)
       || !Array.isArray(data.files) || data.files.length > 10_000 || !Array.isArray(data.folders) || data.folders.length > 20_000) throw invalid();
     let previous = ''; const paths = new Set<string>();

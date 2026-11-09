@@ -20,7 +20,8 @@ describe('Desktop Node.js runtime requirement', () => {
 
   it('keeps Desktop validation and user-facing requirements on the same baseline', () => {
     const sources = [
-      'main.ts',
+      // Private-Node validation moved to boot-heal.ts with the rest of the heal path.
+      'boot-heal.ts',
       'connect-window.ts',
       path.join('i18n', 'en.ts'),
       path.join('i18n', 'zh.ts'),

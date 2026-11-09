@@ -282,7 +282,7 @@ vi.mock('@/components/ask/PiThinkingLevelCapsule', () => ({
 }));
 vi.mock('@/components/ask/ModeCapsule', () => ({
   default: () => null,
-  getPersistedPermissionMode: () => 'ask',
+  getPersistedPermissionChoice: () => 'ask',
 }));
 vi.mock('@/lib/agent/stream-consumer', () => ({
   consumeUIMessageStream: () => new Promise(() => {}),

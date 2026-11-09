@@ -33,6 +33,14 @@ export type {
 /** Runtimes a message part can be attributed to. */
 export type AgentRuntimeKind = 'mindos' | 'acp' | 'codex' | 'claude';
 
+export interface ToolCallDiff {
+  path: string;
+  oldText: string;
+  newText: string;
+  /** The Agent's file content was clipped before it reached the client. */
+  truncated?: boolean;
+}
+
 export interface ToolCallPart {
   type: 'tool-call';
   toolCallId: string;
@@ -43,6 +51,11 @@ export interface ToolCallPart {
   runtime?: AgentRuntimeKind;
   userQuestion?: AskUserQuestionState;
   runtimePermission?: RuntimePermissionState;
+  /**
+   * Structured file changes reported by an external agent. Native MindOS tools
+   * embed their diff in `output` instead, so this stays undefined for them.
+   */
+  diffs?: ToolCallDiff[];
 }
 
 export interface RuntimePermissionOption {
@@ -116,6 +129,16 @@ export interface ImagePart {
   path?: string;
 }
 
+/**
+ * The agent's todo list for the turn. Agents resend the whole plan on every
+ * change, so this part is replaced rather than appended to.
+ */
+export interface AgentPlanPart {
+  type: 'agent-plan';
+  entries: Array<{ content: string; status: 'pending' | 'in_progress' | 'completed' }>;
+  runtime?: AgentRuntimeKind;
+}
+
 export interface RuntimeStatusPart {
   type: 'runtime-status';
   message: string;
@@ -153,7 +176,7 @@ export interface AgentRunTimelinePart {
   updatedAt: number;
 }
 
-export type MessagePart = TextPart | ToolCallPart | ReasoningPart | ImagePart | RuntimeStatusPart | AgentRunTimelinePart;
+export type MessagePart = TextPart | ToolCallPart | ReasoningPart | ImagePart | RuntimeStatusPart | AgentPlanPart | AgentRunTimelinePart;
 
 export interface Message {
   role: 'user' | 'assistant';

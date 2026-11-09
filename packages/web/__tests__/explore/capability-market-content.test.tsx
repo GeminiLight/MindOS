@@ -26,14 +26,16 @@ describe('CapabilityMarketplaceContent', () => {
     expect(html).not.toContain('Capability Marketplace');
     expect(html).toContain('Skill Market');
     expect(html).toContain('MCP Servers');
-    expect(html).toContain('Plugin Market');
     expect(html).toContain('Task starters');
     expect(html).toContain('href="/explore/skills"');
     expect(html).toContain('href="/explore/mcp"');
-    expect(html).toContain('href="/explore/plugins"');
     expect(html).toContain('href="/explore"');
     expect(html).not.toContain('href="/settings?tab=mcp"');
     expect(html).not.toContain('href="/settings?tab=plugins"');
+    // The Obsidian community plugin market was removed; compatibility is now
+    // scoped to the data layer (vault, wiki links, callouts, canvas).
+    expect(html).not.toContain('Plugin Market');
+    expect(html).not.toContain('href="/explore/plugins"');
   });
 
   it('uses Chinese titles and descriptions throughout the overview cards', () => {

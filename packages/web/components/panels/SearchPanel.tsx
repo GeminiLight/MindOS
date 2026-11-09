@@ -129,6 +129,8 @@ interface SearchPanelProps {
   active: boolean;
   /** Increments when an external trigger wants to refocus the existing panel */
   focusRequest?: number;
+  /** A query to prefill, with a nonce so the same query can be re-applied */
+  presetQuery?: { query: string; nonce: number } | null;
   /** Called when user navigates to a result (panel host may want to close) */
   onNavigate?: () => void;
   onClose?: () => void;
@@ -136,7 +138,7 @@ interface SearchPanelProps {
 
 export { getSearchWarmHint, shouldStartSearchPrewarm } from '@/hooks/useSearchPrewarm';
 
-export default function SearchPanel({ active, focusRequest = 0, onNavigate, onClose }: SearchPanelProps) {
+export default function SearchPanel({ active, focusRequest = 0, presetQuery = null, onNavigate, onClose }: SearchPanelProps) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -169,6 +171,13 @@ export default function SearchPanel({ active, focusRequest = 0, onNavigate, onCl
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [active, focusRequest]);
+
+  // An external surface (a tag chip in the reading view) asked for a search.
+  // Keyed on the nonce so clicking the same tag twice re-applies it.
+  useEffect(() => {
+    if (!presetQuery) return;
+    setQuery(presetQuery.query);
+  }, [presetQuery?.nonce, presetQuery?.query]);
 
   const warmState = useSearchPrewarm(active);
   const visiblePluginCommands = useMemo(

@@ -130,6 +130,10 @@ describe('Desktop release packaging contract', () => {
   it('requires trusted local renderers for high-impact desktop IPC', () => {
     const main = readText('packages/desktop/src/main.ts');
     const updater = readText('packages/desktop/src/updater.ts');
+    // IPC registration moved out of main.ts into ipc-handlers.ts when the shell
+    // was split to keep files under 1000 lines; the trust requirement is about
+    // where a channel is registered, not which file holds the registration.
+    const handlers = readText('packages/desktop/src/ipc-handlers.ts');
 
     for (const channel of [
       'open-mindroot',
@@ -142,14 +146,17 @@ describe('Desktop release packaging contract', () => {
       'apply-core-update',
       'uninstall-app',
     ]) {
-      const source = channel === 'check-update' || channel === 'install-update' ? updater : main;
+      const source = channel === 'check-update' || channel === 'install-update' ? updater : handlers;
       expect(source, channel).not.toContain(`ipcMain.handle('${channel}', async () =>`);
       expect(source, channel).not.toContain(`ipcMain.handle('${channel}', () =>`);
+      expect(main, channel).not.toContain(`ipcMain.handle('${channel}'`);
     }
 
-    expect(main).toContain("handleLocalOnly('uninstall-app'");
-    expect(main).toContain("handleLocalOnly('apply-core-update'");
-    expect(main).toContain('installMainWindowNavigationGuard(mainWindow)');
+    expect(handlers).toContain("handleLocalOnly('uninstall-app'");
+    expect(handlers).toContain("handleLocalOnly('apply-core-update'");
+    // The guard is installed with the window, which now exists for the whole
+    // session (it hosts the boot shell before the product loads).
+    expect(main).toContain('installMainWindowNavigationGuard(win)');
     expect(updater).toContain('opts?.assertTrustedLocalRenderer?.(event,');
   });
 
@@ -172,6 +179,8 @@ describe('Desktop release packaging contract', () => {
 
   it('keeps Desktop-managed home, tray fallback, and restart ports cross-platform safe', () => {
     const main = readText('packages/desktop/src/main.ts');
+    const handlers = readText('packages/desktop/src/ipc-handlers.ts');
+    const localMode = readText('packages/desktop/src/local-mode.ts');
     const home = readText('packages/desktop/src/desktop-home.ts');
     const shim = readText('packages/desktop/src/install-cli-shim.ts');
     const resolver = readText('packages/desktop/src/mindos-runtime-resolve.ts');
@@ -184,18 +193,25 @@ describe('Desktop release packaging contract', () => {
     // keep consuming the shared env-overridable home instead of os.homedir()
     expect(readText('packages/desktop/src/desktop-config.ts')).toContain('export const DESKTOP_HOME = getDesktopHome()');
     expect(main).toContain('DESKTOP_HOME,');
-    expect(main).toContain('let trayAvailable = false');
-    expect(main).toContain('let closingSplashForTransition = false');
-    expect(main).toContain('if (!mainWindow && !transitionClose) app.quit();');
-    expect(main).toContain('if (!isQuitting && !isUpdating && trayAvailable)');
-    expect(main).toContain('if (!trayAvailable && !isQuitting && !isUpdating) app.quit();');
+    // Tray/quit flags moved from main.ts locals into the shared shell-state
+    // module during the same split. Assert the initial value where it now lives
+    // and the branches where they are consumed.
+    expect(readText('packages/desktop/src/shell-state.ts')).toContain('trayAvailable: false');
+    expect(main).toContain('if (!shellState.isQuitting && !shellState.isUpdating && shellState.trayAvailable)');
+    expect(main).toContain('if (!shellState.trayAvailable && !shellState.isQuitting && !shellState.isUpdating) app.quit();');
+    // Closing the window during startup means the user gave up, and there is
+    // no product behind it to hide to. The splash used to carry this
+    // distinction (transition close vs user close); with one window it is a
+    // branch on whether the boot shell is still up.
+    expect(main).toContain('if (isBootShellActive()) { shellState.isQuitting = true; return; }');
     expect(main).toContain("ensureMindosCliShim({ appendPath: process.env.MINDOS_DISABLE_CLI_SHIM_PATH_APPEND !== '1' })");
-    expect(main).toContain('findLocalModePorts');
-    expect(main).toContain('if (resolvedMcpPort !== resolvedWebPort)');
-    expect(main).toContain('currentWebPort = processManager.webPort;');
-    expect(main).toContain('currentMcpPort = processManager.mcpPort;');
-    expect(main).toContain("execFileChild('taskkill.exe', ['/PID', String(proc.pid), '/T', '/F']");
-    expect(main).toContain('detached: process.platform !== \'win32\'');
+    // Port resolution and child-process lifecycle moved into local-mode.ts.
+    expect(localMode).toContain('findLocalModePorts');
+    expect(localMode).toContain('if (resolvedMcpPort !== resolvedWebPort)');
+    expect(localMode).toContain('shellState.currentWebPort = shellState.processManager.webPort;');
+    expect(localMode).toContain('shellState.currentMcpPort = shellState.processManager.mcpPort;');
+    expect(localMode).toContain("execFileChild('taskkill.exe', ['/PID', String(proc.pid), '/T', '/F']");
+    expect(localMode).toContain('detached: process.platform !== \'win32\'');
 
     for (const source of [shim, resolver, nodeBootstrap, nodeDetect, sshTunnel]) {
       expect(source).toContain("from './desktop-home'");

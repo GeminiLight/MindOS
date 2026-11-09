@@ -13,10 +13,17 @@ export interface DesktopTelemetryEvent {
 }
 
 const MAX_HISTORY = 200;
+/**
+ * `pending` is only drained by flush(), which no-ops without
+ * MINDOS_TELEMETRY_ENDPOINT. Unbounded, it grew for the whole process lifetime
+ * (every crash respawn, port kill and restart adds events).
+ */
+const MAX_PENDING = 500;
 
 class DesktopTelemetryClient {
   private history: DesktopTelemetryEvent[] = [];
   private pending: DesktopTelemetryEvent[] = [];
+  private dropped = 0;
 
   track(name: string, props?: Record<string, TelemetryValue>): void {
     this.record(this.makeEvent(name, props));
@@ -33,9 +40,15 @@ class DesktopTelemetryClient {
     return this.history.map((event) => ({ ...event, props: event.props ? { ...event.props } : undefined }));
   }
 
+  /** Events dropped from the pending queue because nothing flushed them. */
+  getDroppedCount(): number {
+    return this.dropped;
+  }
+
   reset(): void {
     this.history = [];
     this.pending = [];
+    this.dropped = 0;
   }
 
   async flush(): Promise<number> {
@@ -54,6 +67,7 @@ class DesktopTelemetryClient {
       return batch.length;
     } catch {
       this.pending.unshift(...batch);
+      this.trimPending();
       return 0;
     }
   }
@@ -80,7 +94,16 @@ class DesktopTelemetryClient {
       this.history.splice(0, this.history.length - MAX_HISTORY);
     }
     this.pending.push(event);
+    this.trimPending();
     this.log(event);
+  }
+
+  /** Drop the oldest pending events once the queue exceeds its cap. */
+  private trimPending(): void {
+    if (this.pending.length <= MAX_PENDING) return;
+    const excess = this.pending.length - MAX_PENDING;
+    this.pending.splice(0, excess);
+    this.dropped += excess;
   }
 
   private log(event: DesktopTelemetryEvent): void {

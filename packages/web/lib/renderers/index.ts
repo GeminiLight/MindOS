@@ -6,6 +6,7 @@ import { registerRenderer } from './registry';
 import { manifest as agentInspector } from '@/components/renderers/agent-inspector/manifest';
 import { manifest as audio } from '@/components/renderers/audio/manifest';
 import { manifest as backlinks } from '@/components/renderers/backlinks/manifest';
+import { manifest as canvas } from '@/components/renderers/canvas/manifest';
 import { manifest as changeLog } from '@/components/renderers/change-log/manifest';
 import { manifest as config } from '@/components/renderers/config/manifest';
 import { manifest as csv } from '@/components/renderers/csv/manifest';
@@ -19,7 +20,7 @@ import { manifest as workflowYaml } from '@/components/renderers/workflow-yaml/m
 import { manifest as graph } from '@/components/renderers/graph/manifest';
 
 const manifests = [
-  agentInspector, audio, backlinks, changeLog, config, csv, image, pdf, summary, timeline, todo, video, workflowYaml, graph,
+  agentInspector, audio, backlinks, canvas, changeLog, config, csv, image, pdf, summary, timeline, todo, video, workflowYaml, graph,
 ];
 
 for (const m of manifests) {

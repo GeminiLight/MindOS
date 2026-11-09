@@ -6,6 +6,8 @@
  */
 
 import { describe, expect, it, beforeAll, afterEach, vi } from 'vitest';
+import { pathToFileURL } from 'node:url';
+import { resolveUpstreamSubagentEntry } from '@/lib/agent/subagent-extension-entry';
 import { spawnSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
@@ -45,12 +47,19 @@ describe('pi-subagents built-in extension', () => {
       expect(pkg.dependencies).toHaveProperty('@earendil-works/pi-ai');
       expect(pkg.dependencies).toHaveProperty('@earendil-works/pi-coding-agent');
       expect(pkg.dependencies).toHaveProperty('pi-subagents');
-      expect(pkg.dependencies['pi-subagents']).toMatch(/^\^?0\.\d+\.\d+$/);
+      expect(pkg.dependencies['pi-subagents']).toMatch(/^\^?\d+\.\d+\.\d+$/);
     });
 
-    it('pi-subagents is installed in node_modules', () => {
-      const indexPath = path.join(PROJECT_ROOT, 'node_modules', 'pi-subagents', 'src', 'extension', 'index.ts');
-      expect(fs.existsSync(indexPath)).toBe(true);
+    it('pi-subagents is installed and declares a loadable extension entry', () => {
+      // 0.87 ships a prebuilt bundle and names the entry in `pi.extensions`;
+      // 0.6x shipped TypeScript source. Assert the contract, not the layout.
+      const packageDir = path.join(PROJECT_ROOT, 'node_modules', 'pi-subagents');
+      const manifest = JSON.parse(
+        fs.readFileSync(path.join(packageDir, 'package.json'), 'utf-8'),
+      ) as { pi?: { extensions?: unknown } };
+      const entry = resolveUpstreamSubagentEntry(packageDir, manifest);
+
+      expect(fs.existsSync(entry)).toBe(true);
     });
 
     it('pi-subagents has expected structure (agents directory)', () => {
@@ -193,22 +202,18 @@ describe('pi-subagents built-in extension', () => {
   });
 
   describe('extension exports', () => {
-    it('pi-subagents index.ts is valid TypeScript with default export', async () => {
-      const indexPath = path.join(PROJECT_ROOT, 'node_modules', 'pi-subagents', 'src', 'extension', 'index.ts');
-      const content = fs.readFileSync(indexPath, 'utf-8');
+    it('the declared entry exports an extension factory', async () => {
+      // Reads the module rather than its source text: 0.87 publishes a bundle,
+      // so grepping for `pi.registerTool` only tested how upstream happened to
+      // be written, and broke the moment they shipped compiled output.
+      const packageDir = path.join(PROJECT_ROOT, 'node_modules', 'pi-subagents');
+      const manifest = JSON.parse(
+        fs.readFileSync(path.join(packageDir, 'package.json'), 'utf-8'),
+      ) as { pi?: { extensions?: unknown } };
+      const entry = resolveUpstreamSubagentEntry(packageDir, manifest);
 
-      // Extension should have a default export function
-      expect(content).toMatch(/export\s+default\s+function/);
-    });
-
-    it('pi-subagents registers subagent tool via pi.registerTool', async () => {
-      const indexPath = path.join(PROJECT_ROOT, 'node_modules', 'pi-subagents', 'src', 'extension', 'index.ts');
-      const content = fs.readFileSync(indexPath, 'utf-8');
-
-      // Should call pi.registerTool with the subagent tool
-      expect(content).toContain('pi.registerTool');
-      // Should have tool definition for 'subagent'
-      expect(content).toMatch(/name:\s*['"]subagent['"]/);
+      const loaded = await import(pathToFileURL(entry).href) as { default?: unknown };
+      expect(typeof loaded.default).toBe('function');
     });
   });
 

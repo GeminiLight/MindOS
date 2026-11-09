@@ -7,7 +7,7 @@
  * Instead, we use filesystem-only checks first (instant), then shell fallbacks
  * with an enriched PATH that includes the discovered node's bin directory.
  */
-import { execFile, execFileSync } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { readdirSync, readFileSync, existsSync } from 'fs';
 import path from 'path';
@@ -24,11 +24,15 @@ const execFileAsync = promisify(execFile);
 /**
  * Check if a node binary meets the Pi runtime's minimum Node.js version.
  * Returns true if version is OK, false if too old or check fails.
+ *
+ * Async on purpose: this used to be execFileSync, so detection blocked the
+ * Electron main process (and therefore the boot progress bar and every window)
+ * for up to 3s per candidate — and getNodePath() probes up to eight candidates.
  */
-function checkNodeVersion(nodePath: string): boolean {
+async function checkNodeVersion(nodePath: string): Promise<boolean> {
   try {
-    const ver = execFileSync(nodePath, ['--version'], { encoding: 'utf-8', timeout: 3000 }).trim();
-    return isNodeVersionAcceptable(ver);
+    const { stdout } = await execFileAsync(nodePath, ['--version'], { encoding: 'utf-8', timeout: 3000 });
+    return isNodeVersionAcceptable(String(stdout).trim());
   } catch {
     return false;
   }
@@ -77,35 +81,41 @@ async function execFileWithPath(command: string, args: string[], opts: { timeout
 export async function getNodePath(): Promise<string | null> {
   const home = getDesktopHome();
 
+  /** Remember every successful discovery, not just the slow shell paths. */
+  const remember = (nodePath: string): string => {
+    try { getAppConfigStore().set('cachedNodePath', nodePath); } catch { /* best-effort */ }
+    return nodePath;
+  };
+
   // 0a. Bundled Node.js shipped with the Desktop app (highest priority — zero download)
   if (isBundledNodeInstalled()) {
     const bundledNode = getBundledNodePath();
-    if (checkNodeVersion(bundledNode)) return bundledNode;
+    if (await checkNodeVersion(bundledNode)) return bundledNode;
   }
 
   // 0b. MindOS private Node.js (~/.mindos/node/) — downloaded on first run of older versions
   if (isPrivateNodeInstalled()) {
     const privateNode = getPrivateNodePath();
-    if (checkNodeVersion(privateNode)) return privateNode;
+    if (await checkNodeVersion(privateNode)) return privateNode;
   }
 
   // 0c. Cached path from previous startup — avoids expensive shell detection on every launch
   try {
     const cached = getAppConfigStore().get('cachedNodePath');
-    if (cached && existsSync(cached) && checkNodeVersion(cached)) {
+    if (cached && existsSync(cached) && await checkNodeVersion(cached)) {
       return cached;
     }
   } catch { /* cache miss — fall through to full detection */ }
 
   // 1. Explicit env var (instant)
   if (process.env.MINDOS_NODE_BIN && existsSync(process.env.MINDOS_NODE_BIN)) {
-    if (checkNodeVersion(process.env.MINDOS_NODE_BIN)) return process.env.MINDOS_NODE_BIN;
+    if (await checkNodeVersion(process.env.MINDOS_NODE_BIN)) return process.env.MINDOS_NODE_BIN;
     console.warn(`[MindOS] MINDOS_NODE_BIN (${process.env.MINDOS_NODE_BIN}) is below Node ${MIN_NODE_VERSION}, skipping`);
   }
 
   // 2. NVM: symlink (instant + version check)
   const nvmCurrent = path.join(home, '.nvm', 'current', 'bin', 'node');
-  if (existsSync(nvmCurrent) && checkNodeVersion(nvmCurrent)) return nvmCurrent;
+  if (existsSync(nvmCurrent) && await checkNodeVersion(nvmCurrent)) return remember(nvmCurrent);
 
   // 3. NVM: version directories (instant, fs only — filter by version)
   const nvmVersionsDir = path.join(home, '.nvm', 'versions', 'node');
@@ -116,7 +126,7 @@ export async function getNodePath(): Promise<string | null> {
         .sort((a, b) => b.localeCompare(a, undefined, { numeric: true, sensitivity: 'base' }));
       for (const ver of versions) {
         const nodePath = path.join(nvmVersionsDir, ver, 'bin', 'node');
-        if (existsSync(nodePath)) return nodePath;
+        if (existsSync(nodePath)) return remember(nodePath);
       }
     }
   } catch { /* ignore */ }
@@ -129,7 +139,7 @@ export async function getNodePath(): Promise<string | null> {
       const ver = readFileSync(fnmAliases, 'utf-8').trim();
       if (isVersionDirAcceptable(ver)) {
         const fnmNode = path.join(fnmDir, 'node-versions', ver, 'installation', 'bin', 'node');
-        if (existsSync(fnmNode)) return fnmNode;
+        if (existsSync(fnmNode)) return remember(fnmNode);
       }
     }
   } catch { /* ignore */ }
@@ -143,7 +153,7 @@ export async function getNodePath(): Promise<string | null> {
     path.join(home, '.local', 'bin', 'node'),
   ];
   for (const p of systemPaths) {
-    if (existsSync(p) && checkNodeVersion(p)) return p;
+    if (existsSync(p) && await checkNodeVersion(p)) return remember(p);
   }
 
   // 6. `which`/`where` node with enriched PATH (fast, ~100ms + version check)
@@ -151,9 +161,8 @@ export async function getNodePath(): Promise<string | null> {
     const raw = await execFileWithPath(IS_WIN ? 'where' : 'which', ['node'], { timeout: 3000 });
     // `where` on Windows may return multiple lines; take the first match.
     const result = raw.split(/\r?\n/)[0].trim();
-    if (result && existsSync(result) && checkNodeVersion(result)) {
-      try { getAppConfigStore().set('cachedNodePath', result); } catch { /* best-effort */ }
-      return result;
+    if (result && existsSync(result) && await checkNodeVersion(result)) {
+      return remember(result);
     }
   } catch { /* ignore */ }
 
@@ -167,10 +176,8 @@ export async function getNodePath(): Promise<string | null> {
     try {
       const remaining = shellCeiling - (Date.now() - shellStart);
       const result = await execFileWithPath(sh, ['-ilc', 'which node'], { timeout: Math.min(1500, remaining) });
-      if (result && existsSync(result) && checkNodeVersion(result)) {
-        // Cache for next startup so we skip the slow shell detection
-        try { getAppConfigStore().set('cachedNodePath', result); } catch { /* best-effort */ }
-        return result;
+      if (result && existsSync(result) && await checkNodeVersion(result)) {
+        return remember(result);
       }
     } catch { /* ignore */ }
   }

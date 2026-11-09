@@ -63,7 +63,7 @@ export interface SettingsData {
 }
 
 export type Tab = 'ai' | 'appearance' | 'navigation' | 'knowledge' | 'plugins' | 'mcp' | 'sync' | 'update' | 'uninstall';
-export type PluginPanel = 'installed' | 'community' | 'import' | 'surfaces';
+export type PluginPanel = 'installed' | 'import' | 'surfaces';
 
 export const CONTENT_WIDTH_DEFAULT = '80%';
 export const CONTENT_WIDTH_MIN = 50;

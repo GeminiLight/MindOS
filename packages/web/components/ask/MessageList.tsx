@@ -8,6 +8,7 @@ import type { Message, ImagePart, RuntimeStatusPart } from '@/lib/types';
 import { stripThinkingTags } from '@/hooks/useAiOrganize';
 import { copyToClipboard } from '@/lib/clipboard';
 import ToolCallBlock from './ToolCallBlock';
+import AgentPlanBlock from './AgentPlanBlock';
 import ThinkingBlock from './ThinkingBlock';
 import EchoCorrectionButton from '@/components/echo/learning/EchoCorrectionButton';
 import InquirySourceButton from '@/components/echo/inquiries/InquirySourceButton';
@@ -347,6 +348,9 @@ const AssistantMessageWithParts = memo(function AssistantMessageWithParts({ mess
             />
           );
         }
+        if (part.type === 'agent-plan') {
+          return <AgentPlanBlock key={`agent-plan-${idx}`} part={part} />;
+        }
         if (part.type === 'agent-run-timeline') {
           return <AgentRunTimeline key={`agent-run-timeline-${part.chatSessionId}-${part.startedAfter ?? 'all'}`} part={part} />;
         }
@@ -466,6 +470,8 @@ function hasVisiblePart(part: NonNullable<Message['parts']>[number]): boolean {
   if (part.type === 'text') return part.text.trim().length > 0;
   if (part.type === 'reasoning') return part.text.trim().length > 0;
   if (part.type === 'runtime-status') return !isRoutineRuntimeStatusPart(part);
+  // A plan with no steps renders nothing, so it must not keep an empty reply alive.
+  if (part.type === 'agent-plan') return part.entries.length > 0;
   return true;
 }
 

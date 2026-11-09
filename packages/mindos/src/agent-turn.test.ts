@@ -81,6 +81,8 @@ describe('MindOS session event contract', () => {
       'tool_start',
       'tool_delta',
       'tool_end',
+      'tool_diff',
+      'agent_plan',
       'runtime_permission_request',
       'runtime_permission_resolved',
       'user_question_start',
@@ -708,8 +710,8 @@ describe('MindOS session event contract', () => {
       }],
       hasVisibleContent: false,
     });
-    expect(mapMindosAcpUpdateToSseEvents({ type: 'error', error: 'bad' }, { suppressErrors: true })).toEqual({
-      events: [],
+    expect(mapMindosAcpUpdateToSseEvents({ type: 'error', error: 'bad' })).toEqual({
+      events: [{ type: 'error', message: 'bad' }],
       hasVisibleContent: false,
     });
   });

@@ -402,34 +402,21 @@ vi.mock('@/components/ask/PiThinkingLevelCapsule', () => ({
     </button>
   ),
 }));
-vi.mock('@/components/ask/AgentModeCapsule', () => ({
-  default: ({
-    mode,
-    onChange,
-  }: {
-    mode: AgentMode;
-    onChange: (mode: AgentMode) => void;
-  }) => (
-    <div data-testid="agent-mode-capsule" data-mode={mode}>
-      <button type="button" onClick={() => onChange('plan')}>Set Plan Mode</button>
-      <button type="button" onClick={() => onChange('goal')}>Set Goal Mode</button>
-    </div>
-  ),
-}));
 vi.mock('@/components/ask/ModeCapsule', () => ({
   default: ({
-    mode,
+    choice,
     onChange,
   }: {
-    mode: AgentPermissionMode;
-    onChange: (mode: AgentPermissionMode) => void;
+    choice: string;
+    onChange: (choice: string) => void;
   }) => (
-    <div data-testid="permission-capsule" data-mode={mode}>
+    <div data-testid="permission-capsule" data-mode={choice}>
       <button type="button" onClick={() => onChange('ask')}>Set Ask Permission</button>
       <button type="button" onClick={() => onChange('full')}>Set Full Permission</button>
+      <button type="button" onClick={() => onChange('plan')}>Set Plan Permission</button>
     </div>
   ),
-  getPersistedPermissionMode: () => mockPersistedPermissionMode,
+  getPersistedPermissionChoice: () => mockPersistedPermissionMode,
 }));
 vi.mock('@/lib/utils', () => ({ cn: (...parts: Array<string | false | null | undefined>) => parts.filter(Boolean).join(' ') }));
 vi.mock('@/lib/agent/reconnect', () => ({
@@ -926,7 +913,7 @@ describe('ChatContent ACP session binding', () => {
     });
   });
 
-  it('sends the selected MindOS agent mode with the turn request', async () => {
+  it('sends a goal set through the composer directive with the turn request', async () => {
     mockPersistedProviderModel = { provider: 'openai', model: 'gpt-test' };
     mockActiveSession = emptySession;
     mockSessions = [emptySession];
@@ -940,10 +927,11 @@ describe('ChatContent ACP session binding', () => {
       root.render(<ChatContent visible variant="panel" initialMessage="finish this feature" />);
     });
 
-    const goalMode = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Set Goal Mode') as HTMLButtonElement;
-    expect(goalMode).toBeTruthy();
+    // Goal is an objective, not a toggle: it is set with the /goal directive
+    // that the + menu primes, not from the permission ladder.
+    const textarea = host.querySelector('textarea') as HTMLTextAreaElement;
     await act(async () => {
-      goalMode.click();
+      setTextareaValue(textarea, '/goal finish this feature');
     });
 
     const form = host.querySelector('form') as HTMLFormElement;
@@ -969,7 +957,7 @@ describe('ChatContent ACP session binding', () => {
     });
   });
 
-  it('syncs the MindOS agent mode capsule from /plan and /goal composer directives', async () => {
+  it('moves the permission ladder with /plan, and leaves it alone for /goal', async () => {
     mockActiveSession = emptySession;
     mockSessions = [emptySession];
     mockActiveSessionId = emptySession.id;
@@ -982,47 +970,46 @@ describe('ChatContent ACP session binding', () => {
       root.render(<ChatContent visible variant="panel" />);
     });
 
-    const capsule = () => host.querySelector('[data-testid="agent-mode-capsule"]') as HTMLElement;
+    // The ladder must follow a typed /plan, or it would advertise a permission
+    // the run does not use — the split this redesign removed.
+    const ladder = () => host.querySelector('[data-testid="permission-capsule"]') as HTMLElement;
     const textarea = host.querySelector('textarea') as HTMLTextAreaElement;
-    expect(capsule().getAttribute('data-mode')).toBe('default');
+    expect(ladder().getAttribute('data-mode')).toBe('ask');
 
     await act(async () => {
       setTextareaValue(textarea, '/plan inspect before editing');
     });
-    expect(capsule().getAttribute('data-mode')).toBe('plan');
+    expect(ladder().getAttribute('data-mode')).toBe('plan');
 
+    // A goal is not a permission, so the ladder returns to where it was.
     await act(async () => {
       setTextareaValue(textarea, '/goal finish the task');
     });
-    expect(capsule().getAttribute('data-mode')).toBe('goal');
+    expect(ladder().getAttribute('data-mode')).toBe('ask');
 
     await act(async () => {
       setTextareaValue(textarea, 'finish the task normally');
     });
-    expect(capsule().getAttribute('data-mode')).toBe('default');
+    expect(ladder().getAttribute('data-mode')).toBe('ask');
 
-    const planMode = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Set Plan Mode') as HTMLButtonElement;
+    const planRung = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Set Plan Permission') as HTMLButtonElement;
     await act(async () => {
-      planMode.click();
+      planRung.click();
     });
-    expect(capsule().getAttribute('data-mode')).toBe('plan');
+    expect(ladder().getAttribute('data-mode')).toBe('plan');
 
-    await act(async () => {
-      setTextareaValue(textarea, '  /goal finish the task');
-    });
-    expect(capsule().getAttribute('data-mode')).toBe('goal');
-
+    // `/planner` is ordinary text, so the chosen rung stays put.
     await act(async () => {
       setTextareaValue(textarea, '/planner is ordinary text');
     });
-    expect(capsule().getAttribute('data-mode')).toBe('plan');
+    expect(ladder().getAttribute('data-mode')).toBe('plan');
 
     await act(async () => {
       root.unmount();
     });
   });
 
-  it('keeps Plan mode available and submits it for a native Codex turn', async () => {
+  it('submits a plan run for a native Codex turn when the ladder is set to plan', async () => {
     mockNativeRuntimeDescriptors = [{
       id: 'codex',
       name: 'Codex',
@@ -1054,15 +1041,15 @@ describe('ChatContent ACP session binding', () => {
       await Promise.resolve();
     });
 
-    const capsule = host.querySelector('[data-testid="agent-mode-capsule"]') as HTMLElement;
-    expect(capsule).toBeTruthy();
-    expect(capsule.getAttribute('data-mode')).toBe('default');
+    const ladder = host.querySelector('[data-testid="permission-capsule"]') as HTMLElement;
+    expect(ladder).toBeTruthy();
+    expect(ladder.getAttribute('data-mode')).toBe('ask');
 
-    const planMode = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Set Plan Mode') as HTMLButtonElement;
+    const planRung = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Set Plan Permission') as HTMLButtonElement;
     await act(async () => {
-      planMode.click();
+      planRung.click();
     });
-    expect(capsule.getAttribute('data-mode')).toBe('plan');
+    expect(ladder.getAttribute('data-mode')).toBe('plan');
 
     const form = host.querySelector('form') as HTMLFormElement;
     await act(async () => {
@@ -1086,7 +1073,7 @@ describe('ChatContent ACP session binding', () => {
     });
   });
 
-  it('keeps Goal mode available and submits it for a native Claude Code turn', async () => {
+  it('submits a goal run for a native Claude Code turn set from the composer', async () => {
     mockNativeRuntimeDescriptors = [{
       id: 'claude',
       name: 'Claude Code',
@@ -1117,14 +1104,10 @@ describe('ChatContent ACP session binding', () => {
       await Promise.resolve();
     });
 
-    const capsule = host.querySelector('[data-testid="agent-mode-capsule"]') as HTMLElement;
-    expect(capsule).toBeTruthy();
-
-    const goalMode = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Set Goal Mode') as HTMLButtonElement;
+    const textarea = host.querySelector('textarea') as HTMLTextAreaElement;
     await act(async () => {
-      goalMode.click();
+      setTextareaValue(textarea, '/goal finish the task');
     });
-    expect(capsule.getAttribute('data-mode')).toBe('goal');
 
     const form = host.querySelector('form') as HTMLFormElement;
     await act(async () => {
@@ -1148,7 +1131,7 @@ describe('ChatContent ACP session binding', () => {
     });
   });
 
-  it('does not expose MindOS agent modes for ACP runtimes', async () => {
+  it('does not send a MindOS agent mode for ACP runtimes', async () => {
     mockActiveSession = emptySession;
     mockSessions = [emptySession];
     mockActiveSessionId = emptySession.id;
@@ -1161,11 +1144,11 @@ describe('ChatContent ACP session binding', () => {
       root.render(<ChatContent visible variant="panel" initialMessage="run through acp" />);
     });
 
-    const planMode = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Set Plan Mode') as HTMLButtonElement;
+    const planRung = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Set Plan Permission') as HTMLButtonElement;
     await act(async () => {
-      planMode.click();
+      planRung.click();
     });
-    expect(host.querySelector('[data-testid="agent-mode-capsule"]')?.getAttribute('data-mode')).toBe('plan');
+    expect(host.querySelector('[data-testid="permission-capsule"]')?.getAttribute('data-mode')).toBe('plan');
 
     const selectOpenCode = Array.from(host.querySelectorAll('button')).find((button) => button.textContent === 'Select OpenCode') as HTMLButtonElement;
     await act(async () => {
@@ -1174,7 +1157,9 @@ describe('ChatContent ACP session binding', () => {
     await act(async () => {
       await Promise.resolve();
     });
-    expect(host.querySelector('[data-testid="agent-mode-capsule"]')).toBeNull();
+    // The ladder stays visible for every runtime; ACP agents carry their own
+    // modes, so the MindOS agent mode must not ride along on the wire.
+    expect(host.querySelector('[data-testid="permission-capsule"]')).toBeTruthy();
 
     const form = host.querySelector('form') as HTMLFormElement;
     await act(async () => {

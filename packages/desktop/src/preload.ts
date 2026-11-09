@@ -5,6 +5,7 @@
  * All event listeners return cleanup functions to prevent memory leaks.
  */
 import { contextBridge, ipcRenderer } from 'electron';
+import { exposeConnectBridge } from './connect-bridge';
 
 type CleanupFn = () => void;
 
@@ -14,10 +15,43 @@ function onChannel(channel: string, cb: (...args: unknown[]) => void): CleanupFn
   return () => ipcRenderer.removeListener(channel, handler);
 }
 
+/**
+ * One preload serves three documents, and must expose a different surface to
+ * each. A preload is fixed at window creation and cannot be swapped on
+ * navigation, so the branch has to happen here:
+ *
+ *   mindos-connect://…?shell=boot  → boot shell in the main window
+ *   mindos-connect://…             → the standalone connect / mode dialogs
+ *   anything else                  → the product, on the managed loopback origin
+ *
+ * The split is the trust boundary. The product origin never receives
+ * `mindosConnect` (so a compromised page cannot drive SSH or npm install), and
+ * the connect UI never receives `mindos` (so it cannot reach uninstall, core
+ * updates, or the Obsidian editor). Both halves of the test matter: the
+ * protocol check is what stops a product page from claiming to be the boot
+ * shell by navigating to `?shell=boot`, since only our own protocol handler
+ * can serve that scheme.
+ */
+const SURFACE: 'boot' | 'connect' | 'product' = (() => {
+  try {
+    const url = new URL(window.location.href);
+    if (url.protocol !== 'mindos-connect:') return 'product';
+    return url.searchParams.get('shell') === 'boot' ? 'boot' : 'connect';
+  } catch {
+    return 'product';
+  }
+})();
+
+const IS_BOOT_SHELL = SURFACE !== 'product';
+
+if (SURFACE !== 'product') {
+  exposeConnectBridge({ boot: SURFACE === 'boot' });
+}
+
 // Mark <html> for macOS-specific CSS (traffic-light safe zone, drag region).
 // The inline script in layout.tsx handles this for most loads; this is a belt-and-suspenders fallback.
 try {
-  if (process.platform === 'darwin') {
+  if (!IS_BOOT_SHELL && process.platform === 'darwin') {
     window.addEventListener('DOMContentLoaded', () => {
       document.documentElement.setAttribute('data-electron-mac', '');
     });
@@ -27,15 +61,17 @@ try {
 // Shell capability flags — exposed synchronously so the layout.tsx inline head
 // script can read them before first paint (spec-titlebar-row).
 try {
-  contextBridge.exposeInMainWorld('mindosShell', {
-    macTitlebarRow: process.platform === 'darwin',
-  });
+  if (!IS_BOOT_SHELL) {
+    contextBridge.exposeInMainWorld('mindosShell', {
+      macTitlebarRow: process.platform === 'darwin',
+    });
+  }
 } catch { /* sandbox may restrict process access */ }
 
 // macOS fullscreen state → html[data-mac-fullscreen]; main resends on every
 // did-finish-load because each navigation creates a fresh document.
 try {
-  if (process.platform === 'darwin') {
+  if (!IS_BOOT_SHELL && process.platform === 'darwin') {
     onChannel('mindos:mac-fullscreen', (isFullScreen) => {
       if (isFullScreen) document.documentElement.setAttribute('data-mac-fullscreen', '');
       else document.documentElement.removeAttribute('data-mac-fullscreen');
@@ -43,7 +79,7 @@ try {
   }
 } catch { /* sandbox may restrict process access */ }
 
-contextBridge.exposeInMainWorld('mindos', {
+if (!IS_BOOT_SHELL) contextBridge.exposeInMainWorld('mindos', {
   // App info
   getAppInfo: () => ipcRenderer.invoke('get-app-info'),
 

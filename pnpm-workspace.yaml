@@ -28,3 +28,14 @@ supportedArchitectures:
   libc:
     - glibc
     - musl
+
+# pnpm 10 reads overrides and patches here; the `pnpm` field in package.json is
+# ignored, so anything left there silently stops applying.
+overrides:
+  '@types/react': ^19.0.0
+
+patchedDependencies:
+  # pi-ai 1.x no longer re-exports typebox's `Type`, which this extension still
+  # imports. Upstream is inactive (last publish 2026-06-23), so the single
+  # import line is patched to take `Type` from typebox directly.
+  pi-schedule-prompt@0.4.1: patches/pi-schedule-prompt@0.4.1.patch

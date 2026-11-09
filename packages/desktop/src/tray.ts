@@ -2,12 +2,21 @@
  * System tray — mode-aware tray icon and context menu.
  * Uses callbacks to trigger main process actions directly (not via renderer IPC).
  */
-import { Tray, Menu, BrowserWindow, app, nativeImage } from 'electron';
+import { Tray, Menu, BrowserWindow, app, clipboard, nativeImage } from 'electron';
 import path from 'path';
 import { existsSync } from 'fs';
+import { getUiLang } from './i18n/lang';
+import { TOGGLE_WINDOW_ACCELERATOR } from './shortcuts';
 
 let tray: Tray | null = null;
 let mainWindowRef: BrowserWindow | null = null;
+/** Only advertise the toggle accelerator when it was actually registered. */
+let toggleShortcutRegistered = false;
+
+/** Called once the global shortcut registration result is known. */
+export function setToggleShortcutRegistered(registered: boolean): void {
+  toggleShortcutRegistered = registered;
+}
 
 type ServerStatus = 'starting' | 'running' | 'error' | 'stopped';
 
@@ -104,17 +113,17 @@ export function updateTrayMenu(
 ): void {
   if (!tray || !mainWindowRef) return;
 
-  const zh = app.getLocale()?.startsWith('zh');
+  const zh = getUiLang() === 'zh';
   const statusIcon = status === 'running' ? '\u25CF' : status === 'starting' ? '\u25CB' : '\u2716';  // ● ○ ✖
   const statusLabel = status === 'running'
     ? (zh ? '运行中' : 'Running')
     : status === 'starting'
-    ? (zh ? '启动中...' : 'Starting...')
-    : (zh ? '错误' : 'Error');
+    ? (zh ? '启动中…' : 'Starting…')
+    : (zh ? '出错' : 'Error');
 
   const modeLabel = mode === 'local'
-    ? (zh ? '本地模式' : 'Local')
-    : (remoteAddress || (zh ? '远程模式' : 'Remote'));
+    ? (zh ? '本地模式' : 'Local Mode')
+    : (remoteAddress || (zh ? '远程模式' : 'Remote Mode'));
 
   const template: Electron.MenuItemConstructorOptions[] = [
     // ── Status ──
@@ -124,7 +133,10 @@ export function updateTrayMenu(
     // ── Daily use ──
     {
       label: zh ? '打开 MindOS' : 'Open MindOS',
-      accelerator: 'CmdOrCtrl+Shift+M',
+      // Only advertised when the global shortcut was actually registered —
+      // another app may already own this chord, and showing a dead accelerator
+      // is worse than showing none.
+      ...(toggleShortcutRegistered ? { accelerator: TOGGLE_WINDOW_ACCELERATOR } : {}),
       click: () => { mainWindowRef?.show(); mainWindowRef?.focus(); },
     },
     {
@@ -133,7 +145,7 @@ export function updateTrayMenu(
     },
     ...(callbacks?.onRefreshCliShim
       ? [{
-          label: zh ? '安装/刷新终端命令 mindos…' : 'Install / refresh mindos CLI…',
+          label: zh ? '安装或更新终端命令 mindos…' : 'Install or Update the mindos Command…',
           click: () => callbacks?.onRefreshCliShim?.(),
         } as const]
       : []),
@@ -143,11 +155,21 @@ export function updateTrayMenu(
   // ── Mode-specific actions ──
   if (mode === 'local') {
     if (webPort || mcpPort) {
-      template.push(
-        { label: `Web ${webPort ? `· port ${webPort}` : ''}`, enabled: false },
-        { label: `MCP ${mcpPort ? `· port ${mcpPort}` : ''}`, enabled: false },
-        { type: 'separator' },
-      );
+      // These used to be disabled labels, so the MCP endpoint that every agent
+      // config needs could be read but never copied.
+      if (webPort) {
+        template.push({
+          label: zh ? `复制 Web 地址 · ${webPort}` : `Copy Web Address · ${webPort}`,
+          click: () => clipboard.writeText(`http://127.0.0.1:${webPort}`),
+        });
+      }
+      if (mcpPort) {
+        template.push({
+          label: zh ? `复制 MCP 地址 · ${mcpPort}` : `Copy MCP Address · ${mcpPort}`,
+          click: () => clipboard.writeText(`http://127.0.0.1:${mcpPort}/mcp`),
+        });
+      }
+      template.push({ type: 'separator' });
     }
     template.push({
       label: zh ? '重启服务' : 'Restart Services',
@@ -156,24 +178,27 @@ export function updateTrayMenu(
   } else {
     if (remoteAddress) {
       template.push(
-        { label: `Server · ${remoteAddress}`, enabled: false },
+        {
+          label: zh ? `复制服务器地址 · ${remoteAddress}` : `Copy Server Address · ${remoteAddress}`,
+          click: () => clipboard.writeText(remoteAddress),
+        },
         { type: 'separator' },
       );
     }
     template.push({
-      label: zh ? '重新连接' : 'Reconnect Now',
+      label: zh ? '重新连接' : 'Reconnect',
       enabled: status === 'error',
       click: () => { callbacks?.onReconnect?.(); },
     });
     template.push({
-      label: zh ? '更换服务器...' : 'Switch Server...',
+      label: zh ? '更换服务器…' : 'Change Server…',
       click: () => { callbacks?.onSwitchServer(); },
     });
   }
 
   template.push(
     {
-      label: zh ? '切换模式...' : 'Switch Mode...',
+      label: zh ? '切换模式…' : 'Switch Mode…',
       click: () => { callbacks?.onChangeMode(); },
     },
     { type: 'separator' },

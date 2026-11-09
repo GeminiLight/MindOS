@@ -32,7 +32,9 @@ import type {
   ReasoningPart,
   RuntimePermissionRisk,
   RuntimeStatusPart,
+  AgentPlanPart,
   TextPart,
+  ToolCallDiff,
   ToolCallPart,
 } from './stream-message-types.js';
 import { parseMindosSseLine } from '../turn/ui-events.js';
@@ -97,6 +99,8 @@ export interface ContextUsageMetadata {
   historyCompactTokens?: number;
   historyBeforeCompactTokens?: number;
   prunedMessages?: number;
+  /** Cumulative session spend, when the runtime reports it. */
+  cost?: { amount: number; currency: string };
   message?: string;
 }
 
@@ -201,6 +205,46 @@ function normalizeRuntime(value: unknown): ToolCallPart['runtime'] | undefined {
     : undefined;
 }
 
+/** A step with no text renders as a blank checklist row, so it is dropped. */
+function normalizeAgentPlanEntries(value: unknown): AgentPlanPart['entries'] {
+  if (!Array.isArray(value)) return [];
+  const entries: AgentPlanPart['entries'] = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+    const record = entry as Record<string, unknown>;
+    const content = typeof record.content === 'string' ? record.content.trim() : '';
+    if (!content) continue;
+    entries.push({
+      content: redactSensitiveText(content),
+      status: record.status === 'completed' || record.status === 'in_progress' ? record.status : 'pending',
+    });
+    if (entries.length >= 100) break;
+  }
+  return entries;
+}
+
+/**
+ * A diff is only renderable with a path and the new content; anything else is a
+ * half-truth about a file, so it is dropped rather than shown.
+ */
+function normalizeToolCallDiffs(value: unknown[]): ToolCallDiff[] {
+  const diffs: ToolCallDiff[] = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+    const record = entry as Record<string, unknown>;
+    const path = typeof record.path === 'string' ? record.path.trim() : '';
+    if (!path || typeof record.newText !== 'string') continue;
+    diffs.push({
+      path,
+      oldText: redactSensitiveText(typeof record.oldText === 'string' ? record.oldText : ''),
+      newText: redactSensitiveText(record.newText),
+      ...(record.truncated === true ? { truncated: true } : {}),
+    });
+    if (diffs.length >= 20) break;
+  }
+  return diffs;
+}
+
 function finiteNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
@@ -238,6 +282,15 @@ function normalizeContextWindowSource(value: unknown): ContextUsageMetadata['con
   return undefined;
 }
 
+/** A price is only meaningful with both a finite amount and a currency. */
+function normalizeUsageCost(value: unknown): { amount: number; currency: string } | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const { amount, currency } = value as Record<string, unknown>;
+  if (typeof amount !== 'number' || !Number.isFinite(amount)) return undefined;
+  if (typeof currency !== 'string' || !currency.trim()) return undefined;
+  return { amount, currency: currency.trim() };
+}
+
 function normalizeContextUsage(eventRecord: Record<string, unknown>): ContextUsageMetadata | null {
   const percent = finiteNumber(eventRecord.percent);
   const usedTokens = finiteNumber(eventRecord.usedTokens);
@@ -260,6 +313,7 @@ function normalizeContextUsage(eventRecord: Record<string, unknown>): ContextUsa
   const historyCompactTokens = finiteNumber(eventRecord.historyCompactTokens);
   const historyBeforeCompactTokens = finiteNumber(eventRecord.historyBeforeCompactTokens);
   const prunedMessages = finiteNumber(eventRecord.prunedMessages);
+  const cost = normalizeUsageCost(eventRecord.cost);
   if (
     percent === undefined
     || usedTokens === undefined
@@ -297,6 +351,7 @@ function normalizeContextUsage(eventRecord: Record<string, unknown>): ContextUsa
     ...(historyCompactTokens !== undefined ? { historyCompactTokens } : {}),
     ...(historyBeforeCompactTokens !== undefined ? { historyBeforeCompactTokens } : {}),
     ...(prunedMessages !== undefined ? { prunedMessages } : {}),
+    ...(cost ? { cost } : {}),
     ...(typeof eventRecord.message === 'string' ? { message: redactSensitiveText(eventRecord.message) } : {}),
   };
 }
@@ -364,6 +419,7 @@ export async function consumeUIMessageStream(
   const toolCalls = new Map<string, ToolCallPart>();
   let currentTextId: string | null = null;
   let currentReasoningPart: ReasoningPart | null = null;
+  let currentPlanPart: AgentPlanPart | null = null;
   // Terminal stream state: an `error` frame is a failed turn (never
   // downgraded by a later `done`), a `done` frame without error completes it.
   let streamStatus: Message['status'];
@@ -388,6 +444,7 @@ export async function consumeUIMessageStream(
     if (p.type === 'reasoning') return { type: 'reasoning' as const, text: p.text };
     if (p.type === 'image') return { ...p };
     if (p.type === 'runtime-status') return { ...p };
+    if (p.type === 'agent-plan') return { ...p, entries: p.entries.map(entry => ({ ...entry })) };
     if (p.type === 'agent-run-timeline') {
       return {
         ...p,
@@ -400,6 +457,7 @@ export async function consumeUIMessageStream(
     // ToolCallPart — shallow copy safe (primitive fields, input is replaced not mutated)
     return {
       ...p,
+      ...(p.diffs ? { diffs: p.diffs.map(diff => ({ ...diff })) } : {}),
       ...(p.userQuestion ? {
         userQuestion: {
           ...p.userQuestion,
@@ -666,8 +724,50 @@ export async function consumeUIMessageStream(
             break;
           }
 
+          case 'agent_plan': {
+            // Agents resend the full plan on every change, so keep one live part
+            // and replace its entries instead of stacking snapshots.
+            const entries = normalizeAgentPlanEntries(eventRecord.entries);
+            if (entries.length === 0) break;
+            if (!currentPlanPart) {
+              currentPlanPart = { type: 'agent-plan', entries };
+              parts.push(currentPlanPart);
+              currentTextId = null;
+              currentReasoningPart = null;
+            } else {
+              currentPlanPart.entries = entries;
+            }
+            const planRuntime = normalizeRuntime(eventRecord.runtime);
+            if (planRuntime) currentPlanPart.runtime = planRuntime;
+            touch(currentPlanPart);
+            changed = true;
+            break;
+          }
+
+          case 'tool_diff': {
+            // External agents report edits as structured diffs instead of
+            // embedding them in the tool output; keep one entry per file, with
+            // the newest content winning and first-touch order preserved.
+            const toolCallId = eventRecord.toolCallId as string;
+            if (!toolCallId || !Array.isArray(eventRecord.diffs)) break;
+            const incoming = normalizeToolCallDiffs(eventRecord.diffs);
+            if (incoming.length === 0) break;
+            const tc = findOrCreateToolCall(toolCallId, eventRecord.toolName as string | undefined);
+            tc.runtime = normalizeRuntime(eventRecord.runtime) ?? tc.runtime;
+            const merged = [...(tc.diffs ?? [])];
+            for (const diff of incoming) {
+              const existing = merged.findIndex((candidate) => candidate.path === diff.path);
+              if (existing >= 0) merged[existing] = diff;
+              else merged.push(diff);
+            }
+            tc.diffs = merged;
+            if (tc.state === 'pending') tc.state = 'running';
+            touch(tc);
+            changed = true;
+            break;
+          }
+
           case 'tool_end': {
-            // Tool execution finished
             const toolCallId = eventRecord.toolCallId as string;
             if (!toolCallId) break;
             // Use findOrCreateToolCall so tool_end still works even if tool_start was lost

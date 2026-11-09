@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { resolveSafe } from './core/security';
 import {
+  ECHO_PROMOTION_KINDS,
   reviewEchoPromotionCandidate,
   type EchoPromotionReview,
 } from '@geminilight/mindos/knowledge';
@@ -37,6 +38,7 @@ import {
   normalizeEchoCardSchedule,
   normalizeEchoCardWindowMinutes,
 } from './echo-card-schedule';
+import { detectEchoAgreements } from './echo-agreement-detection';
 
 export { getEchoCardScheduleStatus } from './echo-card-schedule';
 
@@ -73,12 +75,28 @@ export type GenerateEchoCardsWithAiInput = GenerateEchoCardsInput & {
   signal?: AbortSignal;
 };
 
+/** Single source for "can this card be promoted": the promotion contract itself. */
+function isEchoPromotionKind(kind: EchoCardKind): kind is EchoCardKind & (typeof ECHO_PROMOTION_KINDS)[number] {
+  return (ECHO_PROMOTION_KINDS as readonly string[]).includes(kind);
+}
+
 const ECHO_CARDS_STATE_PATH = '.mindos/echo/cards.json';
 const MAX_ACTIVE_CARDS = 5;
 const MAX_STORED_CARDS = 80;
 const MAX_CONTENT_CHARS = 420;
 
 const SEGMENT_KIND: Record<EchoCardSegment, EchoCardKind[]> = {
+  imprint: ['digest', 'moment'],
+  insight: ['pattern', 'judgment'],
+  promotion: ['agreement', 'playbook', 'practice'],
+};
+
+/**
+ * Kinds the extraction model may invent. `agreement` is deliberately absent: an
+ * agreement must be backed by the user's own repeated words, which the
+ * deterministic detector proves and a paraphrasing model cannot.
+ */
+const LM_EXTRACTION_KIND: Record<EchoCardSegment, EchoCardKind[]> = {
   imprint: ['digest', 'moment'],
   insight: ['pattern', 'judgment'],
   promotion: ['playbook', 'practice'],
@@ -96,6 +114,8 @@ const ECHO_COPY: Record<EchoOutputLocale, {
   sessionLabel: string;
   sessionWindowLabel: (count: number) => string;
   messagesLabel: string;
+  agreementDirectiveLabel: string;
+  agreementRepetitionLabel: (occurrences: number, sessions: number) => string;
 }> = {
   en: {
     untitledCard: 'Untitled Echo card',
@@ -103,6 +123,8 @@ const ECHO_COPY: Record<EchoOutputLocale, {
     sessionLabel: 'Session',
     sessionWindowLabel: (count) => `${count} session window`,
     messagesLabel: 'messages',
+    agreementDirectiveLabel: 'You stated this as a standing rule',
+    agreementRepetitionLabel: (occurrences, sessions) => `You said this ${occurrences} times across ${sessions} sessions`,
   },
   zh: {
     untitledCard: '未命名 Echo 卡片',
@@ -110,6 +132,8 @@ const ECHO_COPY: Record<EchoOutputLocale, {
     sessionLabel: '会话',
     sessionWindowLabel: (count) => `${count} 个会话窗口`,
     messagesLabel: '消息',
+    agreementDirectiveLabel: '你明确说过这是长期规则',
+    agreementRepetitionLabel: (occurrences, sessions) => `你在 ${sessions} 次对话里说过 ${occurrences} 次`,
   },
 };
 
@@ -183,7 +207,14 @@ export function generateEchoCards({
       extraction: { mode: 'deterministic' },
     });
   }
-  const generatedCards = buildCardsFromSessions(source.sourceSessions, segment, trigger, now, outputLocale);
+  const generatedCards = withAgreementCards(
+    buildCardsFromSessions(source.sourceSessions, segment, trigger, now, outputLocale),
+    source.sourceSessions,
+    segment,
+    trigger,
+    now,
+    outputLocale,
+  );
   return completeGeneration({
     mindRoot,
     segment,
@@ -236,7 +267,14 @@ async function runGenerationWithAi({
     })
     : null;
   const extraction = lmAttempt?.extraction ?? { mode: 'deterministic' as const };
-  const generatedCards = lmAttempt?.cards ?? buildCardsFromSessions(source.sourceSessions, segment, trigger, now, outputLocale);
+  const generatedCards = withAgreementCards(
+    lmAttempt?.cards ?? buildCardsFromSessions(source.sourceSessions, segment, trigger, now, outputLocale),
+    source.sourceSessions,
+    segment,
+    trigger,
+    now,
+    outputLocale,
+  );
 
   return completeGeneration({
     mindRoot,
@@ -316,8 +354,11 @@ export function reviewEchoPromotionCard(
   ));
   if (index < 0) return null;
   const current = state.cards[index]!;
-  if (current.kind !== 'playbook' && current.kind !== 'practice') {
-    throw new Error('Only playbook or practice cards can be promoted.');
+  // Derived from the promotion contract rather than restated here: listing the
+  // kinds a second time is what let 'agreement' be generated and displayed but
+  // never approved, from either the UI or the CLI.
+  if (!isEchoPromotionKind(current.kind)) {
+    throw new Error(`Card kind cannot be promoted: ${current.kind}`);
   }
   const normalizedNote = typeof note === 'string' ? normalizeText(note, 1_000) : undefined;
   const review = reviewEchoPromotionCandidate(mindRoot, {
@@ -773,6 +814,62 @@ function buildCardsFromSessions(
   return sessions.slice(0, MAX_ACTIVE_CARDS).map((session) => buildSessionCard(session, segment, trigger, now, locale));
 }
 
+/**
+ * Agreements are detected deterministically and prepended to whatever else the
+ * promotion segment produced, so the thing the user has repeated most is the
+ * first card they review. Other segments are untouched.
+ */
+function withAgreementCards(
+  cards: EchoCard[],
+  sessions: EchoCardSourceSessionInput[],
+  segment: EchoCardSegment,
+  trigger: EchoGenerationTrigger,
+  now: Date,
+  locale: EchoOutputLocale,
+): EchoCard[] {
+  if (segment !== 'promotion') return cards;
+  const agreements = buildAgreementCards(sessions, trigger, now, locale);
+  if (agreements.length === 0) return cards;
+
+  const seen = new Set(agreements.map((card) => card.id));
+  return [...agreements, ...cards.filter((card) => !seen.has(card.id))].slice(0, MAX_ACTIVE_CARDS);
+}
+
+function buildAgreementCards(
+  sessions: EchoCardSourceSessionInput[],
+  trigger: EchoGenerationTrigger,
+  now: Date,
+  locale: EchoOutputLocale,
+): EchoCard[] {
+  const copy = ECHO_COPY[locale];
+  return detectEchoAgreements(sessions).map((agreement) => createCard({
+    idSeed: `promotion:agreement:${agreement.signature}`,
+    segment: 'promotion',
+    kind: 'agreement',
+    title: agreement.title,
+    content: agreement.content,
+    createdAt: new Date(agreement.latestAt ?? now.getTime()).toISOString(),
+    source: {
+      label: agreement.trigger === 'directive'
+        ? copy.agreementDirectiveLabel
+        : copy.agreementRepetitionLabel(agreement.occurrenceCount, agreement.sessionCount),
+      sessions: agreement.sessions.map((session) => ({
+        id: session.id,
+        ...(session.title ? { title: session.title } : {}),
+        ...(session.runtime ? { runtime: session.runtime } : {}),
+        messageRefs: session.messageRefs,
+      })),
+    },
+    // An explicit "from now on" outranks anything inferred from repetition; for
+    // the weaker path, more sessions saying the same thing is the evidence.
+    confidence: agreement.trigger === 'directive'
+      ? 0.9
+      : Math.min(0.85, 0.6 + (agreement.sessionCount * 0.05)),
+    generation: { method: 'deterministic', trigger, locale },
+    now,
+  }));
+}
+
 async function buildCardsWithAi({
   aiTaskRunner,
   segment,
@@ -800,7 +897,7 @@ async function buildCardsWithAi({
   try {
     const result = await aiTaskRunner.run(echoCardExtractionTask, {
       segment,
-      allowedKinds: SEGMENT_KIND[segment],
+      allowedKinds: LM_EXTRACTION_KIND[segment],
       window: {
         since: sourceWindow.since,
         until: sourceWindow.until,

@@ -1,6 +1,8 @@
-<!-- Last verified: 2026-05-10 | Current stage: v1.0.5 | Canonical status: wiki/reviews/v1-migration-status-2026-04-27.md -->
+<!-- Last verified: 2026-11-09 | Current stage: pi 1.5 / ACP-first 迁移中 | Canonical status: wiki/reviews/v1-migration-status-2026-04-27.md -->
 
 # MindOS 系统架构 (System Architecture)
+
+> 可视化版本：[`docs/architecture/index.html`](../docs/architecture/index.html)（浏览器直接打开；各端、核心分层、四条 lane、关键数据流、代码规模）。
 
 ## 本地工作视图（候选）
 
@@ -8,45 +10,62 @@
 
 ## 整体架构
 
+一句话：**一个本地 Markdown 知识库，加一个把多个外部 AI agent 接进来、让它们共享这个知识库的宿主。**
+
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         用户 & 外部 Agent                         │
-└──────────┬──────────────────────┬───────────────────────────────┘
-           │ Browser (GUI)         │ MCP Protocol (stdio/HTTP)
-           ▼                       ▼
-┌─────────────────────┐  ┌────────────────────────┐
-│ packages/web (Next.js)  │  │ packages/mindos protocol runtime │
-│   ─────────────────  │  │  ────────────────────  │
-│   • 前端 UI 组件     │  │  • MCP ↔ App API       │
-│   • API Routes       │  │  • stdio + HTTP 传输   │
-│   • 内置 Agent       │  │  • Bearer Token 认证   │
-│   • 插件渲染器       │  │  • 安全沙箱 & 写保护   │
-└──────────┬──────────┘  └──────────┬─────────────┘
-           │                        │
-           ▼                        ▼
-┌──────────────────────────────────────────────────┐
-│              my-mind/ (本地纯文本知识库)             │
-│  Markdown + CSV + JSON | Git 版本控制              │
-└──────────────────────────────────────────────────┘
+         用户                        外部 Agent
+    (浏览器 / 桌面 / 移动)      (Claude Code / Codex / Gemini …)
+           │                              │
+           │                    ┌─────────┴──────────┐
+           │                    │ 我们接它：ACP        │  我们被它用：MCP
+           │                    │ (spawn 子进程)      │  (stdio / HTTP)
+           ▼                    ▼                    ▼
+┌──────────────────────────────────────────────────────────────┐
+│  客户端外壳（薄）                                               │
+│  packages/{web, desktop, mobile, browser-extension}          │
+│  web 的 API route 基本只做转发，业务不在这里                     │
+└──────────────────────────┬───────────────────────────────────┘
+                           │ 57 个导出入口
+┌──────────────────────────▼───────────────────────────────────┐
+│  @geminilight/mindos — 产品核心（约 10.4 万行）                 │
+│                                                               │
+│   agent (3.6万)      server (3.6万)     knowledge (1.7万)     │
+│   跑 agent / lane     HTTP 路由表        笔记·链接·空间         │
+│                                                               │
+│   protocols (6.9千)              foundation (5.1千)           │
+│   ACP / MCP / A2A                配置·权限·存储·安全            │
+│                                                               │
+│   依赖单向：foundation ← knowledge ← agent ← server           │
+└──────────────────────────┬───────────────────────────────────┘
+                           ▼
+┌──────────────────────────────────────────────────────────────┐
+│  my-mind/ 本地知识库：Markdown + CSV + JSON，Git 版本控制        │
+│  .mindos/db/*.sqlite：派生状态（变更日志 / run ledger），不进 Git │
+└──────────────────────────────────────────────────────────────┘
 ```
+
+**理解这套架构的三个要点：**
+
+1. **Web 是外壳，不是后端。** `packages/web/app/api` 下 64 个目录里，绝大多数路由只有一行 `delegateToMindos(...)`，请求经 Next 鉴权后交给核心包同一张路由表。同一套业务逻辑被 Web、CLI（`bin/cli.js`）、MCP server 三个入口共用。
+2. **agent 分两类。** 内置 agent 基于 pi 框架跑在本进程内，能直接调知识库工具；外部 agent 跑在各自进程里，经 ACP 对话。详见「Agent 支持体系」。
+3. **方向是双向的。** 我们既作为 ACP 客户端去接外部 agent，也作为 MCP server 被外部 agent 使用——后者是「跨 agent 共享上下文」的实现方式。
 
 ## 目录结构
 
 ```
 mindos/
 ├── packages/
-│   ├── mindos/                 # @geminilight/mindos 产品主包：OpenCode-style product runtime
+│   ├── mindos/                 # @geminilight/mindos 产品主包（约 10.4 万行）
 │   │   ├── bin/                # thin shim/CLI 入口；npm 主包通过平台 runtime 执行完整 CLI
-│   │   └── src/                # product facade + server/client/plugin/tool/session/agent + internals
-│   ├── web/                    # Next.js 16 Web 源码；发布包只包含 _standalone artifact
+│   │   └── src/                # agent / server / knowledge / protocols / foundation
+│   ├── web/                    # Next.js 16 Web 源码（约 21.9 万行）；发布包只含 _standalone artifact
 │   │   ├── app/                # App Router 页面 + API Routes
 │   │   ├── components/         # UI 组件
 │   │   ├── lib/                # Web runtime modules and adapters
 │   │   └── data/skills/        # 内置 Skill 上下文
-│   ├── desktop/                # Electron 桌面客户端
-│   ├── mobile/                 # Expo 移动端
-│   ├── browser-extension/      # Web Clipper 浏览器扩展
-│   └── protocols/              # acp/mcp-server 外部协议适配
+│   ├── desktop/                # Electron 桌面客户端（约 1.5 万行）
+│   ├── mobile/                 # Expo 移动端（约 1.7 万行）
+│   └── browser-extension/      # Web Clipper 浏览器扩展（约 2 千行）
 ├── skills/                     # Agent 工作流技能
 ├── templates/{en,zh}/          # 预设知识库模板
 ├── landing/                    # 静态 Landing Page
@@ -62,9 +81,11 @@ mindos/
 
 ### 1. packages/web — Next.js 16 前端
 
-**技术栈：** Next.js 16 (App Router) + React 19 + TypeScript + Tailwind CSS 4 + shadcn/ui + TipTap + CodeMirror 6 + pi-agent-core 0.60.0 + pi-coding-agent 0.61.1 (session/model/auth)
+**技术栈：** Next.js 16 (App Router) + React 19 + TypeScript + Tailwind CSS 4 + shadcn/ui + Milkdown Crepe + CodeMirror 6 + pi-agent-core / pi-coding-agent **1.5.0**（session/model/auth）
 
-**API Routes (总 78，已迁移 thin-adapter 65)：**
+**API Routes（`app/api` 下 64 个目录）：**
+
+> 下表是按领域举例，不是全量清单——全量以 `packages/mindos/src/server/contract.ts` 的 `MINDOS_SERVER_ROUTES` 和 `packages/mindos/src/server/route-ownership.ts` 为准，两者由契约测试锁定一致。手工维护的表格必然漂移，不要依赖它做判断。
 
 > **2026-04-10 架构优化**：关键路由已完成职责分离重构。`ask/route.ts` 从 1,524 行减少至 1,050 行 (-31%)，`file/route.ts` 从 451 行减少至 159 行 (-65%)。7 个业务逻辑模块已提取 (`lib/sse/events.ts`, `lib/agent/skill-resolver.ts`, `lib/agent/non-streaming.ts`, `lib/agent/file-context.ts`, `lib/api/request-utils.ts`, `lib/file/handlers.ts`, `lib/sync/config.ts`)。详见 `wiki/reviews/architecture-review-2026-04-10.md`。
 
@@ -141,23 +162,22 @@ mindos/
 | `GET /api/im/status` | IM 平台连接状态 |
 | `POST /api/im/test` | IM 消息测试发送 |
 
-**核心组件拆分：**
+**组件规模（2026-11-09 实测，前 6 名）：**
 
-> **2026-04-10 状态**：8 个超大组件已完成 60-85% 的拆分，提取 15+ 个子组件与专用 hook。
+| 组件 | 行数 | 说明 |
+|------|------|------|
+| `chat/ChatContent.tsx` | 2259 | composer 编排中枢：runtime 选择、权限阶梯、附件、排队、历史回溯 |
+| `agents/AgentsPresetsSection.tsx` | 2092 | Agent 预设与 Skill 管理 |
+| `panels/HomePanel.tsx` | 1214 | 首页面板 |
+| `settings/ObsidianPluginHostSection.tsx` | 1008 | Obsidian 插件宿主设置 |
+| `studio/StudioAutomationView.tsx` | 965 | Studio 自动化 |
+| `echo/EchoImprintCardsReview.tsx` | 935 | 回响卡片复核 |
 
-| 组件 | 拆分前 | 拆分后 | 减少 |
-|------|--------|--------|------|
-| TodoRenderer | 889 行 | 137 行 + (parse-todos.ts / FilterBar / SectionCard) | **-85%** |
-| UpdateTab | 868 行 | 357 行 + DesktopUpdateCards.tsx | -59% |
-| McpTab | 713 行 | 293 行 + McpConnectGuides.tsx | -59% |
-| AgentsPanelA2aTab | 746 行 | 297 行 + AcpRegistrySection.tsx | -60% |
-| AgentDetailContent | 1,188 行 | 741 行 + 6 子组件 (Header/Skills/Mcp/Space/Config/SkillEditor) | -38% |
-| FileTree | 861 行 | 619 行 + FileTreeContextMenus.tsx, useDirectoryDragDrop hook | -28% |
-| SyncTab | 775 行 | 556 行 + SyncEmptyState.tsx | -28% |
-| AgentsSkillsSection | 869 行 | 655 行 + AgentsSkillsByAgent.tsx | -25% |
-| ChatContent | 771 行 | 771 行 | 跳过 (编排型组件，拆分反增复杂度) |
+> 这张表只是现状快照，不是"待拆分清单"。`ChatContent` 超过 1000 行是有意的：它是编排型组件，状态互相牵连，此前评估过拆分会反增复杂度。真要动它，先读 `wiki/41-dev-pitfall-patterns.md` 规则 6-8。
 
-**插件渲染器 (14个)：**
+**另一块值得知道的体量**：`lib/obsidian-compat/` 约 2.7 万行（占 Web 源码约 1/8），是在 MindOS 内运行 Obsidian 社区插件的兼容层。实际跑通的插件约 9 个，其中约 1/3 代码是探测与兼容矩阵等诊断层。去留未定，见 backlog。
+
+**插件渲染器（17 个目录）：**
 
 | 渲染器 | 功能 | 目录 |
 |--------|------|------|
@@ -366,7 +386,7 @@ Web 的 `packages/web/app/api/file/route.ts` 只保留 Next.js adapter：读取 
 
 参考：`wiki/refs/im-integration-research-2026-04-09.md`（详细的平台对比与 SDK 选型）、`wiki/specs/spec-im-integration.md`（完整架构）。
 
-### 6. A2A Protocol — Agent 间通信
+### 8. A2A Protocol — Agent 间通信
 
 **协议：** Google A2A (Agent-to-Agent) 标准协议
 
@@ -378,7 +398,7 @@ Web 的 `packages/web/app/api/file/route.ts` 只保留 Next.js adapter：读取 
 
 **Agent 工具 (6)：** `list_remote_agents`, `discover_agent`, `discover_agents`, `delegate_to_agent`, `check_task_status`, `orchestrate`
 
-### 7. packages/mindos/src/protocols/acp + Web ACP adapters — Agent Client Protocol
+### 9. packages/mindos/src/protocols/acp + Web ACP adapters — Agent Client Protocol
 
 **协议：** ACP 标准协议，基于 `@agentclientprotocol/sdk` 官方 SDK，通过 JSON-RPC 2.0 over stdio 与本地 Agent 子进程通信
 
@@ -404,7 +424,30 @@ Web 的 `packages/web/app/api/file/route.ts` 只保留 Next.js adapter：读取 
 
 **Agent 工具 (2)：** `list_acp_agents`, `call_acp_agent`
 
-### 8. Agent 支持体系
+### 10. 跑 agent 的四条 lane（2026-11-09）
+
+上面几节讲的是「别人把我们当 MCP server 用」。这一节是反向：**我们作为宿主去跑 agent**。两件事方向相反，别混。
+
+所有 lane 的生命周期收敛到 `agent/runtime/runRuntimeLaneTurn`（见下文「数据流」），区别只在怎么和 agent 对话：
+
+| lane | 代码量 | 对话方式 | 覆盖 |
+|------|--------|---------|------|
+| `mindos-pi` | — | 进程内，pi 1.5 session | 内置 agent，可直接调知识库工具 |
+| `acp` | 约 5.4 千行 | spawn 子进程 + JSON-RPC | 40+ 个外部 agent（Gemini / Qwen / Kimi / OpenCode …） |
+| `claude` | 约 1 千行 | Claude Agent SDK，或直启 `claude` CLI | 仅 Claude Code |
+| `codex` | 约 4.5 千行 | 自研 Codex app-server 客户端 | 仅 Codex |
+
+**为什么有三条外部 lane、以及方向是什么：**
+
+2026-06 立项自研 Claude / Codex lane 时，ACP adapter 还不支持 session load/resume，所以 ACP 被定位成单轮通道。这个前提在 2026-11 已不成立——`codex-acp` 底层直接驱动同一个 Codex App Server，`claude-agent-acp` 基于同一个 Claude Agent SDK，两者都支持 resume/fork/模型/用量/图片。
+
+所以方向是 **ACP-first**：先把 ACP lane 补齐到 ACP v1 完整能力（一次让 40+ 个 agent 都受益），再让两条专用 lane 退休。spec：`wiki/specs/spec-acp-first-agent-integration.md`。Phase 1 已完成——diff 透传、用量与费用、结构化 plan、图片输入、错误不再被吞。
+
+**并行开关已具备**：`agent-descriptor-table.ts` 里 `claude` 指向 `@agentclientprotocol/claude-agent-acp`、`codex-acp` 指向 `@agentclientprotocol/codex-acp`，用户可直接在 ACP agent 列表里选用，与自研 lane 并存。剩余是实机对照与下线决策。
+
+**一个保留理由**：Claude 订阅登录在 adapter 下有已知问题（claude-agent-acp #517 / #658），所以直启 `claude` CLI 这条路必须留作兜底。
+
+### 11. Agent 支持体系
 
 **MCP Agent：27 个**（单一真值 `packages/mindos/src/agent/config/registry.ts` 的 `DEFAULT_MCP_AGENTS`；Web `packages/web/lib/mcp-agents.ts` 直接 re-export，CLI `packages/mindos/bin/lib/mcp-agents.js` 从 esbuild 生成 bundle `bin/lib/generated/agent-config.mjs` 派生，去 `mindos` 自列）；**ACP 注册表：30+ 个**（独立计数）。
 
@@ -474,6 +517,24 @@ Web 的 `packages/web/app/api/file/route.ts` 只保留 Next.js adapter：读取 
     └── 外部 runtime：Codex / Claude Code / ACP adapter → SSE 流式输出
 ```
 
+**agent 回话怎么到屏幕上**（SSE 事件 → UI part，2026-11 ACP-first 补齐后）：
+
+```
+agent 侧事件                 SSE 事件            UI 呈现
+─────────────────────────────────────────────────────────
+文本 / 思考                  text_delta          正文 / 思考块
+                            thinking_delta
+工具调用                     tool_start/_end     可折叠工具卡片
+文件改动（ACP diff）          tool_diff           行级 diff（与 /changes 同一算法）
+todo 列表                    agent_plan          计划清单（进行中展开，完成折叠）
+用量与费用                    context_usage       上下文计量器（含累计花费）
+权限请求                     runtime_permission_* 审批卡片
+```
+
+跨越的层：`protocols/acp/session-callbacks.ts` 解析 → `agent/turn/acp-lane.ts` 映射成 SSE → `agent/stream/stream-consumer.ts` 聚合成 message part → Web 组件渲染。
+
+> **这条链上最容易踩的坑**：lane 边界（`acp-lane.ts` 的 `MindosAcpSessionUpdate`）是一套**独立的窄类型**，不是 `AcpSessionUpdate` 的别名。只在 protocols 层解析了新字段、却没在 lane 类型里声明，数据会在边界静默丢失，编译器不报错。`tool_diff` 当初就是这样丢了两层。
+
 lane 生命周期（ledger start/complete/fail、capsule capture/finalize、mode artifacts、取消/超时分类、断连宽限、bridge ALS）收敛到 core 的唯一调用方 `agent/runtime/runRuntimeLaneTurn`（`lane-runner.ts`）；四条 lane（mindos-pi / codex / claude / acp）经 `lane-adapters.ts` 适配既有协议函数（runner 函数全部 deps 注入，默认绑定叶子模块，web 从 barrel import 后显式传入以保 vi.mock 契约）。Web `_lib/turn-lane-*.ts` 退化为 HTTP/SSE 壳 + 服务装配。三条 lane 统一走「客户端在场表 + 断连宽限」取消模型（presence 端口由 web 注入）。设计与验收见 `wiki/specs/spec-runtime-lane-contract.md`（方案 1/2/8 已落地）。
 
 ### 外部 Agent (MCP)
@@ -488,8 +549,8 @@ Agent → stdio: spawn node dist/protocols/mcp-server/index.cjs ← stdin/stdout
 | 决策 | 选择 | 理由 |
 |------|------|------|
 | 前端框架 | Next.js 16 App Router | 服务端组件 + 流式渲染 + API Routes 一体化 |
-| 编辑器 | TipTap + CodeMirror 6 | 富文本 + 源码双模式，各自领域最优 |
-| Agent SDK | pi-agent-core 0.60.0 | Agent 执行循环 + TypeBox 工具定义 |
+| 编辑器 | Milkdown Crepe + CodeMirror 6 | 富文本 + 源码双模式，各自领域最优 |
+| Agent SDK | pi-agent-core **1.5.0** | Agent 执行循环 + TypeBox 工具定义；2026-11-09 从 0.84.4 升级，几个 pi 包互相咬合需整体升 |
 | MCP SDK | `@modelcontextprotocol/sdk` | 标准协议，跨 Agent 兼容 |
 | 存储 | 本地纯文本 + Git | 隐私、主权、可审计、零依赖 |
 | 派生状态 | `node:sqlite`（WAL，`.mindos/db/*_N.sqlite`） | change-log / run ledger / capsule 索引按索引查询、单语句多进程安全；不进 Git 同步 |

@@ -31,15 +31,6 @@ export function PluginManagerHeader({
       icon={<Puzzle size={15} />}
       title={copy.managerTitle}
       description={copy.managerSubtitle}
-      actions={(
-        <Link
-          href="/explore/plugins"
-          className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <ExternalLink size={13} />
-          {copy.browseMarketAction}
-        </Link>
-      )}
       bodyClassName="space-y-0"
     >
       <nav

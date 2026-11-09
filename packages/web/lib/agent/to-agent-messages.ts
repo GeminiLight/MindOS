@@ -26,6 +26,9 @@ export function toMindosUiAgentMessages(messages: FrontendMessage[]): MindosUiAg
 
 function toMindosUiMessagePart(part: NonNullable<FrontendMessage['parts']>[number]): MindosUiMessagePart | null {
   if (part.type === 'agent-run-timeline') return null;
+  // A plan is UI state about how the turn ran, not something the agent said.
+  // Replaying it as history would feed the agent its own todo list back.
+  if (part.type === 'agent-plan') return null;
   return part;
 }
 

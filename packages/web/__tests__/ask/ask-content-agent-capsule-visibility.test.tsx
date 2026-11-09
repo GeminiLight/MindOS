@@ -195,7 +195,7 @@ vi.mock('@/components/ask/AskHeader', () => ({
 vi.mock('@/components/ask/FileChip', () => ({ default: () => null }));
 vi.mock('@/components/ask/ModeCapsule', () => ({
   default: () => <div data-testid="permission-capsule">permission</div>,
-  getPersistedPermissionMode: () => 'ask',
+  getPersistedPermissionChoice: () => 'ask',
 }));
 vi.mock('@/components/ask/ProviderModelCapsule', () => ({
   default: () => <div data-testid="provider-capsule">provider</div>,

@@ -1,165 +1,33 @@
 /**
  * Process Manager — manages Next.js and MCP child processes.
  * Handles spawning, health checks, crash recovery, and graceful shutdown.
+ *
+ * The process layer is three files:
+ *   process-manager.ts  the lifecycle of the two children (this file)
+ *   process-kill.ts     cross-platform termination primitives
+ *   process-cleanup.ts  PID files and port-holder cleanup between sessions
  */
-import { ChildProcess, execFile, spawn } from 'child_process';
+import { ChildProcess, spawn } from 'child_process';
 import { EventEmitter } from 'events';
 import path from 'path';
 import net from 'net';
-import { promisify } from 'util';
-import { readFileSync, existsSync, writeFileSync, unlinkSync, mkdirSync, chmodSync, appendFileSync } from 'fs';
+import { readFileSync, existsSync, writeFileSync, unlinkSync, mkdirSync, appendFileSync, statSync } from 'fs';
 import { desktopTelemetry } from './telemetry';
 import { resolveCliPath, resolveMcpBundlePath, resolveMcpDir, resolveWebAppDir } from './mindos-runtime-layout';
 import { verifyMindOsWebHealth } from './mindos-web-health';
 import { getDesktopConfigDir } from './desktop-home';
 import { resolveExecTarget } from './exec-target';
+import { IS_WIN, sanitizeChildEnv, terminateChildProcess } from './process-kill';
+import {
+  cleanupCliPidFile,
+  cleanupOrphanedChildren,
+  clearChildPidFile,
+  killProcessesOnPort,
+  writeChildPidList,
+} from './process-cleanup';
 
-const IS_WIN = process.platform === 'win32';
-const execFileAsync = promisify(execFile);
-const CHILD_PROCESS_TERM_TIMEOUT_MS = 5000;
-const PID_TERM_TIMEOUT_MS = 1500;
-/** After SIGKILL, how long to wait for the kernel to report the child's exit before giving up. */
-const FORCE_KILL_CONFIRM_TIMEOUT_MS = 1500;
-
-/**
- * Env vars that tell the MCP server (and any future child) it was launched by a
- * daemon supervisor. The MCP server disables its stdin parent-death watchdog when
- * either is set, so a Desktop started via systemd/GNOME autostart or launchd would
- * inherit them and leave an orphaned MCP behind when Desktop dies.
- */
-const DAEMON_SUPERVISOR_ENV_KEYS = ['INVOCATION_ID', 'LAUNCHED_BY_LAUNCHD'] as const;
-
-export function sanitizeChildEnv(base: Record<string, string | undefined>): Record<string, string> {
-  const env: Record<string, string> = {};
-  for (const [key, value] of Object.entries(base)) {
-    if (value === undefined) continue;
-    if ((DAEMON_SUPERVISOR_ENV_KEYS as readonly string[]).includes(key)) continue;
-    env[key] = value;
-  }
-  return env;
-}
-
-export function isMindosOwnedCommandLine(commandLine: string): boolean {
-  const normalized = commandLine.replace(/\\/g, '/').toLowerCase();
-  return [
-    '/.mindos/runtime/',
-    '/mindos-runtime/',
-    '/node_modules/@geminilight/mindos/',
-    '/@geminilight/mindos/',
-    '/packages/mindos/bin/cli.js',
-    '/packages/web/.next/standalone/server.js',
-    '/dist/protocols/mcp-server/index.cjs',
-  ].some((marker) => normalized.includes(marker));
-}
-
-function forceKillChildProcess(proc: ChildProcess): void {
-  try {
-    if (IS_WIN && proc.pid) {
-      execFile('taskkill.exe', ['/PID', String(proc.pid), '/T', '/F'], { windowsHide: true }, () => {});
-      proc.kill();
-    } else if (proc.pid) {
-      try { process.kill(-proc.pid, 'SIGKILL'); } catch { /* process may not own a group */ }
-      proc.kill('SIGKILL');
-    } else {
-      if (IS_WIN) proc.kill();
-      else proc.kill('SIGKILL');
-    }
-  } catch { /* already dead */ }
-}
-
-/**
- * SIGTERM → wait → SIGKILL → wait (bounded) for the exit event.
- * Resolves `true` when the child confirmed exit, `false` when it may still be
- * alive after force-kill (caller must keep its PID on record for the next boot).
- */
-function terminateChildProcess(
-  proc: ChildProcess | null,
-  timeoutMs = CHILD_PROCESS_TERM_TIMEOUT_MS,
-  forceKillConfirmMs = FORCE_KILL_CONFIRM_TIMEOUT_MS,
-): Promise<boolean> {
-  return new Promise((resolve) => {
-    if (!proc || proc.killed) { resolve(true); return; }
-    // Already exited (e.g. crashed before stop()): kill() is a no-op and 'exit'
-    // will never fire again, so waiting would only produce a false "unclean" verdict.
-    if (typeof proc.exitCode === 'number' || typeof proc.signalCode === 'string') { resolve(true); return; }
-
-    let resolved = false;
-    let confirmTimer: ReturnType<typeof setTimeout> | null = null;
-    const done = (confirmed: boolean) => {
-      if (resolved) return;
-      resolved = true;
-      clearTimeout(forceKillTimer);
-      if (confirmTimer) clearTimeout(confirmTimer);
-      resolve(confirmed);
-    };
-
-    const forceKillTimer = setTimeout(() => {
-      forceKillChildProcess(proc);
-      // Resolving here without the exit event let stop() clear the PID file for a
-      // child that was still alive; give the kernel a moment to report the exit.
-      confirmTimer = setTimeout(() => done(false), forceKillConfirmMs);
-    }, timeoutMs);
-
-    proc.once('exit', () => done(true));
-
-    try {
-      if (IS_WIN && proc.pid) {
-        // proc.kill() on Windows only terminates the DIRECT child (cmd.exe for
-        // shell-wrapped spawns); its exit clears the force-kill timer, so the
-        // timeout taskkill never ran and grandchildren kept the port. Kill the
-        // whole tree up front instead.
-        execFile('taskkill.exe', ['/PID', String(proc.pid), '/T', '/F'], { windowsHide: true }, () => {});
-      }
-      if (!IS_WIN && proc.pid) {
-        try { process.kill(-proc.pid, 'SIGTERM'); } catch { /* process may not own a group */ }
-      }
-      proc.kill('SIGTERM');
-    } catch {
-      done(true);
-    }
-  });
-}
-
-function isPidAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function terminatePid(pid: number, timeoutMs = PID_TERM_TIMEOUT_MS): Promise<void> {
-  if (!isPidAlive(pid)) return;
-
-  try {
-    if (IS_WIN) {
-      // Tree-kill first — killing only the direct PID leaves grandchildren
-      // (node spawned via cmd.exe) holding the port. See terminateChildProcess.
-      execFile('taskkill.exe', ['/PID', String(pid), '/T', '/F'], { windowsHide: true }, () => {});
-    } else {
-      process.kill(pid, 'SIGTERM');
-    }
-  } catch {
-    return;
-  }
-
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    if (!isPidAlive(pid)) return;
-  }
-
-  try {
-    if (IS_WIN) {
-      execFile('taskkill.exe', ['/PID', String(pid), '/T', '/F'], { windowsHide: true }, () => {});
-      process.kill(pid);
-    }
-    else process.kill(pid, 'SIGKILL');
-  } catch { /* already dead */ }
-}
-
-export const _terminateChildProcess_forTest = terminateChildProcess;
+// Re-exported: these were part of this module's surface before the split.
+export { isMindosOwnedCommandLine, sanitizeChildEnv, _terminateChildProcess_forTest } from './process-kill';
 
 export interface ProcessManagerOptions {
   nodePath: string;
@@ -623,17 +491,34 @@ export class ProcessManager extends EventEmitter {
     });
   }
 
+  /**
+   * Whether child stdout/stderr should be mirrored into the main process log.
+   *
+   * This used to run unconditionally despite its "so DevTools shows crash
+   * output" comment: every Next.js request line went through a main-process
+   * console write (plus a synchronous appendFileSync under MINDOS_DESKTOP_CI_LOG),
+   * on the thread that also drives the UI.
+   */
+  private shouldPipeChildOutput(): boolean {
+    return Boolean(
+      this.opts.verbose ||
+      process.env.MINDOS_OPEN_DEVTOOLS === '1' ||
+      process.env.MINDOS_DESKTOP_CI_LOG ||
+      process.env.MINDOS_VERBOSE_CHILD_LOGS === '1',
+    );
+  }
+
   /** Forward child stdout/stderr so `MINDOS_OPEN_DEVTOOLS=1` terminal actually shows crash output. */
   private pipeChildOutput(proc: ChildProcess, label: string): void {
+    if (!this.shouldPipeChildOutput()) {
+      // stdout must still be drained or the pipe buffer fills and the child blocks.
+      proc.stdout?.resume?.();
+      return;
+    }
     const tag = `[MindOS:${label}]`;
     proc.stdout?.on('data', (chunk: Buffer) => {
       for (const line of chunk.toString().split('\n').filter(Boolean)) {
         console.log(tag, line);
-      }
-    });
-    proc.stderr?.on('data', (chunk: Buffer) => {
-      for (const line of chunk.toString().split('\n').filter(Boolean)) {
-        console.error(tag, line);
       }
     });
   }
@@ -698,7 +583,7 @@ export class ProcessManager extends EventEmitter {
       appendFileSync(logPath, entry + '\n', 'utf-8');
       // Keep log file bounded (~100KB)
       try {
-        const stat = require('fs').statSync(logPath);
+        const stat = statSync(logPath);
         if (stat.size > 100_000) {
           const lines = readFileSync(logPath, 'utf-8').split('\n');
           writeFileSync(logPath, lines.slice(-200).join('\n'), 'utf-8');
@@ -709,17 +594,25 @@ export class ProcessManager extends EventEmitter {
 
   private setupCrashHandler(proc: ChildProcess, which: 'web' | 'mcp'): void {
     this.pipeChildOutput(proc, which);
-    // Capture stderr for crash diagnostics — keep last ~2KB
+    // Capture stderr for crash diagnostics — keep last ~2KB.
+    // One listener does all three jobs (crash tail, per-process buffer, optional
+    // console mirror); there used to be three separate 'data' listeners on the
+    // same stream, each re-decoding and re-splitting every chunk.
     const stderrChunks: string[] = [];
+    const mirror = this.shouldPipeChildOutput();
+    const tag = `[MindOS:${which}]`;
     proc.stderr?.on('data', (chunk: Buffer) => {
-      stderrChunks.push(chunk.toString());
+      const text = chunk.toString();
+      stderrChunks.push(text);
       // Keep only last 10 chunks (~2KB) to avoid unbounded growth
       if (stderrChunks.length > 10) stderrChunks.shift();
-      // Also feed into the per-process stderr lines buffer
-      const lines = chunk.toString().split('\n').filter(Boolean);
+      const lines = text.split('\n').filter(Boolean);
       if (which === 'mcp') {
         this.mcpStderrLines.push(...lines);
         if (this.mcpStderrLines.length > 100) this.mcpStderrLines.splice(0, this.mcpStderrLines.length - 100);
+      }
+      if (mirror) {
+        for (const line of lines) console.error(tag, line);
       }
     });
     const handler = (code: number | null, signal: string | null) => {
@@ -879,223 +772,39 @@ export class ProcessManager extends EventEmitter {
     }
   }
 
-  // ── Child PID tracking (secondary safety net for orphan cleanup) ──
+  // ── Orphan cleanup (implementation in process-cleanup.ts) ──
 
-  private static childPidFile(): string {
-    return path.join(getDesktopConfigDir(), 'desktop-children.pid');
-  }
-
-  /** Write current child PIDs to disk so next launch can clean up orphans */
+  /** Write current child PIDs to disk so next launch can clean up orphans. */
   private writeChildPids(): void {
     const pids: number[] = [];
     if (this.webProcess?.pid) pids.push(this.webProcess.pid);
     if (this.mcpProcess?.pid) pids.push(this.mcpProcess.pid);
     if (pids.length === 0) return;
-    this.writePidList(pids);
+    writeChildPidList(pids);
   }
 
   private writePidList(pids: number[]): void {
-    try {
-      const pidFile = ProcessManager.childPidFile();
-      const dir = path.dirname(pidFile);
-      if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-      writeFileSync(pidFile, pids.join('\n'), 'utf-8');
-    } catch { /* best effort */ }
+    writeChildPidList(pids);
   }
 
-  /** Remove PID file on clean shutdown */
   private clearChildPids(): void {
-    const pidFile = ProcessManager.childPidFile();
-    try { if (existsSync(pidFile)) unlinkSync(pidFile); } catch { /* best effort */ }
+    clearChildPidFile();
   }
 
-  /**
-   * Kill orphaned child processes from a previous Desktop session that didn't shut down cleanly.
-   * Call once at app startup before creating a new ProcessManager.
-   */
-  static async cleanupOrphanedChildren(): Promise<void> {
-    try {
-      const pidFile = ProcessManager.childPidFile();
-      if (!existsSync(pidFile)) return;
-      const raw = readFileSync(pidFile, 'utf-8').trim();
-      if (!raw) return;
-      const pids = raw.split('\n').map(Number).filter(p => p > 0 && !isNaN(p));
-      for (const pid of pids) {
-        await ProcessManager.killIfNodeProcess(pid, 'orphaned child');
-      }
-      unlinkSync(pidFile);
-    } catch { /* non-critical */ }
+  /*
+    Kept as static entry points so callers (boot-heal, local-mode) and their
+    contracts keep reading ProcessManager.cleanupOrphanedChildren() — the
+    process layer's public surface did not change when the file was split.
+  */
+  static cleanupOrphanedChildren(): Promise<void> {
+    return cleanupOrphanedChildren();
   }
 
-  /**
-   * Kill orphaned CLI-started processes (mindos.pid) from a previous `mindos start` session.
-   * Desktop and CLI use separate PID files — both must be cleaned up on reinstall.
-   */
-  static async cleanupCliPidFile(): Promise<void> {
-    const cliPidPath = path.join(getDesktopConfigDir(), 'mindos.pid');
-    try {
-      if (!existsSync(cliPidPath)) return;
-      const raw = readFileSync(cliPidPath, 'utf-8').trim();
-      if (!raw) return;
-      const pids = raw.split('\n').map(Number).filter(p => p > 0 && !isNaN(p));
-      for (const pid of pids) {
-        await ProcessManager.killIfNodeProcess(pid, 'orphaned CLI');
-      }
-      unlinkSync(cliPidPath);
-    } catch { /* non-critical */ }
+  static cleanupCliPidFile(): Promise<void> {
+    return cleanupCliPidFile();
   }
 
-  /**
-   * Kill processes holding a specific port (fallback when PID files are missing/stale).
-   * Only kills node/next processes to avoid harming unrelated services.
-   * Uses platform-specific tools with cascading fallbacks:
-   *   macOS:   lsof → fuser
-   *   Linux:   lsof → ss → fuser
-   *   Windows: Get-NetTCPConnection (PowerShell)
-   */
-  static async killProcessesOnPort(port: number): Promise<void> {
-    try {
-      const pids = await ProcessManager.findPidsOnPort(port);
-      for (const pid of pids) {
-        await ProcessManager.killIfNodeProcess(pid, `port ${port} occupant`);
-      }
-    } catch { /* best effort */ }
-  }
-
-  /** Find PIDs listening on a given port — cross-platform with fallbacks */
-  private static async findPidsOnPort(port: number): Promise<number[]> {
-    const timeout = 3000;
-
-    if (process.platform === 'win32') {
-      const stop = desktopTelemetry.startTimer('desktop.port.find_pids', { port, method: 'powershell' });
-      try {
-        const { stdout } = await execFileAsync('powershell.exe', [
-          '-NoProfile', '-Command',
-          `(Get-NetTCPConnection -LocalPort ${port} -State Listen -ErrorAction SilentlyContinue).OwningProcess`,
-        ], { encoding: 'utf-8', timeout, windowsHide: true });
-        const pids = (stdout as string).trim().split(/\r?\n/).map(Number).filter((p: number) => p > 0 && !isNaN(p));
-        stop({ port, method: 'powershell', pidCount: pids.length, success: true });
-        return pids;
-      } catch {
-        stop({ port, method: 'powershell', pidCount: 0, success: false });
-        return [];
-      }
-    }
-
-    // Unix: try lsof → ss → fuser
-    {
-      const stop = desktopTelemetry.startTimer('desktop.port.find_pids', { port, method: 'lsof' });
-      try {
-        const { stdout } = await execFileAsync('lsof', [`-ti:${port}`], { encoding: 'utf-8', timeout, windowsHide: true });
-        if (stdout.trim()) {
-          const pids = stdout.trim().split('\n').map(Number).filter((p: number) => p > 0 && !isNaN(p));
-          stop({ port, method: 'lsof', pidCount: pids.length, success: true });
-          return pids;
-        }
-        stop({ port, method: 'lsof', pidCount: 0, success: true });
-      } catch {
-        stop({ port, method: 'lsof', pidCount: 0, success: false });
-      }
-    }
-
-    // Fallback: ss (Linux modern — not on macOS)
-    if (process.platform === 'linux') {
-      const stop = desktopTelemetry.startTimer('desktop.port.find_pids', { port, method: 'ss' });
-      try {
-        const { stdout } = await execFileAsync('ss', ['-tlnp', 'sport', '=', `:${port}`], { encoding: 'utf-8', timeout, windowsHide: true });
-        const pids: number[] = [];
-        for (const match of (stdout as string).matchAll(/pid=(\d+)/g)) {
-          const p = parseInt(match[1], 10);
-          if (p > 0) pids.push(p);
-        }
-        if (pids.length > 0) {
-          stop({ port, method: 'ss', pidCount: pids.length, success: true });
-          return pids;
-        }
-        stop({ port, method: 'ss', pidCount: 0, success: true });
-      } catch {
-        stop({ port, method: 'ss', pidCount: 0, success: false });
-      }
-    }
-
-    // Fallback: fuser (available on most Unix)
-    const stop = desktopTelemetry.startTimer('desktop.port.find_pids', { port, method: 'fuser' });
-    try {
-      let output = '';
-      let fuserSucceeded = true;
-      try {
-        const { stdout, stderr } = await execFileAsync('fuser', [`${port}/tcp`], { encoding: 'utf-8', timeout, windowsHide: true });
-        output = `${stdout}${stderr}`;
-      } catch (err) {
-        fuserSucceeded = false;
-        const e = err as { stdout?: string; stderr?: string };
-        output = `${e.stdout ?? ''}${e.stderr ?? ''}`;
-      }
-      const pids = output.match(/\d+/g)?.map(Number).filter((p: number) => p > 0 && p !== port) ?? [];
-      if (pids.length > 0) {
-        stop({ port, method: 'fuser', pidCount: pids.length, success: true });
-        return pids;
-      }
-      stop({ port, method: 'fuser', pidCount: 0, success: fuserSucceeded });
-    } catch {
-      stop({ port, method: 'fuser', pidCount: 0, success: false });
-    }
-
-    return [];
-  }
-
-  /**
-   * Verify a PID belongs to MindOS before killing it — prevents harming
-   * unrelated Node/Next processes when PID files are stale or ports collide.
-   * On Windows: uses PowerShell/wmic to check command line before killing.
-   * On Unix: uses ps -p to check command line.
-   */
-  private static async killIfNodeProcess(pid: number, label: string): Promise<void> {
-    const stop = desktopTelemetry.startTimer('desktop.port.kill_verify', { pid, label });
-    try {
-      process.kill(pid, 0); // check alive
-      const timeout = 3000;
-
-      if (process.platform === 'win32') {
-        try {
-          const { stdout } = await execFileAsync('powershell.exe', [
-            '-NoProfile', '-Command',
-            `(Get-CimInstance Win32_Process -Filter "ProcessId = ${pid}" -ErrorAction SilentlyContinue).CommandLine`,
-          ], { encoding: 'utf-8', timeout, windowsHide: true });
-          if (!isMindosOwnedCommandLine((stdout as string).trim())) {
-            stop({ pid, label, verifiedMindosProcess: false, success: true });
-            return;
-          }
-        } catch {
-          try {
-            const { stdout } = await execFileAsync('wmic', ['process', 'where', `ProcessId=${pid}`, 'get', 'CommandLine', '/format:value'], { encoding: 'utf-8', timeout, windowsHide: true });
-            if (!isMindosOwnedCommandLine((stdout as string).trim())) {
-              stop({ pid, label, verifiedMindosProcess: false, success: true });
-              return;
-            }
-          } catch {
-            stop({ pid, label, verifiedMindosProcess: false, success: false });
-            return;
-          }
-        }
-      } else {
-        try {
-          const { stdout } = await execFileAsync('ps', ['-p', String(pid), '-o', 'args='], { encoding: 'utf-8', timeout: 2000, windowsHide: true });
-          if (!isMindosOwnedCommandLine((stdout as string).trim())) {
-            stop({ pid, label, verifiedMindosProcess: false, success: true });
-            return;
-          }
-        } catch {
-          stop({ pid, label, verifiedMindosProcess: false, success: false });
-          return;
-        }
-      }
-
-      console.warn(`[MindOS] Killing ${label} process (PID ${pid})`);
-      await terminatePid(pid);
-      stop({ pid, label, verifiedMindosProcess: true, success: true });
-    } catch {
-      stop({ pid, label, verifiedMindosProcess: false, success: false });
-    }
+  static killProcessesOnPort(port: number): Promise<void> {
+    return killProcessesOnPort(port);
   }
 }

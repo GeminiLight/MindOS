@@ -81,6 +81,7 @@ function record(value: unknown): Record<string, unknown> {
 function readManifest(value: unknown, pluginId: string): PackageManifest {
   const data = record(value);
   if (data.id !== pluginId || typeof data.name !== 'string' || !data.name.trim() || data.name.length > 256
+    // eslint-disable-next-line no-control-regex -- rejecting control characters is the point of this check
     || /[\x00-\x1f\x7f\u202a-\u202e\u2066-\u2069]/.test(data.name)
     || typeof data.version !== 'string' || data.version.length > 64 || !/^\d+\.\d+\.\d+$/.test(data.version)) throw new Error('Invalid plugin package manifest.');
   if (data.minAppVersion !== undefined && (typeof data.minAppVersion !== 'string' || data.minAppVersion.length > 64)) throw new Error('Invalid package minAppVersion.');
@@ -100,6 +101,7 @@ function validatePreview(value: unknown, pluginId: string): PackagePreview {
   const assets = data.assets.map(value => {
     const asset = record(value);
     if (typeof asset.path !== 'string' || asset.path.length > 4096 || asset.path <= previous || asset.path === 'data.json'
+      // eslint-disable-next-line no-control-regex -- rejecting control characters is the point of this check
       || /[\\:\x00-\x1f]/.test(asset.path) || asset.path.split('/').some(part => !part || part === '.' || part === '..')
       || !Number.isSafeInteger(asset.size) || (asset.size as number) < 0 || (asset.size as number) > MAX_FILE
       || typeof asset.sha256 !== 'string' || !SHA256.test(asset.sha256)) throw new Error('Invalid plugin package asset metadata.');

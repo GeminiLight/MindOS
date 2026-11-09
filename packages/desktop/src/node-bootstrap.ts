@@ -7,7 +7,7 @@
  *
  * Platform support: macOS (arm64/x64), Linux (x64), Windows (arm64/x64).
  */
-import { createWriteStream, existsSync, mkdirSync, chmodSync, statSync, readFileSync, writeFileSync, symlinkSync, type WriteStream } from 'fs';
+import { createWriteStream, existsSync, mkdirSync, chmodSync, statSync, readFileSync, writeFileSync, symlinkSync, readdirSync, cpSync, type WriteStream } from 'fs';
 import { rm } from 'fs/promises';
 import { execFileSync, spawn } from 'child_process';
 import path from 'path';
@@ -172,11 +172,9 @@ export async function downloadNode(
     ], 120000);
     // Find extracted folder name and copy contents using Node.js API (xcopy is deprecated)
     const extractDir = path.join(tmpDir, 'node-extract');
-    const entries = require('fs').readdirSync(extractDir);
-    const nodeFolder = entries.find((e: string) => e.startsWith('node-'));
+    const nodeFolder = readdirSync(extractDir).find((e) => e.startsWith('node-'));
     if (nodeFolder) {
-      const { cpSync: cpSyncFn } = require('fs');
-      cpSyncFn(path.join(extractDir, nodeFolder), nodeDir, { recursive: true });
+      cpSync(path.join(extractDir, nodeFolder), nodeDir, { recursive: true });
     }
   }
 

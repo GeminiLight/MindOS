@@ -5,7 +5,7 @@
 <h1 align="center">MindOS</h1>
 
 <p align="center">
-  <strong>Human Thinks Here, Agents Act There.</strong>
+  <strong>Knowing and doing, each growing the other.</strong>
 </p>
 
 <p align="center">
@@ -24,7 +24,7 @@
   <a href="https://github.com/GeminiLight/MindOS/releases?q=clipper"><img src="https://img.shields.io/badge/Web_Clipper-Install-c8873a.svg?style=for-the-badge" alt="Web Clipper"></a>
 </p>
 
-MindOS is a local-first knowledge base for sharing durable context between you and the AI agents you use. **Think in one place. Let agents work from shared context.**
+MindOS is a local-first knowledge workspace for you and the AI agents you use. **You think here. Agents act on it. What they do comes back as experience you approve.**
 
 ---
 

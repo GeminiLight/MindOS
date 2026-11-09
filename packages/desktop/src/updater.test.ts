@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 
 const updaterMock = vi.hoisted(() => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- vi.hoisted runs before imports, so require is the only way in
   const { EventEmitter } = require('node:events') as typeof import('node:events');
   return {
     autoUpdater: Object.assign(new EventEmitter(), {

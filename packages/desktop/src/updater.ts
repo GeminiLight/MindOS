@@ -7,13 +7,25 @@ import { ipcMain, BrowserWindow, app, type IpcMainInvokeEvent } from 'electron';
 import semver from 'semver';
 import path from 'path';
 import { existsSync, readFileSync } from 'fs';
+import { MINDOS_LATEST_RELEASE_URL } from './public-urls';
 
-const MANUAL_DESKTOP_UPDATE_URL = 'https://github.com/GeminiLight/MindOS/releases/latest';
+const MANUAL_DESKTOP_UPDATE_URL = MINDOS_LATEST_RELEASE_URL;
 export const UPDATE_INSTALL_STALL_TIMEOUT_MS = 45_000;
+
+/**
+ * Stable reason codes so the renderer can localize. `reason` stays as English
+ * prose for logs and as a fallback for clients that do not know the code yet.
+ */
+export type ShellUpdateUnsupportedCode =
+  | 'linux-deb'
+  | 'linux-rpm'
+  | 'linux-pacman'
+  | 'linux-unknown-package';
 
 export interface ShellUpdateSupport {
   canInstall: boolean;
   reason?: string;
+  reasonCode?: ShellUpdateUnsupportedCode;
   manualUrl?: string;
 }
 
@@ -21,7 +33,19 @@ interface InstallUpdateResult {
   ok: boolean;
   phase?: 'installing';
   error?: string;
+  code?: ShellUpdateUnsupportedCode;
   manualUrl?: string;
+}
+
+/**
+ * Trigger a shell update check on demand (Help → Check for Updates…).
+ * Results arrive through the usual `update-available` / `update-error`
+ * broadcasts, so the Settings UI stays the single place that renders them.
+ */
+export function checkForUpdatesNow(): void {
+  autoUpdater.checkForUpdates().catch((err) => {
+    console.warn('[MindOS:updater] Manual check failed:', err?.message);
+  });
 }
 
 interface ShellUpdateSupportOptions {
@@ -66,6 +90,7 @@ export function getShellUpdateSupport(options: ShellUpdateSupportOptions = {}): 
   if (packageType === 'deb') {
     return {
       canInstall: false,
+      reasonCode: 'linux-deb',
       reason: 'Debian/Ubuntu package updates must be installed by downloading the latest .deb package.',
       manualUrl: MANUAL_DESKTOP_UPDATE_URL,
     };
@@ -73,6 +98,7 @@ export function getShellUpdateSupport(options: ShellUpdateSupportOptions = {}): 
   if (packageType === 'rpm' || packageType === 'pacman') {
     return {
       canInstall: false,
+      reasonCode: packageType === 'rpm' ? 'linux-rpm' : 'linux-pacman',
       reason: `${packageType} package updates must be installed with the system package manager.`,
       manualUrl: MANUAL_DESKTOP_UPDATE_URL,
     };
@@ -80,6 +106,7 @@ export function getShellUpdateSupport(options: ShellUpdateSupportOptions = {}): 
   if (!env.APPIMAGE) {
     return {
       canInstall: false,
+      reasonCode: 'linux-unknown-package',
       reason: 'This Linux install type cannot be updated in place. Download the latest Desktop build.',
       manualUrl: MANUAL_DESKTOP_UPDATE_URL,
     };
@@ -188,6 +215,7 @@ export function setupUpdater(opts?: UpdaterOptions): () => void {
       releaseNotes: info.releaseNotes,
       canInstall: support.canInstall,
       unsupportedReason: support.reason,
+      unsupportedCode: support.reasonCode,
       manualUrl: support.manualUrl,
     });
   };
@@ -265,6 +293,7 @@ export function setupUpdater(opts?: UpdaterOptions): () => void {
         version: updateVersion,
         canInstall: support.canInstall,
         unsupportedReason: support.reason,
+        unsupportedCode: support.reasonCode,
         manualUrl: support.manualUrl,
       };
     } catch (err) {
@@ -277,8 +306,8 @@ export function setupUpdater(opts?: UpdaterOptions): () => void {
     opts?.assertTrustedLocalRenderer?.(event, 'install-update');
     if (!support.canInstall) {
       const message = support.reason ?? 'This Desktop install cannot be updated in place.';
-      broadcast('update-error', { message });
-      return { ok: false, error: message, manualUrl: support.manualUrl };
+      broadcast('update-error', { message, code: support.reasonCode });
+      return { ok: false, error: message, code: support.reasonCode, manualUrl: support.manualUrl };
     }
     if (installInProgress) {
       return { ok: true, phase: 'installing' };

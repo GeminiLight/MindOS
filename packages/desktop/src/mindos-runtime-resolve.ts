@@ -114,8 +114,9 @@ export async function resolveLocalMindOsProjectRoot(
   if (policy === 'bundled-only' && !pick.projectRoot) {
     return {
       ok: false,
-      messageEn: 'Bundled MindOS runtime is missing or incomplete. Reinstall the Desktop app or set MINDOS_DEV_BUNDLED_ROOT for development.',
-      messageZh: '内置 MindOS 不完整或缺失。请重装桌面端，或在开发时设置 MINDOS_DEV_BUNDLED_ROOT。',
+      // Lead with what a user can do; the env var only matters in a source checkout.
+      messageEn: 'The built-in MindOS is missing or damaged. Reinstall the MindOS desktop app. (Developing from source? Set MINDOS_DEV_BUNDLED_ROOT.)',
+      messageZh: '内置的 MindOS 缺失或已损坏，请重新安装 MindOS 桌面应用。（从源码开发时，可以设置 MINDOS_DEV_BUNDLED_ROOT。）',
     };
   }
 
@@ -123,9 +124,9 @@ export async function resolveLocalMindOsProjectRoot(
     return {
       ok: false,
       messageEn:
-        'user-only policy: no runnable global @geminilight/mindos (install and build, or fix minMindOsVersion / strictCompat).',
+        'MindOS is set to use only a global install, but no runnable @geminilight/mindos was found. Install and build it, or check minMindOsVersion / strictCompat.',
       messageZh:
-        '已设为仅使用全局安装：当前没有可运行的 @geminilight/mindos（请安装并完成构建，或检查 minMindOsVersion / strictCompat）。',
+        '已设置为只使用全局安装的 MindOS，但没有找到可以运行的 @geminilight/mindos。请先安装并构建，或检查 minMindOsVersion / strictCompat 设置。',
     };
   }
 

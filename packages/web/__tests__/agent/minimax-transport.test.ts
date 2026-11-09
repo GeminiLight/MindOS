@@ -20,6 +20,16 @@ type SerializedBody = {
   [key: string]: unknown;
 };
 
+/**
+ * Compare without the query string: pi 1.5 routes Anthropic-protocol providers
+ * through the SDK's beta namespace, which appends `?beta=true`. What these
+ * tests guard is the host and path MiniMax traffic is sent to.
+ */
+function requestTarget(url: string): string {
+  const parsed = new URL(url);
+  return `${parsed.origin}${parsed.pathname}`;
+}
+
 describe('MiniMax serialized requests', () => {
   let home: string;
   let configPath: string;
@@ -99,7 +109,7 @@ describe('MiniMax serialized requests', () => {
       const response = await completeWithPiModels(cfg.model, prompt, { apiKey: cfg.apiKey });
       expect(response.stopReason).toBe('stop');
       expect(requests).toHaveLength(1);
-      expect(requests[0].url).toBe(`https://${host}/anthropic/v1/messages`);
+      expect(requestTarget(requests[0].url)).toBe(`https://${host}/anthropic/v1/messages`);
       expect(requests[0].body.model).toBe('MiniMax-M3.1-Flash');
       expect(requests[0].body.thinking?.type).not.toBe('disabled');
       expect(requests[0].body.output_config).toBeUndefined(); // Provider default: max.
@@ -166,7 +176,7 @@ describe('MiniMax serialized requests', () => {
     const cfg = await resolve();
     const { completeWithPiModels } = await import('@/lib/agent/pi-models');
     expect((await completeWithPiModels(cfg.model, prompt, { apiKey: cfg.apiKey })).stopReason).toBe('stop');
-    expect(requests[0].url).toBe('https://custom.example/prefix/anthropic/v1/messages');
+    expect(requestTarget(requests[0].url)).toBe('https://custom.example/prefix/anthropic/v1/messages');
     expect(requests[0].body.model).toBe(model);
     expect(cfg.model.compat?.forceAdaptiveThinking).toBeUndefined();
     expect(cfg.model.thinkingLevelMap?.off).not.toBeNull();

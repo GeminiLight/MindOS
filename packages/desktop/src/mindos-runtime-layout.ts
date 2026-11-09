@@ -22,6 +22,18 @@ export function resolveWebAppDir(root: string): string {
   return existsSync(v1AppDir) ? v1AppDir : path.join(root, 'app');
 }
 
+/**
+ * True when a directory carries Web sources a build could turn into a runtime.
+ *
+ * The connect window used to treat "installed but no .next" as buildable,
+ * which offered a Build button for published shim packages that ship no Web
+ * sources at all and can never satisfy it.
+ */
+export function hasBuildableWebSources(root: string): boolean {
+  const webDir = resolveWebAppDir(root);
+  return existsSync(path.join(webDir, 'package.json')) && existsSync(path.join(webDir, 'app'));
+}
+
 export function resolveMcpDir(root: string): string {
   const productMcpDir = path.join(root, 'dist', 'protocols', 'mcp-server');
   if (existsSync(productMcpDir)) return productMcpDir;

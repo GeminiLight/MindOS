@@ -16,8 +16,31 @@ import {
   registerContextAsset,
   removeContextAsset,
 } from './registry.js';
+import type { ContextAssetKind } from './types.js';
+import {
+  USER_PREFERENCES_PATH,
+  appendUserPreference,
+  readUserPreferences,
+  removeUserPreferences,
+  writeUserPreferences,
+} from '../preferences/index.js';
 
-export type EchoPromotionKind = 'playbook' | 'practice';
+export const ECHO_PROMOTION_KINDS = ['agreement', 'playbook', 'practice'] as const;
+export type EchoPromotionKind = (typeof ECHO_PROMOTION_KINDS)[number];
+
+/**
+ * Entry points used to coerce unknown kinds to 'playbook' with a ternary, so
+ * adding 'agreement' to the union silently filed agreements as playbooks —
+ * in the wrong place, with no error anywhere. Rejecting is the only safe
+ * default for a value that decides where a write lands.
+ */
+export function normalizeEchoPromotionKind<T extends EchoPromotionKind = EchoPromotionKind>(
+  value: unknown,
+  allowed: readonly T[] = ECHO_PROMOTION_KINDS as unknown as readonly T[],
+): T {
+  if (typeof value === 'string' && (allowed as readonly string[]).includes(value)) return value as T;
+  throw new Error(`Echo promotion candidate kind must be one of: ${allowed.join(', ')}.`);
+}
 
 export type EchoPromotionMessageRef = {
   messageIndex: number;
@@ -60,6 +83,10 @@ export type ReviewEchoPromotionInput = {
 };
 
 const REVIEW_DIR = '.mindos/echo/promotion-reviews';
+const PREFERENCES_HEADING = '## Preferences';
+
+
+
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$/;
 const LOCK_ATTEMPTS = 50;
 const LOCK_WAIT_MS = 10;
@@ -107,39 +134,30 @@ export function reviewEchoPromotionCandidate(
 
     const sourceRef = `echo-card:${candidate.id}`;
     const assetId = `asset-${sha256(sourceRef).slice(0, 20)}`;
-    const targetPath = promotionTargetPath(candidate);
-    const markdown = renderPromotionMarkdown(candidate, evidence, assetId, reviewedAt);
-    const assetKind = candidate.kind === 'playbook' ? 'echo-playbook' : 'echo-practice';
-    const target = resolveExistingSafe(mindRoot, targetPath);
-    mkdirSync(path.dirname(target), { recursive: true });
+    const written = candidate.kind === 'agreement'
+      ? prepareAgreementWrite(mindRoot, candidate, reviewedAt)
+      : prepareNoteWrite(mindRoot, candidate, evidence, assetId, reviewedAt);
 
     const priorAssets = listContextAssets(mindRoot, { sourceRef });
     if (priorAssets.some((asset) => (
       asset.id !== assetId
-      || asset.kind !== assetKind
-      || asset.path !== targetPath
-      || asset.contentHash !== sha256(markdown)
+      || asset.kind !== written.assetKind
+      || asset.path !== written.targetPath
+      || asset.contentHash !== sha256(written.content)
     ))) {
       throw new Error(`Echo promotion context asset conflicts with candidate: ${candidate.id}`);
     }
-    let createdNote = false;
+    let rollback: (() => void) | null = null;
     try {
-      if (existsSync(target)) {
-        if (!statSync(target).isFile() || readFileSync(target, 'utf-8') !== markdown) {
-          throw new Error(`Echo promotion target already exists with different content: ${targetPath}`);
-        }
-      } else {
-        writeFileSync(target, markdown, { encoding: 'utf-8', mode: 0o600, flag: 'wx' });
-        createdNote = true;
-      }
+      rollback = written.apply();
 
       const asset = registerContextAsset(mindRoot, {
         id: assetId,
-        kind: assetKind,
+        kind: written.assetKind,
         status: 'active',
         title: candidate.title,
-        path: targetPath,
-        contentHash: sha256(markdown),
+        path: written.targetPath,
+        contentHash: sha256(written.content),
         source: { kind: 'echo-card', ref: sourceRef },
         metadata: {
           sourceCardId: candidate.id,
@@ -154,13 +172,13 @@ export function reviewEchoPromotionCandidate(
         candidateHash,
         ...(note ? { note } : {}),
         assetId: asset.id,
-        targetPath,
+        targetPath: written.targetPath,
       };
       writeReviewFile(mindRoot, reviewPath, review);
       return review;
     } catch (error) {
-      if (createdNote) {
-        try { unlinkSync(target); } catch { /* best-effort rollback */ }
+      if (rollback) {
+        try { rollback(); } catch { /* best-effort rollback */ }
       }
       if (priorAssets.length === 0) {
         try { removeContextAsset(mindRoot, assetId, now); } catch { /* best-effort rollback */ }
@@ -169,6 +187,97 @@ export function reviewEchoPromotionCandidate(
     }
   });
 }
+
+type PreparedPromotionWrite = {
+  targetPath: string;
+  assetKind: ContextAssetKind;
+  /** Hashed for the context asset — the bytes this promotion owns, not the whole file. */
+  content: string;
+  /** Performs the write and returns the undo for it. */
+  apply: () => () => void;
+};
+
+/** Playbooks and practices each own a brand new Markdown note. Unchanged behaviour. */
+function prepareNoteWrite(
+  mindRoot: string,
+  candidate: EchoPromotionCandidate,
+  evidence: ReturnType<typeof collectEvidence>,
+  assetId: string,
+  reviewedAt: string,
+): PreparedPromotionWrite {
+  const targetPath = promotionTargetPath(candidate);
+  const markdown = renderPromotionMarkdown(candidate, evidence, assetId, reviewedAt);
+  const target = resolveExistingSafe(mindRoot, targetPath);
+  mkdirSync(path.dirname(target), { recursive: true });
+
+  return {
+    targetPath,
+    assetKind: candidate.kind === 'playbook' ? 'echo-playbook' : 'echo-practice',
+    content: markdown,
+    apply: () => {
+      if (existsSync(target)) {
+        if (!statSync(target).isFile() || readFileSync(target, 'utf-8') !== markdown) {
+          throw new Error(`Echo promotion target already exists with different content: ${targetPath}`);
+        }
+        return () => { /* pre-existing identical note: nothing to undo */ };
+      }
+      writeFileSync(target, markdown, { encoding: 'utf-8', mode: 0o600, flag: 'wx' });
+      return () => { try { unlinkSync(target); } catch { /* best-effort rollback */ } };
+    },
+  };
+}
+
+/**
+ * Agreements append one bullet to `.mindos/user-preferences.md`.
+ *
+ * Why that file rather than a note of its own: it is the only path that reaches
+ * every agent deterministically — the bootstrap handler ships it as
+ * `user_skill_rules` and the web turn runner inlines it — so an approved
+ * agreement takes effect on the next run without depending on search recall.
+ * Only the rule itself is written; the evidence stays in the context asset
+ * registry, because this file is injected into every agent's context window and
+ * must stay short.
+ */
+function prepareAgreementWrite(
+  mindRoot: string,
+  candidate: EchoPromotionCandidate,
+  reviewedAt: string,
+): PreparedPromotionWrite {
+  const marker = agreementMarker(candidate.id);
+  const rule = candidate.content;
+
+  return {
+    targetPath: USER_PREFERENCES_PATH,
+    assetKind: "echo-agreement",
+    // Hash the bullet this promotion owns, not the whole shared file: other
+    // writers legitimately change the rest of it.
+    content: `- ${rule} ${marker}`,
+    apply: () => {
+      const before = readUserPreferences(mindRoot);
+      const result = appendUserPreference(mindRoot, {
+        rule,
+        marker,
+        category: "Echo agreements",
+      }, new Date(reviewedAt));
+      if (!result.appended) return () => { /* already recorded: leave it alone */ };
+      return () => {
+        // Restore what was there before. Another writer landing in between is
+        // prevented by the shared lock, not by this rollback.
+        try {
+          if (before === null) removeUserPreferences(mindRoot);
+          else writeUserPreferences(mindRoot, before);
+        } catch { /* best-effort rollback */ }
+      };
+    },
+  };
+}
+/** The bare token; the preferences writer wraps it in the HTML comment. */
+function agreementMarker(cardId: string): string {
+  return `echo-card:${cardId}`;
+}
+
+
+
 
 export function readEchoPromotionReview(
   mindRoot: string,
@@ -299,9 +408,7 @@ function collectEvidence(candidate: EchoPromotionCandidate) {
 function normalizeCandidate(value: EchoPromotionCandidate): EchoPromotionCandidate {
   if (!value || typeof value !== 'object') throw new Error('Echo promotion candidate is required.');
   const id = normalizeId(value.id);
-  if (value.kind !== 'playbook' && value.kind !== 'practice') {
-    throw new Error('Echo promotion candidate kind must be playbook or practice.');
-  }
+  const kind = normalizeEchoPromotionKind(value.kind);
   const title = requiredText(value.title, 200, 'title');
   const content = requiredText(value.content, 8_000, 'content');
   if (!value.source || !Array.isArray(value.source.sessions)) {
@@ -317,7 +424,7 @@ function normalizeCandidate(value: EchoPromotionCandidate): EchoPromotionCandida
   }));
   return {
     id,
-    kind: value.kind,
+    kind,
     title,
     content,
     source: {

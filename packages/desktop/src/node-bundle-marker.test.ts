@@ -2,7 +2,6 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import os from 'os';
 import path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
-// eslint-disable-next-line import/no-relative-packages
 import {
   NODE_BUNDLE_MARKER_FILE,
   isBundledNodeCurrent,

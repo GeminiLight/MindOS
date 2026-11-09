@@ -8,6 +8,12 @@ let latestDraft = '';
 let timer: ReturnType<typeof setTimeout> | undefined;
 let pluginFrame: HTMLIFrameElement | undefined;
 let pluginOrigin = '';
+/**
+ * Status strings arrive from main with the `init` message. They used to be
+ * hardcoded Chinese here, so an English-locale user saw a Chinese status line.
+ */
+let strings: Record<string, string> = {};
+const s = (key: string, fallback: string) => strings[key] || fallback;
 const send = (kind: string, content?: string) => ipcRenderer.send(CHANNEL, { kind, content });
 
 // All trusted chrome lives in the isolated preload world. Nothing is exposed via
@@ -22,6 +28,7 @@ window.addEventListener('DOMContentLoaded', () => {
   ipcRenderer.on(CHANNEL, (_event, message) => {
     if (message.kind === 'init' && !initialized) {
       initialized = true; latestDraft = message.document.content;
+      strings = message.strings || {};
       refresh.hidden = !message.vault;
       document.querySelector('#title')!.textContent = `${message.package.manifest.name} · ${message.document.filePath}`;
       const frame = document.createElement('iframe'); frame.title = 'Obsidian plugin'; frame.sandbox.add('allow-scripts', 'allow-same-origin');
@@ -31,7 +38,7 @@ window.addEventListener('DOMContentLoaded', () => {
         if (event.source !== frame.contentWindow || event.origin !== pluginOrigin) return;
         const data = event.data;
         if (data?.kind === 'draft' && typeof data.content === 'string' && data.content.length <= 2 * 1024 * 1024) {
-          latestDraft = data.content; status.textContent = '未保存';
+          latestDraft = data.content; status.textContent = s('unsaved', 'Unsaved');
           if (!timer) timer = setTimeout(flush, 50);
         } else if (data?.kind === 'captured' && typeof data.id === 'string' && typeof data.content === 'string' && data.content.length <= 2 * 1024 * 1024) {
           clearTimeout(timer); timer = undefined; latestDraft = data.content;
@@ -58,8 +65,8 @@ window.addEventListener('DOMContentLoaded', () => {
       const snapshot = message.snapshot;
       button.disabled = !loaded || message.saving || message.refreshing || snapshot.status === 'closed' || snapshot.status === 'conflict';
       refresh.disabled = !loaded || message.saving || message.refreshing || snapshot.status === 'closed';
-      status.textContent = message.error || (snapshot.status === 'conflict' ? '保存冲突，请保留草稿并重新打开' : message.saving ? '保存中…'
-        : message.refreshing ? '刷新知识库中…' : snapshot.dirty || latestDraft !== snapshot.content ? '未保存' : '已保存');
+      status.textContent = message.error || (snapshot.status === 'conflict' ? s('conflict', 'Save conflict — keep your draft and reopen the note') : message.saving ? s('saving', 'Saving…')
+        : message.refreshing ? s('refreshing', 'Refreshing vault…') : snapshot.dirty || latestDraft !== snapshot.content ? s('unsaved', 'Unsaved') : s('saved', 'Saved'));
     }
   });
   send('ready');

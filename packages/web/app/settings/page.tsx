@@ -16,7 +16,7 @@ const SETTINGS_TABS = new Set<Tab>([
   'update',
   'uninstall',
 ]);
-const PLUGIN_PANELS = new Set<PluginPanel>(['installed', 'community', 'import', 'surfaces']);
+const PLUGIN_PANELS = new Set<PluginPanel>(['installed', 'import', 'surfaces']);
 
 function parseSettingsTab(tab: string | undefined): Tab | undefined {
   return tab && SETTINGS_TABS.has(tab as Tab) ? (tab as Tab) : undefined;

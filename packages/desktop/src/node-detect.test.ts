@@ -22,16 +22,31 @@ describe('node-detect command execution', () => {
     expect(source).not.toContain('`${sh} -il -c "which node"');
   });
 
+  it('never blocks the Electron main thread with a synchronous version probe', () => {
+    const source = fs.readFileSync(path.join(__dirname, 'node-detect.ts'), 'utf-8');
+
+    // execFileSync here froze the UI thread for up to 3s per candidate, and
+    // getNodePath() probes up to eight candidates on a cold start.
+    expect(source).not.toMatch(/execFileSync\s*\(/);
+    expect(source).not.toMatch(/import\s*\{[^}]*execFileSync/);
+    expect(source).toContain('async function checkNodeVersion(');
+  });
+
   it('skips an incompatible private Node runtime during path detection', async () => {
     const privateNode = '/private/mindos/node';
-    const execFileSync = vi.fn((command: string) => {
-      if (command === privateNode) return 'v22.16.0\n';
-      throw new Error(`unexpected version check: ${command}`);
+    const versionChecks: string[] = [];
+    const execFile = vi.fn((command: string, args: string[], _options: unknown, callback?: (...args: unknown[]) => void) => {
+      const done = typeof _options === 'function' ? (_options as (...args: unknown[]) => void) : callback;
+      if (args?.[0] === '--version') {
+        versionChecks.push(command);
+        if (command === privateNode) {
+          done?.(null, { stdout: 'v22.16.0\n', stderr: '' });
+          return;
+        }
+      }
+      done?.(new Error('not found'), { stdout: '', stderr: '' });
     });
-    const execFile = vi.fn((_command, _args, _options, callback) => {
-      callback(new Error('not found'), '', '');
-    });
-    vi.doMock('child_process', () => ({ execFile, execFileSync }));
+    vi.doMock('child_process', () => ({ execFile }));
     vi.doMock('./node-bootstrap', () => ({
       getBundledNodePath: () => '/bundled/node',
       getPrivateNodePath: () => privateNode,
@@ -49,10 +64,6 @@ describe('node-detect command execution', () => {
     const { getNodePath } = await import('./node-detect');
 
     expect(await getNodePath()).not.toBe(privateNode);
-    expect(execFileSync).toHaveBeenCalledWith(
-      privateNode,
-      ['--version'],
-      expect.objectContaining({ encoding: 'utf-8' }),
-    );
+    expect(versionChecks).toContain(privateNode);
   });
 });

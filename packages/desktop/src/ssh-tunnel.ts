@@ -3,7 +3,8 @@
  * Used by Remote mode to securely connect to MindOS servers without exposing ports.
  */
 import { ChildProcess, execFile, execFileSync, spawn } from 'child_process';
-import { readFileSync, existsSync, writeFileSync, unlinkSync } from 'fs';
+import { readFileSync, existsSync, writeFileSync, unlinkSync, readdirSync } from 'fs';
+import net from 'net';
 import { randomBytes } from 'crypto';
 import { promisify } from 'util';
 import path from 'path';
@@ -237,8 +238,7 @@ function parseSshConfigFile(filePath: string, visited: Set<string>): SshHost[] {
           const base = path.basename(absPattern);
           const regex = new RegExp('^' + base.replace(/\./g, '\\.').replace(/\*/g, '.*') + '$');
           if (existsSync(dir)) {
-            const { readdirSync: rd } = require('fs');
-            for (const f of rd(dir) as string[]) {
+            for (const f of readdirSync(dir)) {
               if (regex.test(f)) {
                 hosts.push(...parseSshConfigFile(path.join(dir, f), visited));
               }
@@ -455,7 +455,6 @@ export class SshTunnel {
         if (settled || this.stopped) return;
         // TCP probe: try to connect to the forwarded local port
         try {
-          const net = require('net');
           const probeOk = await new Promise<boolean>((probeResolve) => {
             const sock = net.createConnection({ host: '127.0.0.1', port: this.localPort, timeout: 3000 });
             sock.on('connect', () => { sock.destroy(); probeResolve(true); });

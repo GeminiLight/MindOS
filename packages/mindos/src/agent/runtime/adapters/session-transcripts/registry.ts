@@ -1,4 +1,5 @@
 import { CLAUDE_SESSION_TRANSCRIPT_ADAPTER } from './adapters/claude.js';
+import { CODEX_SESSION_TRANSCRIPT_ADAPTER } from './adapters/codex.js';
 import { CODEBUDDY_SESSION_TRANSCRIPT_ADAPTER } from './adapters/codebuddy-code.js';
 import { GEMINI_SESSION_TRANSCRIPT_ADAPTER } from './adapters/gemini.js';
 import { KIMI_SESSION_TRANSCRIPT_ADAPTER } from './adapters/kimi.js';
@@ -22,6 +23,7 @@ export const RUNTIME_SESSION_TRANSCRIPT_ADAPTERS: readonly RuntimeSessionTranscr
   GEMINI_SESSION_TRANSCRIPT_ADAPTER,
   OPENCODE_SESSION_TRANSCRIPT_ADAPTER,
   CLAUDE_SESSION_TRANSCRIPT_ADAPTER,
+  CODEX_SESSION_TRANSCRIPT_ADAPTER,
   QWEN_SESSION_TRANSCRIPT_ADAPTER,
   CODEBUDDY_SESSION_TRANSCRIPT_ADAPTER,
   OPENCLAW_SESSION_TRANSCRIPT_ADAPTER,
@@ -40,6 +42,7 @@ const RUNTIME_SESSION_TRANSCRIPT_TARGETS: readonly RuntimeSessionTranscriptTarge
   { adapterId: 'gemini-cli', cli: 'gemini', runtime: { id: 'gemini', name: 'Gemini', kind: 'acp' } },
   { adapterId: 'opencode', cli: 'opencode', runtime: { id: 'opencode', name: 'OpenCode', kind: 'acp' } },
   { adapterId: 'claude-code', cli: 'claude', runtime: { id: 'claude', name: 'Claude Code', kind: 'claude' } },
+  { adapterId: 'codex', cli: 'codex', runtime: { id: 'codex', name: 'Codex', kind: 'acp' } },
   { adapterId: 'qwen-code', cli: 'qwen-code', runtime: { id: 'qwen-code', name: 'Qwen Code', kind: 'acp' } },
   { adapterId: 'codebuddy-code', cli: 'codebuddy', runtime: { id: 'codebuddy', name: 'CodeBuddy', kind: 'acp' } },
   { adapterId: 'openclaw', cli: 'openclaw', runtime: { id: 'openclaw', name: 'OpenClaw', kind: 'acp' } },

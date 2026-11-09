@@ -10,6 +10,7 @@ import {
 import type { ToolCallPart } from '@/lib/types';
 import type { LucideIcon } from 'lucide-react';
 import AskUserQuestionBlock from './AskUserQuestionBlock';
+import ToolCallDiffView from './ToolCallDiffView';
 import { requestPendingAgentActionsRefresh } from '@/hooks/usePendingAgentActions';
 import { redactSensitiveObject, redactSensitiveText } from '@geminilight/mindos/foundation/security/redaction';
 
@@ -592,6 +593,10 @@ export default function ToolCallBlock({ part }: { part: ToolCallPart }) {
   const displayPart = derivedUserQuestion && derivedUserQuestion !== part.userQuestion
     ? { ...part, userQuestion: derivedUserQuestion }
     : part;
+  // MindOS tools embed their diff in the output text; external agents report it
+  // as structured `tool_diff` payloads. Structured diffs win when both exist.
+  const structuredDiffs = displayPart.diffs ?? [];
+  const hasStructuredDiff = structuredDiffs.length > 0;
   const hasDiff = DIFF_TOOLS.has(displayPart.toolName);
   const hasUserQuestion = isAskUserQuestionToolName(displayPart.toolName) || Boolean(displayPart.userQuestion);
   const hasNativeRuntimeTool = isNativeRuntimeTool(displayPart);
@@ -679,6 +684,8 @@ export default function ToolCallBlock({ part }: { part: ToolCallPart }) {
               output={displayPart.output}
               running={displayPart.state === 'running'}
             />
+          ) : hasStructuredDiff ? (
+            <ToolCallDiffView diffs={structuredDiffs} />
           ) : hasDiff && isDone && parsed.diffLines.length > 0 ? (
             <div className="max-h-64 overflow-y-auto">
               {parsed.diffLines.map((line, idx) => (

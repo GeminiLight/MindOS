@@ -1,12 +1,12 @@
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
-import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createMindosPiCodingAgentRuntime, type MindosPiAgentRuntime, type MindosPiCodingAgentRuntimeHostServices, type MindosPiCodingAgentRuntimeOptions } from '../agent/mindos-pi/index.js';
 import { createMindosAgentPermissionPolicy } from '../agent/mindos-pi/permission/index.js';
 import { runWithMindosKbExtensionHost, runWithKbPermissionPolicy } from '../agent/mindos-pi/extension/kb-extension.js';
 import { buildMindosSystemPrompt } from '../agent/prompt/index.js';
 import { nativeImport } from '../foundation/native-import.js';
+import { installMindosPiAgentDir } from '../foundation/pi-agent-dir/index.js';
 import { applyMiniMaxModelCompatibility } from '../agent/mindos-pi/minimax-model.js';
 import { MINDOS_PROVIDER_PRESETS, REQUESTY_DEFAULT_BASE_URL } from './provider-settings.js';
 import { getSkillRootsFromRuntime, readRuntimeSettings, type MindosRuntimeSettings } from './runtime.js';
@@ -196,7 +196,7 @@ export async function createStandalonePiRuntime(input: StandalonePiRuntimeInput)
     messages: input.messages,
     turnPrompt: input.turnPrompt,
     systemPrompt: buildMindosSystemPrompt({ mindRoot: input.mindRoot, environment: { projectRoot: runtimeRoot, cwd: workDir } }),
-    projectRoot: runtimeRoot, agentDir: path.join(homeDir, '.pi'), mindRoot: input.mindRoot, workDir,
+    projectRoot: runtimeRoot, agentDir: installMindosPiAgentDir({ homeDir }), mindRoot: input.mindRoot, workDir,
     agentConfig: input.agentConfig, serverSettings: settings,
     providerOverride: input.providerOverride, modelOverride: input.modelOverride, runtimeSession: input.runtimeSession,
     additionalSkillPaths: getSkillRootsFromRuntime({ mindRoot: input.mindRoot, runtimeRoot, homeDir, settings }).map(root => root.path).filter(existsSync),

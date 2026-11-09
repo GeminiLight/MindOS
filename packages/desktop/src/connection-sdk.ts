@@ -3,11 +3,27 @@
  * Zero DOM dependency — only uses fetch (available in Node 22+, browsers, Capacitor, Electron).
  */
 
+/**
+ * Stable failure codes. The renderer maps these to localized strings (see
+ * i18n/index.translateFailure) — raw English fetch errors used to leak straight
+ * into the Chinese connect UI.
+ */
+export type ConnectErrorCode =
+  | 'errEmptyAddress'
+  | 'errInvalidAddress'
+  | 'errTimeout'
+  | 'errRefused'
+  | 'errHttpStatus';
+
 /** Health check result from testConnection() */
 export interface HealthCheckResult {
   status: 'online' | 'offline' | 'not-mindos' | 'error';
   version?: string;
   authRequired?: boolean;
+  /** Localizable failure code — prefer this over `error` when rendering. */
+  code?: ConnectErrorCode;
+  params?: Record<string, string | number>;
+  /** Raw diagnostic text; kept for logs and as a last-resort fallback. */
   error?: string;
 }
 
@@ -47,8 +63,9 @@ export function normalizeAddress(input: string): string {
  * Calls GET {address}/api/health with a 5-second timeout.
  */
 export async function testConnection(address: string): Promise<HealthCheckResult> {
+  if (!address.trim()) return { status: 'error', code: 'errEmptyAddress', error: 'Empty address' };
   const url = normalizeAddress(address);
-  if (!url) return { status: 'error', error: 'Empty address' };
+  if (!url) return { status: 'error', code: 'errInvalidAddress', error: 'Invalid address' };
 
   try {
     const ctrl = new AbortController();
@@ -61,7 +78,12 @@ export async function testConnection(address: string): Promise<HealthCheckResult
     clearTimeout(timer);
 
     if (!res.ok) {
-      return { status: 'error', error: `HTTP ${res.status}` };
+      return {
+        status: 'error',
+        code: 'errHttpStatus',
+        params: { status: res.status },
+        error: `HTTP ${res.status}`,
+      };
     }
 
     const data = (await res.json()) as {
@@ -80,13 +102,16 @@ export async function testConnection(address: string): Promise<HealthCheckResult
       authRequired: data.authRequired,
     };
   } catch (err: unknown) {
-    if (err instanceof DOMException && err.name === 'AbortError') {
-      return { status: 'offline', error: 'Connection timed out' };
+    // AbortError arrives as a DOMException in browsers and (depending on the
+    // runtime) may not extend Error — match on `name` rather than the class.
+    const name = (err as { name?: unknown } | null)?.name;
+    if (name === 'AbortError' || name === 'TimeoutError') {
+      return { status: 'offline', code: 'errTimeout', error: 'Connection timed out' };
     }
-    // Node.js abort error
-    if (err instanceof Error && err.name === 'AbortError') {
-      return { status: 'offline', error: 'Connection timed out' };
-    }
-    return { status: 'offline', error: err instanceof Error ? err.message : 'Connection refused' };
+    return {
+      status: 'offline',
+      code: 'errRefused',
+      error: err instanceof Error ? err.message : 'Connection refused',
+    };
   }
 }

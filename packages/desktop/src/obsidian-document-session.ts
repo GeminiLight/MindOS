@@ -104,6 +104,7 @@ export async function createObsidianDocumentSession(options: ObsidianDocumentSes
   const url = managedObsidianBaseUrl(options.baseUrl);
   const { filePath, pluginId, token } = options;
   if (typeof filePath !== 'string' || filePath.length > 1024 || !/\.md$/i.test(filePath)
+    // eslint-disable-next-line no-control-regex -- rejecting control characters is the point of this check
     || /[\\:\x00-\x1f]/.test(filePath) || filePath.split('/').some(part => !part || part.startsWith('.'))) {
     throw new Error('Invalid approved Markdown document path.');
   }

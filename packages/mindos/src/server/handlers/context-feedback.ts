@@ -9,7 +9,7 @@ import {
   type ContextFeedbackSignal,
   type ContextFeedbackStatus,
 } from '../../knowledge/context-feedback/index.js';
-import { listContextAssets, reviewEchoPromotionCandidate } from '../../knowledge/context-assets/index.js';
+import { listContextAssets, normalizeEchoPromotionKind, reviewEchoPromotionCandidate } from '../../knowledge/context-assets/index.js';
 import { json, type MindosServerResponse } from '../response.js';
 
 export type ContextFeedbackHandlerServices = { mindRoot: string };
@@ -94,7 +94,9 @@ export async function handleContextFeedbackPost(
       const candidate = buildEchoPromotionCandidateFromCapsule(services.mindRoot, {
         capsuleId: stringValue(body.capsuleId),
         candidateId: stringValue(body.candidateId),
-        kind: body.kind === 'practice' ? 'practice' : 'playbook',
+        // A run capsule carries no session quotes, so it cannot ground an
+        // agreement; reject rather than silently refile it as a playbook.
+        kind: normalizeEchoPromotionKind(body.kind, ['playbook', 'practice']),
         title: stringValue(body.title),
         content: stringValue(body.content),
         evidence: Array.isArray(body.evidence)

@@ -2,6 +2,7 @@ import { execFileSync, spawn as nodeSpawn, type ChildProcess } from 'node:child_
 import { randomUUID } from 'node:crypto';
 import { deleteProcessGlobal, getProcessGlobal } from '../global-state.js';
 import { CHILD_KILL_GRACE_MS } from './child-process.js';
+import { toHostChildEnv } from '../../foundation/pi-agent-dir/index.js';
 
 /**
  * Child-process supervisor shared by every runtime bridge that spawns a local
@@ -175,7 +176,9 @@ export function spawnSupervisedProcess(spec: SupervisedProcessSpec): SupervisedP
     detached: true,
     shell: spec.shell ?? isWin,
     ...(spec.cwd ? { cwd: spec.cwd } : {}),
-    ...(spec.env ? { env: spec.env } : {}),
+    // Always explicit: external agents get the user's own PI_CODING_AGENT_DIR
+    // back, not the ~/.mindos one this host installed for its embedded Pi.
+    env: toHostChildEnv(spec.env ?? process.env),
   });
 
   const id = `${spec.label}:${randomUUID()}`;

@@ -2,7 +2,7 @@
  * Connect Window — local BrowserWindow for remote mode server configuration.
  * Loads connect.html and bridges IPC to shared/connection SDK.
  */
-import { app, BrowserWindow, ipcMain, safeStorage, session } from 'electron';
+import { BrowserWindow, ipcMain, safeStorage, screen, session } from 'electron';
 import { existsSync } from 'fs';
 import path from 'path';
 import { resolvePreferUnpacked } from './resolve-packaged-asset';
@@ -10,13 +10,26 @@ import { mindosConnectPageUrl } from './mindos-connect-protocol';
 import Store from 'electron-store';
 import { testConnection, normalizeAddress } from './connection-sdk';
 import type { SavedConnection } from './connection-sdk';
-import { getNodePath, getMindosInstallPath, getEnrichedEnv } from './node-detect';
 import { parseSshConfig, isSshAvailable, SshTunnel, PASSPHRASE_NEEDED, addKeyToAgent, isSshAgentRunning } from './ssh-tunnel';
 import { findAvailablePort } from './port-finder';
-import { analyzeMindOsLayout, resolveWebAppDir } from './mindos-runtime-layout';
-import { getDefaultBundledMindOsDirectory } from './mindos-runtime-path';
 import { getDesktopHome } from './desktop-home';
 import { authenticateRemoteWebSession } from './remote-auth';
+import { getUiLang, getUiLangPreference, setUiLangPreference } from './i18n/lang';
+import { currentWindowBackground, getUiTheme, getUiThemePreference, normalizeUiThemePreference, setUiThemePreference } from './ui-theme';
+import { MODE_SELECT_CHANNELS, registerModeSelectHandlers } from './connect-mode-handlers';
+
+/**
+ * What the connect / mode-select window produced.
+ *
+ * This used to be a bare `string | null`, with `null` meaning both "user
+ * cancelled" and "user pressed ← Switch to Local Mode". `app.whenReady()` read
+ * that null as a cancel and called `app.quit()`, so the back button on the
+ * first-run remote screen quit the app. The three outcomes are now distinct.
+ */
+export type ConnectWindowResult =
+  | { kind: 'connected'; url: string }
+  | { kind: 'switch-local' }
+  | { kind: 'cancelled' };
 
 // Active SSH tunnel (shared across windows)
 let activeTunnel: SshTunnel | null = null;
@@ -42,8 +55,13 @@ export function clearActiveTunnel(): void {
   }
 }
 
+/**
+ * The connect dialogs share the main preload, which branches on the document
+ * URL (see preload.ts). A second entry point would make the shared bridge a
+ * rollup chunk, and a sandboxed preload cannot require a relative chunk.
+ */
 function connectPreloadPath(): string {
-  return resolvePreferUnpacked('dist-electron', 'preload', 'connect-preload.js');
+  return resolvePreferUnpacked('dist-electron', 'preload', 'index.js');
 }
 
 const MAX_CONNECTIONS = 5;
@@ -111,6 +129,15 @@ function removeSshPassphrase(host: string): void {
   removePassword(sshPassphraseKey(host));
 }
 
+/** Pure: `ssh://host:port` → its parts. Exported for tests. */
+export function parseSshAddress(address: string): { host: string; remotePort: number } | null {
+  const match = /^ssh:\/\/(.+):(\d+)$/.exec(address);
+  if (!match) return null;
+  const remotePort = Number.parseInt(match[2], 10);
+  if (!Number.isInteger(remotePort) || remotePort < 1 || remotePort > 65535) return null;
+  return { host: match[1], remotePort };
+}
+
 // ── Storage operations ──
 function getConnections(): SavedConnection[] {
   return store.get('remoteConnections')
@@ -148,20 +175,35 @@ export function setActiveRemoteConnection(address: string | null): void {
  * Returns { host, remotePort } if the last connection was SSH-based, null otherwise.
  */
 export function getLastSshConnection(): { host: string; remotePort: number } | null {
-  const connections = getConnections();
-  if (connections.length === 0) return null;
-  // Find the most recent SSH connection
-  const sshConn = connections.find(c => c.address.startsWith('ssh://'));
+  const sshConn = getConnections().find(c => c.address.startsWith('ssh://'));
   if (!sshConn) return null;
-  // Parse ssh://host:port
-  try {
-    const match = sshConn.address.match(/^ssh:\/\/(.+):(\d+)$/);
-    if (!match) return null;
-    return { host: match[1], remotePort: parseInt(match[2], 10) };
-  } catch { return null; }
+  return parseSshAddress(sshConn.address);
 }
 
 // ── IPC handlers registration helpers ──
+
+/**
+ * Only one connect-style surface owns the shared `connect:*` channels at a
+ * time. Without this, closing a mode-select window removed the handlers a
+ * simultaneously open connect window was still using.
+ */
+let handlerOwner: symbol | null = null;
+/**
+ * The webContents allowed to invoke those channels.
+ *
+ * Registration alone used to be the whole gate: while any connect window was
+ * open, *any* renderer in the app could invoke `connect:ssh-connect` or
+ * `connect:install-mindos`. That became load-bearing once the main window
+ * started hosting the boot shell, since the main window outlives the shell and
+ * then navigates to the product. Pinning the sender means a page on the
+ * product origin cannot reach these even if a connect dialog is open.
+ */
+let handlerOwnerContents: Electron.WebContents | null = null;
+
+function claimHandlers(owner: symbol, contents: Electron.WebContents): void {
+  handlerOwner = owner;
+  handlerOwnerContents = contents;
+}
 
 function safeHandle(channel: string, handler: (...args: any[]) => any): void {
   try {
@@ -169,31 +211,94 @@ function safeHandle(channel: string, handler: (...args: any[]) => any): void {
   } catch {
     // Channel might not exist yet, ignore
   }
-  ipcMain.handle(channel, handler);
+  ipcMain.handle(channel, (event: Electron.IpcMainInvokeEvent, ...args: any[]) => {
+    if (handlerOwnerContents && event.sender !== handlerOwnerContents) {
+      throw new Error(`Refused ${channel}: sender is not the active connect surface`);
+    }
+    return handler(event, ...args);
+  });
+}
+
+function releaseHandlers(owner: symbol, channels: readonly string[]): void {
+  if (handlerOwner !== owner) return;
+  handlerOwner = null;
+  handlerOwnerContents = null;
+  for (const ch of channels) {
+    try { ipcMain.removeHandler(ch); } catch { /* ignore */ }
+  }
+}
+
+/** Shared theme/language handlers — the shell language must not be window-local. */
+function registerUiLangHandlers(): void {
+  safeHandle('connect:get-ui-lang', () => ({
+    preference: getUiLangPreference(),
+    lang: getUiLang(),
+  }));
+  safeHandle('connect:set-ui-lang', (_: unknown, value: unknown) => ({
+    preference: value === 'zh' || value === 'en' || value === 'system' ? value : 'system',
+    lang: setUiLangPreference(value),
+  }));
+  // Appearance lives beside language: the boot shell and the connect dialogs
+  // are the same shell and must not disagree about it.
+  safeHandle('connect:get-ui-theme', () => ({
+    preference: getUiThemePreference(),
+    theme: getUiTheme(),
+  }));
+  safeHandle('connect:set-ui-theme', (_: unknown, value: unknown) => ({
+    preference: normalizeUiThemePreference(value),
+    theme: setUiThemePreference(value),
+  }));
+}
+
+const UI_LANG_CHANNELS = [
+  'connect:get-ui-lang', 'connect:set-ui-lang',
+  'connect:get-ui-theme', 'connect:set-ui-theme',
+] as const;
+
+const FIT_CHANNEL = 'connect:fit-window';
+
+/** In-flight SSH attempt, so `connect:ssh-cancel` can actually abort it. */
+interface SshAttempt { cancelled: boolean }
+let activeSshAttempt: SshAttempt | null = null;
+
+async function abandonTunnel(tunnel: SshTunnel | null): Promise<void> {
+  if (!tunnel) return;
+  tunnel.onDeath = undefined;
+  await tunnel.stop().catch(() => { /* best effort */ });
+  if (activeTunnel === tunnel) activeTunnel = null;
 }
 
 /**
  * Register SSH tunnel + remote connection IPC handlers.
- * Shared between showModeSelectWindow and showConnectWindow
- * because both can display the remote connection screen.
+ *
+ * Shared by every surface that can display the remote connection screen: the
+ * mode-select dialog, the connect dialog, and the boot shell hosted in the
+ * main window. `dismiss` is how a surface goes away once the flow resolves —
+ * a dialog closes its window; the boot shell stays put and lets main navigate
+ * it to the product, so it passes a no-op.
  */
 function registerSshHandlers(
   resolvedRef: { value: boolean },
-  resolve: (url: string | null) => void,
-  win: { close: () => void; isDestroyed?: () => boolean },
-  /** When set, resolve with this fixed value instead of the URL (used by mode-select window) */
-  resolveOverride?: string,
+  resolveConnected: (url: string) => void,
+  onSwitchLocal: () => void,
+  dismiss: () => void,
 ): void {
-  /** Safely close the window — no-op if already destroyed */
   const safeClose = () => {
     try {
-      if (win.isDestroyed?.()) return;
-      win.close();
-    } catch { /* window already gone */ }
+      dismiss();
+    } catch { /* surface already gone */ }
   };
+
+  const finishConnected = (url: string) => {
+    resolvedRef.value = true;
+    resolveConnected(url);
+    safeClose();
+  };
+
   safeHandle('connect:get-recent', () => {
-    const connections = getConnections();
-    return connections.map(c => ({
+    // SSH entries are shown in the SSH panel, HTTP entries in the HTTP panel.
+    // Both are returned so neither kind can become unforgettable.
+    return getConnections().map(c => ({
       ...c,
       hasPassword: !!loadPassword(c.address),
     }));
@@ -211,21 +316,21 @@ function registerSshHandlers(
 
   safeHandle('connect:connect', async (_: unknown, address: string, password: string | null) => {
     const url = normalizeAddress(address);
-    if (!url) return { ok: false, error: 'Invalid address' };
+    if (!url) return { ok: false, code: 'errInvalidAddress' };
 
     if (password) {
       // Warn if sending password over unencrypted HTTP to a non-local server
       const isLocal = url.includes('://localhost') || url.includes('://127.0.0.1') || url.includes('://[::1]');
       const isHttps = url.startsWith('https://');
       if (!isLocal && !isHttps) {
-        return { ok: false, error: 'Security warning: password would be sent in plaintext over HTTP. Use SSH tunnel or HTTPS for remote servers.' };
+        return { ok: false, code: 'errPlaintextPassword' };
       }
       const auth = await authenticateRemoteWebSession({
         serverUrl: url,
         password,
         cookieStore: session.defaultSession.cookies,
       });
-      if (!auth.ok) return { ok: false, error: auth.error };
+      if (!auth.ok) return { ok: false, code: 'incorrectPassword', message: auth.error };
     }
 
     saveConnection({
@@ -236,22 +341,25 @@ function registerSshHandlers(
     if (password) savePassword(url, password);
     setActiveRemoteConnection(url);
 
-    resolvedRef.value = true;
-    resolve(resolveOverride ?? url);
-    safeClose();
+    finishConnected(url);
     return { ok: true };
   });
 
   safeHandle('connect:remove', (_: unknown, address: string) => {
     removeConnection(address);
     removePassword(address);
+    // SSH entries also carry a stored key passphrase under a separate key —
+    // forgetting the host must not leave the passphrase behind.
+    const ssh = parseSshAddress(address);
+    if (ssh) removeSshPassphrase(ssh.host);
+    if (getActiveRemoteConnection() === address) setActiveRemoteConnection(null);
   });
 
   /** Complete SSH connection after user enters password (when authRequired was true) */
   safeHandle('connect:ssh-complete', async (_: unknown, sshHost: string, sshRemotePort: number, tunnelUrl: string, password: string) => {
     // Verify tunnel is still alive
     if (!activeTunnel || !activeTunnel.isAlive()) {
-      return { ok: false, error: 'SSH tunnel is no longer active. Please reconnect.' };
+      return { ok: false, code: 'errTunnelDead' };
     }
 
     // Authenticate with password through the tunnel
@@ -260,7 +368,7 @@ function registerSshHandlers(
       password,
       cookieStore: session.defaultSession.cookies,
     });
-    if (!auth.ok) return { ok: false, error: auth.error };
+    if (!auth.ok) return { ok: false, code: 'incorrectPassword', message: auth.error };
 
     // Save connection with SSH address format
     saveConnection({
@@ -272,15 +380,13 @@ function registerSshHandlers(
     savePassword(`ssh://${sshHost}:${sshRemotePort}`, password);
     setActiveRemoteConnection(tunnelUrl);
 
-    resolvedRef.value = true;
-    resolve(resolveOverride ?? tunnelUrl);
-    safeClose();
+    finishConnected(tunnelUrl);
     return { ok: true };
   });
 
   safeHandle('connect:switch-local', () => {
     resolvedRef.value = true;
-    resolve(null);
+    onSwitchLocal();
     safeClose();
   });
 
@@ -291,9 +397,22 @@ function registerSshHandlers(
     return { available: true, hosts };
   });
 
+  /**
+   * Abort the in-flight tunnel attempt. Previously "cancel" only reset the
+   * renderer's buttons: the tunnel kept being established, and either closed
+   * the window behind the user's back or leaked an ssh child process.
+   */
+  safeHandle('connect:ssh-cancel', async () => {
+    if (activeSshAttempt) activeSshAttempt.cancelled = true;
+    await abandonTunnel(activeTunnel);
+    return { ok: true };
+  });
+
   safeHandle('connect:ssh-connect', async (_: unknown, host: string, remotePort: number) => {
+    const attempt: SshAttempt = { cancelled: false };
+    activeSshAttempt = attempt;
     try {
-      if (activeTunnel) { activeTunnel.onDeath = undefined; await activeTunnel.stop(); activeTunnel = null; }
+      await abandonTunnel(activeTunnel);
 
       // Check if we have a cached passphrase — try to preload it into ssh-agent
       const cachedPassphrase = loadSshPassphrase(host);
@@ -308,25 +427,38 @@ function registerSshHandlers(
           }
         }
       }
+      if (attempt.cancelled) return { ok: false, cancelled: true, code: 'errCancelled' };
 
       // Retry up to 3 times to handle transient failures and port collisions
       let lastError = '';
       let passphraseNeeded = false;
-      for (let attempt = 0; attempt < 3; attempt++) {
+      for (let attemptIndex = 0; attemptIndex < 3; attemptIndex++) {
+        if (attempt.cancelled) return { ok: false, cancelled: true, code: 'errCancelled' };
         try {
-          const localPort = await findAvailablePort(remotePort + attempt);
+          const localPort = await findAvailablePort(remotePort + attemptIndex);
           const tunnel = new SshTunnel(host, localPort, remotePort);
           await tunnel.start();
           activeTunnel = tunnel;
 
+          // The user may have pressed Cancel while ssh was negotiating.
+          if (attempt.cancelled) {
+            await abandonTunnel(tunnel);
+            return { ok: false, cancelled: true, code: 'errCancelled' };
+          }
+
           const result = await testConnection(`http://localhost:${localPort}`);
+          if (attempt.cancelled) {
+            await abandonTunnel(tunnel);
+            return { ok: false, cancelled: true, code: 'errCancelled' };
+          }
+
           if (result.status === 'online') {
             const url = `http://localhost:${localPort}`;
 
             // If auth required, DON'T close window — let renderer handle password flow
             if (result.authRequired) {
               // Keep tunnel alive, return info to renderer for password input
-              return { ok: true, url, authRequired: true, sshHost: host, sshRemotePort: remotePort };
+              return { ok: true, url, authRequired: true, sshHost: host, sshRemotePort: remotePort, version: result.version };
             }
 
             // No auth needed — save connection and close window
@@ -337,19 +469,20 @@ function registerSshHandlers(
               authMethod: 'token',
             });
             setActiveRemoteConnection(url);
-            resolvedRef.value = true;
-            resolve(resolveOverride ?? url);
-            safeClose();
-            return { ok: true, url, authRequired: false };
+            finishConnected(url);
+            return { ok: true, url, authRequired: false, version: result.version };
           }
 
           // MindOS not running on remote
-          await tunnel.stop();
-          activeTunnel = null;
-          return { ok: false, error: result.status === 'not-mindos' ? 'Server is reachable but MindOS is not running' : 'Cannot reach MindOS through tunnel' };
+          await abandonTunnel(tunnel);
+          return {
+            ok: false,
+            code: result.status === 'not-mindos' ? 'errMindosNotRunning' : 'errTunnelNoMindos',
+          };
         } catch (retryErr: any) {
-          lastError = retryErr.message || 'SSH tunnel failed';
-          if (activeTunnel) { activeTunnel.onDeath = undefined; await activeTunnel.stop().catch(() => {}); activeTunnel = null; }
+          lastError = retryErr?.message || 'SSH tunnel failed';
+          await abandonTunnel(activeTunnel);
+          if (attempt.cancelled) return { ok: false, cancelled: true, code: 'errCancelled' };
 
           // Detect passphrase needed
           if (lastError === PASSPHRASE_NEEDED) {
@@ -366,22 +499,27 @@ function registerSshHandlers(
             errLower.includes('connection refused');
           if (nonRetryable) break;
 
-          if (attempt < 2) await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+          if (attemptIndex < 2) await new Promise(r => setTimeout(r, 1000 * (attemptIndex + 1)));
         }
       }
 
+      if (attempt.cancelled) return { ok: false, cancelled: true, code: 'errCancelled' };
       if (passphraseNeeded) {
-        return { ok: false, error: lastError, passphraseNeeded: true };
+        return { ok: false, code: 'errSshFailed', message: lastError, passphraseNeeded: true };
       }
-      return { ok: false, error: lastError };
+      return { ok: false, code: 'errSshFailed', message: lastError };
 
     } catch (err: any) {
-      return { ok: false, error: err.message || 'SSH tunnel failed' };
+      return { ok: false, code: 'errSshFailed', message: err?.message };
+    } finally {
+      if (activeSshAttempt === attempt) activeSshAttempt = null;
     }
   });
 
   /** Add SSH key to agent with passphrase, then retry tunnel connection */
   safeHandle('connect:ssh-add-key', async (_: unknown, host: string, remotePort: number, passphrase: string, remember: boolean) => {
+    const attempt: SshAttempt = { cancelled: false };
+    activeSshAttempt = attempt;
     try {
       // Find the SSH key for this host
       const home = getDesktopHome();
@@ -399,7 +537,7 @@ function registerSshHandlers(
       }
 
       if (!keyAdded) {
-        return { ok: false, error: 'Failed to add key to ssh-agent. The passphrase may be incorrect.' };
+        return { ok: false, code: 'errSshKeyRejected' };
       }
 
       // Save passphrase if requested
@@ -408,19 +546,24 @@ function registerSshHandlers(
       }
 
       // Now retry the SSH connection (tunnel should work with the key in agent)
-      if (activeTunnel) { activeTunnel.onDeath = undefined; await activeTunnel.stop(); activeTunnel = null; }
+      await abandonTunnel(activeTunnel);
+      if (attempt.cancelled) return { ok: false, cancelled: true, code: 'errCancelled' };
 
       const localPort = await findAvailablePort(remotePort);
       const tunnel = new SshTunnel(host, localPort, remotePort);
       await tunnel.start();
       activeTunnel = tunnel;
+      if (attempt.cancelled) {
+        await abandonTunnel(tunnel);
+        return { ok: false, cancelled: true, code: 'errCancelled' };
+      }
 
       const testResult = await testConnection(`http://localhost:${localPort}`);
       if (testResult.status === 'online') {
         const url = `http://localhost:${localPort}`;
 
         if (testResult.authRequired) {
-          return { ok: true, url, authRequired: true, sshHost: host, sshRemotePort: remotePort };
+          return { ok: true, url, authRequired: true, sshHost: host, sshRemotePort: remotePort, version: testResult.version };
         }
 
         saveConnection({
@@ -430,17 +573,16 @@ function registerSshHandlers(
           authMethod: 'token',
         });
         setActiveRemoteConnection(url);
-        resolvedRef.value = true;
-        resolve(resolveOverride ?? url);
-        safeClose();
-        return { ok: true, url, authRequired: false };
+        finishConnected(url);
+        return { ok: true, url, authRequired: false, version: testResult.version };
       }
 
-      await tunnel.stop();
-      activeTunnel = null;
-      return { ok: false, error: 'Tunnel established but MindOS not reachable' };
+      await abandonTunnel(tunnel);
+      return { ok: false, code: 'errTunnelNoMindos' };
     } catch (err: any) {
-      return { ok: false, error: err.message || 'Failed to connect' };
+      return { ok: false, code: 'errSshFailed', message: err?.message };
+    } finally {
+      if (activeSshAttempt === attempt) activeSshAttempt = null;
     }
   });
 }
@@ -449,311 +591,222 @@ function registerSshHandlers(
 const REMOTE_CHANNELS = [
   'connect:get-recent', 'connect:get-saved-password', 'connect:test', 'connect:connect',
   'connect:remove', 'connect:switch-local', 'connect:ssh-hosts', 'connect:ssh-connect',
-  'connect:ssh-complete', 'connect:ssh-add-key',
-];
+  'connect:ssh-complete', 'connect:ssh-add-key', 'connect:ssh-cancel',
+] as const;
 
 /**
- * Show mode selection window (initial run)
- * Returns 'local' | 'remote' | null
+ * Window geometry.
+ *
+ * These used to be fixed at 600/640 while the natural content height is ~363
+ * (mode picker) and ~401 (remote screen) — roughly 40% of each window was dead
+ * space, and the content floated in the middle of it. The windows now open
+ * close to their content and `connect:fit-window` resizes them as panels
+ * expand, so neither dead space nor clipping happens.
  */
-export function showModeSelectWindow(parentWindow?: BrowserWindow): Promise<'local' | 'remote' | null> {
-  return new Promise((resolve) => {
-    const modeWin = new BrowserWindow({
-      width: 480,
-      height: 580,
-      resizable: false,
-      minimizable: false,
-      maximizable: false,
-      // Independent window — not modal, not parented.
-      // Modal + hidden titlebar on parent = dead lock on macOS.
-      title: 'MindOS',
-      titleBarStyle: 'default',
-      webPreferences: {
-        preload: connectPreloadPath(),
-        nodeIntegration: false,
-        contextIsolation: true,
-        /** Default sandbox breaks file/custom-scheme loading from the app bundle on macOS. */
-        sandbox: false,
-      },
-      show: false,
-    });
-
-    modeWin.once('ready-to-show', () => modeWin.show());
-
-    modeWin.loadURL(mindosConnectPageUrl({ modeSelect: 'true' })).catch(err => {
-      console.error('[MindOS] Failed to load connect.html for mode selection:', err);
-    });
-
-    const resolvedRef = { value: false };
-
-    // ── IPC Handlers ──
-
-    safeHandle('connect:check-node', async () => {
-      // Packaged app bundles Node.js; if bundled node is missing,
-      // checkMindosStatus will report bundled-incomplete (the real problem).
-      if (app.isPackaged) return true;
-      return !!(await getNodePath());
-    });
-
-    safeHandle('connect:check-mindos-status', async () => {
-      // Check bundled runtime first (Desktop ships with mindos-runtime/)
-      try {
-        const bundledDir = getDefaultBundledMindOsDirectory();
-
-        if (bundledDir && existsSync(bundledDir)) {
-          const analysis = analyzeMindOsLayout(bundledDir);
-          if (analysis.runnable) {
-            return { status: 'ready', path: bundledDir };
-          }
-
-          // Not runnable — in dev mode, source dirs can be built in place
-          if (!app.isPackaged) {
-            const hasAppSrc = existsSync(path.join(bundledDir, 'packages', 'web'));
-            const hasMcpSrc = existsSync(path.join(bundledDir, 'packages', 'protocols', 'mcp-server'));
-            if (hasAppSrc && hasMcpSrc) {
-              return { status: 'installed-not-built', path: bundledDir };
-            }
-          }
-        }
-
-        // Packaged app: resources are read-only, user must reinstall
-        if (app.isPackaged) {
-          return { status: 'bundled-incomplete', path: bundledDir ?? null };
-        }
-      } catch (err) {
-        console.error('[MindOS] Bundled runtime check failed:', err);
-        if (app.isPackaged) {
-          return { status: 'bundled-incomplete', path: null };
-        }
-      }
-
-      // Fallback: check npm global install (dev/standalone mode only)
-      const nodePath = await getNodePath();
-      const mindosPath = await getMindosInstallPath(nodePath);
-
-      if (!mindosPath) {
-        return { status: 'not-installed', path: null };
-      }
-
-      const nextDir = path.join(resolveWebAppDir(mindosPath), '.next');
-      const isBuilt = existsSync(nextDir);
-
-      return {
-        status: isBuilt ? 'ready' : 'installed-not-built',
-        path: mindosPath,
-      };
-    });
-
-    safeHandle('connect:build-mindos', async (_: unknown, modulePath: string) => {
-      const { exec } = require('child_process');
-      const { promisify } = require('util');
-      const execBuild = promisify(exec);
-
-      try {
-        const webAppDir = resolveWebAppDir(modulePath);
-        const standaloneServer = path.join(webAppDir, '.next', 'standalone', 'server.js');
-        const nextDir = path.join(webAppDir, '.next');
-        if (existsSync(standaloneServer) || existsSync(nextDir)) {
-          return { success: true, output: 'Already built' };
-        }
-
-        const nodePath = await getNodePath();
-        const enrichedEnv = getEnrichedEnv(nodePath);
-
-        const { stdout, stderr } = await execBuild(
-          'npm install && npm run build',
-          { cwd: modulePath, timeout: 300000, encoding: 'utf-8', env: enrichedEnv }
-        );
-
-        if (existsSync(nextDir)) {
-          return { success: true, output: stdout || 'Build completed' };
-        } else {
-          return { success: false, error: 'Build completed but packages/web/.next not found', stderr };
-        }
-      } catch (err: any) {
-        return {
-          success: false,
-          error: err.message || 'Build failed',
-          stderr: err.stderr,
-        };
-      }
-    });
-
-    safeHandle('connect:get-mindos-path', async () => {
-      // Check bundled runtime first
-      try {
-        const bundledDir = getDefaultBundledMindOsDirectory();
-        if (bundledDir && existsSync(bundledDir)) {
-          const analysis = analyzeMindOsLayout(bundledDir);
-          if (analysis.runnable) {
-            return { path: bundledDir, source: 'bundled' as const };
-          }
-        }
-      } catch { /* fall through */ }
-
-      // In packaged mode, bundled is the only path
-      if (app.isPackaged) return null;
-
-      // Fallback: npm global install (dev mode only)
-      const nodePath = await getNodePath();
-      const mindosPath = await getMindosInstallPath(nodePath);
-      if (mindosPath) {
-        const nextDir = path.join(resolveWebAppDir(mindosPath), '.next');
-        if (existsSync(nextDir)) {
-          return { path: mindosPath, source: 'user' as const };
-        }
-      }
-      return null;
-    });
-
-    safeHandle('connect:select-mode', (_: unknown, mode: 'local' | 'remote') => {
-      resolvedRef.value = true;
-      resolve(mode);
-      modeWin.close();
-      return true;
-    });
-
-    safeHandle('connect:show-node-dialog', async () => {
-      const { dialog } = require('electron');
-      const result = await dialog.showMessageBox(modeWin as BrowserWindow, {
-        type: 'warning',
-        title: i18n[detectLang()].nodeRequiredTitle,
-        message: i18n[detectLang()].nodeRequiredMessage,
-        detail: i18n[detectLang()].nodeRequiredOptions,
-        buttons: [
-          i18n[detectLang()].downloadNode,
-          i18n[detectLang()].switchRemoteBtn,
-          i18n[detectLang()].cancel
-        ],
-        defaultId: 0,
-        cancelId: 2,
-      });
-      if (result.response === 0) return 'install';
-      if (result.response === 1) return 'remote';
-      return 'cancel';
-    });
-
-    safeHandle('connect:open-nodejs', () => {
-      const { shell } = require('electron');
-      shell.openExternal('https://nodejs.org/');
-    });
-
-    // Auto-install MindOS CLI
-    safeHandle('connect:install-mindos', async () => {
-      const { exec } = require('child_process');
-      const { promisify } = require('util');
-      const execInstall = promisify(exec);
-
-      try {
-        const nodePath = await getNodePath();
-        const enrichedEnv = getEnrichedEnv(nodePath);
-
-        const { stdout, stderr } = await execInstall(
-          'npm install -g @geminilight/mindos@latest',
-          { timeout: 300000, encoding: 'utf-8', env: enrichedEnv }
-        );
-
-        // Verify installation
-        const mindosPath = await getMindosInstallPath(nodePath);
-        if (mindosPath) {
-          return { success: true };
-        } else {
-          return {
-            success: false,
-            error: 'Installation may have succeeded but could not be verified. Please restart Desktop.',
-            stderr
-          };
-        }
-      } catch (err: any) {
-        return {
-          success: false,
-          error: err.message || 'Installation failed',
-          stderr: err.stderr
-        };
-      }
-    });
-
-    // ── SSH handlers (needed when user switches to remote screen within mode selection) ──
-    registerSshHandlers(resolvedRef, resolve as (v: string | null) => void, { close: () => modeWin.close(), isDestroyed: () => modeWin.isDestroyed() }, 'remote');
-
-    // Cleanup
-    modeWin.on('closed', () => {
-      ['connect:check-node', 'connect:check-mindos-status', 'connect:build-mindos',
-       'connect:get-mindos-path', 'connect:install-mindos', 'connect:select-mode',
-       'connect:show-node-dialog', 'connect:open-nodejs',
-       ...REMOTE_CHANNELS].forEach(ch => {
-        try { ipcMain.removeHandler(ch); } catch { /* ignore */ }
-      });
-      if (!resolvedRef.value) resolve(null);
-    });
-  });
-}
-
-// Simple i18n helper for Electron dialog
-function detectLang(): 'zh' | 'en' {
-  const appLocale = require('electron').app.getLocale();
-  return appLocale?.startsWith('zh') ? 'zh' : 'en';
-}
-
-const i18n = {
-  zh: {
-    nodeRequiredTitle: '需要 Node.js',
-    nodeRequiredMessage: 'Node.js ≥22.19 是运行本地模式的必需依赖。',
-    nodeRequiredOptions: '您可以：\n• 从 nodejs.org 安装（推荐）\n• 切换到远程模式',
-    downloadNode: '下载 Node.js',
-    switchRemoteBtn: '切换到远程模式',
-    cancel: '取消',
-  },
-  en: {
-    nodeRequiredTitle: 'Node.js Required',
-    nodeRequiredMessage: 'Node.js ≥22.19 is required to run MindOS locally.',
-    nodeRequiredOptions: 'You can:\n• Install Node.js from nodejs.org (recommended)\n• Switch to Remote mode',
-    downloadNode: 'Download Node.js',
-    switchRemoteBtn: 'Switch to Remote Mode',
-    cancel: 'Cancel',
-  }
+const MODE_SELECT_HEIGHT = 420;
+const CONNECT_WINDOW_DEFAULTS = {
+  width: 480,
+  height: 470,
+  minWidth: 420,
+  minHeight: 360,
+  resizable: true,
+  maximizable: false,
+  title: 'MindOS',
+  titleBarStyle: 'default' as const,
+  show: false,
 };
 
+/** Fresh per window: the preference can change between opens. */
+function connectWindowOptions() {
+  return { ...CONNECT_WINDOW_DEFAULTS, backgroundColor: currentWindowBackground() };
+}
+
 /**
- * Show the connect window and resolve with the authenticated server URL.
- * Returns null if the user cancels or switches to local mode.
+ * Resize a shell window to the height its content actually needs.
+ *
+ * The renderer measures and reports; main decides, because only main knows the
+ * work area. Clamped so a runaway measurement can never produce a window
+ * taller than the display or smaller than the minimum.
  */
-export function showConnectWindow(parentWindow?: BrowserWindow): Promise<string | null> {
-  return new Promise((resolve) => {
-    const connectWin = new BrowserWindow({
-      width: 480,
-      height: 640,
-      resizable: false,
-      minimizable: false,
-      maximizable: false,
-      title: 'MindOS',
-      titleBarStyle: 'default',
-      webPreferences: {
-        preload: connectPreloadPath(),
-        nodeIntegration: false,
-        contextIsolation: true,
-        sandbox: false,
-      },
-      show: false,
-    });
-
-    connectWin.once('ready-to-show', () => connectWin.show());
-
-    connectWin.loadURL(mindosConnectPageUrl()).catch(err => {
-      console.error('[MindOS] Failed to load connect.html for remote connection:', err);
-    });
-
-    const resolvedRef = { value: false };
-
-    // Register all remote connection handlers (shared with mode select window)
-    registerSshHandlers(resolvedRef, resolve, { close: () => connectWin.close(), isDestroyed: () => connectWin.isDestroyed() });
-
-    // Cleanup on close
-    connectWin.on('closed', () => {
-      REMOTE_CHANNELS.forEach(ch => {
-        try { ipcMain.removeHandler(ch); } catch { /* ignore */ }
-      });
-      if (!resolvedRef.value) resolve(null);
-    });
+function registerFitWindowHandler(win: BrowserWindow): void {
+  safeHandle('connect:fit-window', (_: unknown, requested: unknown) => {
+    if (win.isDestroyed()) return { applied: false };
+    const desired = Number(requested);
+    if (!Number.isFinite(desired)) return { applied: false };
+    try {
+      const area = screen.getDisplayMatching(win.getBounds()).workAreaSize;
+      const maxHeight = Math.max(CONNECT_WINDOW_DEFAULTS.minHeight, Math.floor(area.height * 0.9));
+      const height = Math.min(maxHeight, Math.max(CONNECT_WINDOW_DEFAULTS.minHeight, Math.ceil(desired)));
+      const [width] = win.getContentSize();
+      if (Math.abs(win.getContentSize()[1] - height) < 8) return { applied: false, height };
+      win.setContentSize(width, height, false);
+      return { applied: true, height };
+    } catch (err) {
+      console.warn('[MindOS] Could not fit the connect window:', (err as Error)?.message);
+      return { applied: false };
+    }
   });
+}
+
+/**
+ * What a connect surface produced. `switch-local` is distinct from `cancelled`
+ * so callers stop treating the back button as "the user wants to quit".
+ */
+export type ConnectSurfaceOutcome =
+  | { kind: 'mode'; mode: 'local' | 'remote' }
+  | { kind: 'connected'; url: string }
+  | { kind: 'switch-local' }
+  | { kind: 'cancelled' };
+
+export interface ConnectSurfaceOptions {
+  /** The window hosting connect.html — a dialog, or the main window at boot. */
+  window: BrowserWindow;
+  /** Offer the mode cards (first run, boot, tray "switch mode"). */
+  includeModeSelect: boolean;
+  /**
+   * Let the content drive the window height.
+   *
+   * Dialogs size themselves to their content. The main window must not: its
+   * geometry is the user's, restored from window-state, and a boot shell that
+   * resized it would lose that the moment the product loaded.
+   */
+  allowFit: boolean;
+  /** Dismiss the surface once a flow resolves. Dialogs close; the boot shell stays. */
+  dismiss: () => void;
+}
+
+/**
+ * Attach the connect UI's IPC to a window and report what the user chose.
+ *
+ * One surface owns the shared `connect:*` channels at a time (see
+ * claimHandlers) and `release()` gives them back. Main must call `release()`
+ * before navigating the window anywhere else — that, plus the preload's
+ * protocol branch, is what keeps these channels unreachable from the product
+ * origin.
+ */
+export function attachConnectSurface(
+  options: ConnectSurfaceOptions,
+): { outcome: Promise<ConnectSurfaceOutcome>; release: () => void } {
+  const owner = Symbol('connect-surface');
+  claimHandlers(owner, options.window.webContents);
+
+  const resolvedRef = { value: false };
+  let settle: (value: ConnectSurfaceOutcome) => void = () => {};
+  const outcome = new Promise<ConnectSurfaceOutcome>((resolve) => { settle = resolve; });
+
+  const channels = [
+    ...REMOTE_CHANNELS,
+    ...UI_LANG_CHANNELS,
+    ...(options.includeModeSelect ? MODE_SELECT_CHANNELS : []),
+    ...(options.allowFit ? [FIT_CHANNEL] : []),
+  ];
+
+  registerUiLangHandlers();
+  if (options.allowFit) registerFitWindowHandler(options.window);
+  if (options.includeModeSelect) {
+    registerModeSelectHandlers(
+      safeHandle,
+      resolvedRef,
+      (mode) => settle({ kind: 'mode', mode }),
+      options.dismiss,
+      options.window,
+    );
+  }
+
+  // Picking "local" from the remote screen's back button is a mode choice, not
+  // a cancellation — resolving null here used to quit the app on first run.
+  registerSshHandlers(
+    resolvedRef,
+    (url) => settle({ kind: 'connected', url }),
+    () => settle({ kind: 'switch-local' }),
+    options.dismiss,
+  );
+
+  const release = () => {
+    releaseHandlers(owner, channels);
+    if (!resolvedRef.value) settle({ kind: 'cancelled' });
+  };
+
+  return { outcome, release };
+}
+
+/** Window options shared by the two standalone connect dialogs. */
+function connectDialogOptions() {
+  return {
+    ...connectWindowOptions(),
+    minimizable: false,
+    // Independent window — not modal, not parented.
+    // Modal + hidden titlebar on parent = dead lock on macOS.
+    webPreferences: {
+      preload: connectPreloadPath(),
+      nodeIntegration: false,
+      contextIsolation: true,
+      /*
+        Sandboxed, like the main window. This used to be `sandbox: false` on the
+        belief that the sandbox broke custom-scheme loading on macOS. Measured
+        on Electron 44 it does not: a sandboxed window loads mindos-connect://,
+        gets its bridge, and round-trips IPC. The single self-contained preload
+        (see connectPreloadPath) is what keeps that true — a sandboxed preload
+        cannot require a sibling chunk.
+      */
+      sandbox: true,
+    },
+  };
+}
+
+/**
+ * Show mode selection window (tray "switch mode").
+ * Returns 'local' | 'remote' | null (null = the user closed the window)
+ *
+ * First-run mode selection no longer comes through here — it renders inside
+ * the main window via the boot shell (see boot-shell.ts).
+ */
+export async function showModeSelectWindow(): Promise<'local' | 'remote' | null> {
+  const modeWin = new BrowserWindow({ ...connectDialogOptions(), height: MODE_SELECT_HEIGHT });
+  modeWin.once('ready-to-show', () => modeWin.show());
+  modeWin.loadURL(mindosConnectPageUrl({ modeSelect: 'true' })).catch(err => {
+    console.error('[MindOS] Failed to load connect.html for mode selection:', err);
+  });
+
+  const { outcome, release } = attachConnectSurface({
+    window: modeWin,
+    includeModeSelect: true,
+    allowFit: true,
+    dismiss: () => { if (!modeWin.isDestroyed()) modeWin.close(); },
+  });
+  modeWin.on('closed', release);
+
+  const result = await outcome;
+  if (result.kind === 'mode') return result.mode;
+  // The remote screen inside this window resolves its own way: a completed
+  // connection means remote, the back button means local.
+  if (result.kind === 'connected') return 'remote';
+  if (result.kind === 'switch-local') return 'local';
+  return null;
+}
+
+
+/**
+ * Show the connect window and resolve with what the user chose.
+ * See ConnectWindowResult — 'cancelled' and 'switch-local' are distinct.
+ */
+export async function showConnectWindow(): Promise<ConnectWindowResult> {
+  const connectWin = new BrowserWindow(connectDialogOptions());
+  connectWin.once('ready-to-show', () => connectWin.show());
+  connectWin.loadURL(mindosConnectPageUrl()).catch(err => {
+    console.error('[MindOS] Failed to load connect.html for remote connection:', err);
+  });
+
+  const { outcome, release } = attachConnectSurface({
+    window: connectWin,
+    includeModeSelect: false,
+    allowFit: true,
+    dismiss: () => { if (!connectWin.isDestroyed()) connectWin.close(); },
+  });
+  connectWin.on('closed', release);
+
+  const result = await outcome;
+  if (result.kind === 'connected') return { kind: 'connected', url: result.url };
+  if (result.kind === 'switch-local') return { kind: 'switch-local' };
+  return { kind: 'cancelled' };
 }

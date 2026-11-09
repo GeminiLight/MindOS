@@ -17,6 +17,7 @@ import {
   MINDOS_KNOWLEDGE_WRITE_TOOL_NAMES,
 } from '../mindos-pi/permission/index.js';
 import type { MindosAgentTool } from './kb-tools.js';
+import { getMindosPiAgentDir } from '../../foundation/pi-agent-dir/index.js';
 
 /**
  * Capability-source contract owned by the registry (the port declarer) so the
@@ -391,8 +392,11 @@ function discoverPiSubagents(
   resolveBuiltinSubagentsDir?: () => string | null,
 ): PiSubagentModule[] {
   const builtinDir = resolveBuiltinSubagentsDir?.() ?? null;
+  // Mirror what pi-subagents executes: it reads `<PI_CODING_AGENT_DIR>/agents`,
+  // which MindOS points at its own directory rather than the user's ~/.pi, and
+  // `~/.agents`, which it hardcodes and MindOS cannot redirect.
   const userDirs = [
-    path.join(os.homedir(), '.pi', 'agent', 'agents'),
+    path.join(getMindosPiAgentDir(os.homedir()), 'agents'),
     path.join(os.homedir(), '.agents'),
   ];
   const projectRoot = findNearestSubagentProjectRoot(cwd);

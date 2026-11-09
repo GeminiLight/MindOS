@@ -1,2 +1,6 @@
 # Keep executable ESM hashbangs compatible with Node/Vite on Windows.
 *.mjs text eol=lf
+
+# pnpm patches must match upstream byte for byte, including the single space
+# that marks an unchanged blank context line. Exempt them from whitespace checks.
+patches/*.patch -whitespace

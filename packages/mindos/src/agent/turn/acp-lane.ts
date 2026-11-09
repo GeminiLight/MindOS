@@ -39,14 +39,29 @@ export type MindosAcpSessionUpdate = {
     rawInput?: string;
     rawOutput?: string;
     status?: string;
+    /**
+     * Mirrors `AcpToolCallFull.content`. The lane carries its own narrow update
+     * type, so anything parsed in `protocols/acp` must be declared here as well
+     * or it is silently dropped before reaching the UI.
+     */
+    content?: Array<
+      | { type: 'diff'; path: string; oldText: string; newText: string; truncated?: boolean }
+      | { type: string; [key: string]: unknown }
+    >;
+    locations?: Array<{ path: string; line?: number }>;
   };
   plan?: {
     entries?: Array<{ status?: string; content?: string }>;
   };
+  /** Mirrors `AcpSessionUpdate.usage` (ACP `usage_update`). */
+  usage?: {
+    usedTokens: number;
+    contextWindow: number;
+    cost?: { amount: number; currency: string };
+  };
 };
 
 export type MindosAcpUpdateMappingOptions = {
-  suppressErrors?: boolean;
   permissionRunId?: string;
 };
 
@@ -67,33 +82,44 @@ export function mapMindosAcpUpdateToSseEvents(
     case 'tool_call':
       if (!update.toolCall) return { events: [], hasVisibleContent: false };
       return {
-        events: [{
-          type: 'tool_start',
-          toolCallId: update.toolCall.toolCallId,
-          toolName: update.toolCall.title ?? update.toolCall.kind ?? 'tool',
-          runtime: 'acp',
-          args: sanitizeToolArgs(
-            update.toolCall.title ?? update.toolCall.kind ?? 'tool',
-            safeParseMindosJsonObject(update.toolCall.rawInput),
-          ),
-        }],
+        events: [
+          {
+            type: 'tool_start',
+            toolCallId: update.toolCall.toolCallId,
+            toolName: update.toolCall.title ?? update.toolCall.kind ?? 'tool',
+            runtime: 'acp',
+            args: sanitizeToolArgs(
+              update.toolCall.title ?? update.toolCall.kind ?? 'tool',
+              safeParseMindosJsonObject(update.toolCall.rawInput),
+            ),
+          },
+          ...buildAcpToolDiffEvents(update.toolCall),
+        ],
         hasVisibleContent: true,
       };
 
-    case 'tool_call_update':
-      if (!update.toolCall || (update.toolCall.status !== 'completed' && update.toolCall.status !== 'failed')) {
-        return { events: [], hasVisibleContent: false };
+    case 'tool_call_update': {
+      if (!update.toolCall) return { events: [], hasVisibleContent: false };
+      // Diffs usually arrive with the completing update, but an agent may also
+      // stream them while the edit is still in progress; forward them either way.
+      const diffEvents = buildAcpToolDiffEvents(update.toolCall);
+      if (update.toolCall.status !== 'completed' && update.toolCall.status !== 'failed') {
+        return { events: diffEvents, hasVisibleContent: diffEvents.length > 0 };
       }
       return {
-        events: [{
-          type: 'tool_end',
-          toolCallId: update.toolCall.toolCallId,
-          output: sanitizeToolOutput(update.toolCall.rawOutput ?? ''),
-          isError: update.toolCall.status === 'failed',
-          runtime: 'acp',
-        }],
-        hasVisibleContent: false,
+        events: [
+          ...diffEvents,
+          {
+            type: 'tool_end',
+            toolCallId: update.toolCall.toolCallId,
+            output: sanitizeToolOutput(update.toolCall.rawOutput ?? ''),
+            isError: update.toolCall.status === 'failed',
+            runtime: 'acp',
+          },
+        ],
+        hasVisibleContent: diffEvents.length > 0,
       };
+    }
 
     case 'permission_request':
       if (!update.permission) return { events: [], hasVisibleContent: false };
@@ -134,18 +160,44 @@ export function mapMindosAcpUpdateToSseEvents(
         hasVisibleContent: false,
       };
 
-    case 'plan':
-      if (!update.plan?.entries) return { events: [], hasVisibleContent: false };
+    case 'plan': {
+      const entries = buildAcpPlanEntries(update.plan?.entries);
+      if (entries.length === 0) return { events: [], hasVisibleContent: false };
+      return {
+        events: [{ type: 'agent_plan', runtime: 'acp', entries }],
+        hasVisibleContent: false,
+      };
+    }
+
+    case 'usage_update': {
+      if (!update.usage) return { events: [], hasVisibleContent: false };
+      const { usedTokens, contextWindow, cost } = update.usage;
+      // Feed the existing context meter. ACP reports the agent's own totals, so
+      // the MindOS-side budget/prompt breakdown does not apply and stays zero.
       return {
         events: [{
-          type: 'text_delta',
-          delta: `\n\n${update.plan.entries.map((entry) => `${planEntryIcon(entry.status)} ${entry.content ?? ''}`).join('\n')}\n\n`,
+          type: 'context_usage',
+          runtime: 'acp',
+          phase: 'post',
+          action: 'none',
+          percent: Math.min(100, Math.round((usedTokens / contextWindow) * 100)),
+          usedTokens,
+          contextWindow,
+          budgetTokens: contextWindow,
+          reserveTokens: 0,
+          systemPromptTokens: 0,
+          turnPromptTokens: 0,
+          historyTokens: usedTokens,
+          ...(cost ? { cost } : {}),
         }],
-        hasVisibleContent: true,
+        hasVisibleContent: false,
       };
+    }
 
     case 'error':
-      if (options.suppressErrors) return { events: [], hasVisibleContent: false };
+      // Never conditionally dropped: an agent that fails after streaming text
+      // used to end the turn as a success (spec-acp-session-hardening item 9).
+      // The lane records the error and throws, so the turn fails as it should.
       return { events: [{ type: 'error', message: update.error ?? 'ACP agent error' }], hasVisibleContent: false };
 
     default:
@@ -153,10 +205,43 @@ export function mapMindosAcpUpdateToSseEvents(
   }
 }
 
-function planEntryIcon(status: string | undefined): string {
-  if (status === 'completed') return '✅';
-  if (status === 'in_progress') return '⚡';
-  return '⏳';
+/** Keep a plan renderable: an empty step is a blank row, and the list is bounded. */
+function buildAcpPlanEntries(
+  entries: NonNullable<MindosAcpSessionUpdate['plan']>['entries'],
+): Array<{ content: string; status: 'pending' | 'in_progress' | 'completed' }> {
+  if (!Array.isArray(entries)) return [];
+  const built: Array<{ content: string; status: 'pending' | 'in_progress' | 'completed' }> = [];
+  for (const entry of entries) {
+    const content = typeof entry?.content === 'string' ? entry.content.trim() : '';
+    if (!content) continue;
+    const status = entry?.status === 'completed' || entry?.status === 'in_progress' ? entry.status : 'pending';
+    built.push({ content, status });
+    if (built.length >= 100) break;
+  }
+  return built;
+}
+
+/**
+ * File changes reported by an ACP agent. Secrets are redacted with the same
+ * helper used for tool output, because a diff can just as easily contain a key.
+ */
+function buildAcpToolDiffEvents(
+  toolCall: NonNullable<MindosAcpSessionUpdate['toolCall']>,
+): MindOSSSEvent[] {
+  const diffs = (toolCall.content ?? [])
+    .filter((block): block is { type: 'diff'; path: string; oldText: string; newText: string; truncated?: boolean } =>
+      block?.type === 'diff'
+      && typeof (block as { path?: unknown }).path === 'string'
+      && typeof (block as { newText?: unknown }).newText === 'string')
+    .map((block) => ({
+      path: block.path,
+      oldText: sanitizeToolOutput(typeof block.oldText === 'string' ? block.oldText : ''),
+      newText: sanitizeToolOutput(block.newText),
+      ...(block.truncated ? { truncated: true } : {}),
+    }));
+
+  if (diffs.length === 0) return [];
+  return [{ type: 'tool_diff', toolCallId: toolCall.toolCallId, runtime: 'acp', diffs }];
 }
 
 export type MindosAcpAgentTurnSession = {
@@ -174,6 +259,8 @@ export type MindosAcpAgentTurnSessionOptions = {
 
 export type MindosAcpAgentTurnPromptOptions = {
   signal?: AbortSignal;
+  /** Attached images; the session layer drops them for agents without the capability. */
+  images?: ReadonlyArray<{ data: string; mimeType: string }>;
   /** Remaining lane budget for this prompt; the session layer cancels the agent when it elapses. */
   timeoutMs?: number;
 };
@@ -228,6 +315,8 @@ export type MindosAcpAgentTurnOptions = MindosAcpAgentTurnServices & {
   agentId: string;
   cwd: string;
   prompt: string;
+  /** Images attached to this turn; forwarded to agents that accept them. */
+  images?: ReadonlyArray<{ data: string; mimeType: string }>;
   maxRetries?: number;
   timeoutMs?: number;
   signal?: AbortSignal;
@@ -392,7 +481,11 @@ export async function runMindosAcpAgentTurn(options: MindosAcpAgentTurnOptions):
               });
               if (mapped.hasVisibleContent) options.onVisibleContent?.();
               for (const event of mapped.events) options.send(event);
-            }, { signal: options.signal, timeoutMs: promptTimeoutMs }),
+            }, {
+              signal: options.signal,
+              timeoutMs: promptTimeoutMs,
+              ...(options.images?.length ? { images: options.images } : {}),
+            }),
             options.signal,
             () => { void options.cancelPrompt?.(session.id).catch(() => {}); },
           ),

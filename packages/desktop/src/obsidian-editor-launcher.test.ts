@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createObsidianEditorLauncher } from './obsidian-editor-launcher';
 import { openObsidianDraftStore } from './obsidian-draft-store';
+import { mtIn } from './i18n/main-strings';
 
 const calls = vi.hoisted(() => ({ prepare: vi.fn(), open: vi.fn(), dialog: vi.fn(), folder: vi.fn() }));
 vi.mock('electron', () => ({ dialog: { showMessageBox: calls.dialog }, shell: { openPath: calls.folder } }));
@@ -90,7 +91,14 @@ it('requests separate recovery consent and restores a matching backup only after
   calls.open.mockResolvedValue({ window: Object.assign(new EventEmitter(), { isDestroyed: () => false }) });
   await f.launcher.open(f.event, request); await f.launcher.flush();
   expect(calls.open.mock.calls[0][0].session.snapshot.content).toBe('recovered');
-  expect(calls.dialog.mock.calls[1][1].buttons).toEqual(['取消', '恢复草稿', '查看备份文件']);
+  // Localized through the shared table — these buttons used to be hardcoded
+  // Chinese regardless of the UI language. The mock has no app.getLocale, so
+  // the resolved language is English here.
+  expect(calls.dialog.mock.calls[1][1].buttons).toEqual([
+    mtIn('en', 'cancel'),
+    mtIn('en', 'obsidianRestoreDraft'),
+    mtIn('en', 'obsidianOpenBackups'),
+  ]);
   expect(session.save).not.toHaveBeenCalled();
 });
 
@@ -100,7 +108,10 @@ it('never restores stale backups and opens only the main-owned recovery folder o
   old.update({ ...session.snapshot, revision: 'd'.repeat(64), content: 'stale', dirty: true }); await old.flush();
   calls.dialog.mockResolvedValue({ response: 1 });
   expect(await f.launcher.open(f.event, request)).toEqual({ opened: false });
-  expect(calls.dialog.mock.calls[0][1].buttons).toEqual(['取消', '查看备份文件']);
+  expect(calls.dialog.mock.calls[0][1].buttons).toEqual([
+    mtIn('en', 'cancel'),
+    mtIn('en', 'obsidianOpenBackups'),
+  ]);
   expect(calls.folder).toHaveBeenCalledWith(join(directory, 'drafts'));
   expect(calls.open).not.toHaveBeenCalled(); expect(session.snapshot.content).toBe('disk');
 });

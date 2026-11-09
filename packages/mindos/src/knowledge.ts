@@ -18,6 +18,7 @@ export {
 export { gitLog, gitShowFile, isGitRepo, type GitLogEntry } from './knowledge/git/index.js';
 export * from './knowledge/knowledge-ops/index.js';
 export * from './knowledge/context-assets/index.js';
+export * from './knowledge/preferences/index.js';
 export * from './knowledge/context-feedback/index.js';
 export * from './knowledge/learning/index.js';
 export * from './knowledge/coevolution/index.js';

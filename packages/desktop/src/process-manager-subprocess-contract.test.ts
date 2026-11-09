@@ -3,10 +3,11 @@ import path from 'path';
 import { EventEmitter } from 'events';
 import { describe, expect, it } from 'vitest';
 import { _terminateChildProcess_forTest, isMindosOwnedCommandLine } from './process-manager';
+// The process layer is three files since the split; these rules cover all of it.
 
 describe('process-manager subprocess cleanup contract', () => {
   it('uses argv-safe subprocess calls for port and process probes', () => {
-    const source = readFileSync(path.join(__dirname, 'process-manager.ts'), 'utf-8');
+    const source = ['process-manager.ts', 'process-kill.ts', 'process-cleanup.ts'].map((f) => readFileSync(path.join(__dirname, f), 'utf-8')).join('\n');
 
     expect(source).not.toContain("require('child_process')");
     expect(source).not.toContain('execAsync(');
@@ -23,7 +24,7 @@ describe('process-manager subprocess cleanup contract', () => {
   });
 
   it('uses a single Desktop-managed home for PID files and crash logs', () => {
-    const source = readFileSync(path.join(__dirname, 'process-manager.ts'), 'utf-8');
+    const source = ['process-manager.ts', 'process-kill.ts', 'process-cleanup.ts'].map((f) => readFileSync(path.join(__dirname, f), 'utf-8')).join('\n');
 
     expect(source).toContain("import { getDesktopConfigDir } from './desktop-home'");
     expect(source).toContain("path.join(getDesktopConfigDir(), 'config.json')");
@@ -33,7 +34,7 @@ describe('process-manager subprocess cleanup contract', () => {
   });
 
   it('terminates managed subprocess trees across platforms', () => {
-    const source = readFileSync(path.join(__dirname, 'process-manager.ts'), 'utf-8');
+    const source = ['process-manager.ts', 'process-kill.ts', 'process-cleanup.ts'].map((f) => readFileSync(path.join(__dirname, f), 'utf-8')).join('\n');
 
     expect(source).toContain("execFile('taskkill.exe', ['/PID', String(proc.pid), '/T', '/F']");
     expect(source).toContain("process.kill(-proc.pid, 'SIGTERM')");
@@ -50,7 +51,7 @@ describe('process-manager subprocess cleanup contract', () => {
   });
 
   it('validates MindOS health payloads before treating ports as ready', () => {
-    const source = readFileSync(path.join(__dirname, 'process-manager.ts'), 'utf-8');
+    const source = ['process-manager.ts', 'process-kill.ts', 'process-cleanup.ts'].map((f) => readFileSync(path.join(__dirname, f), 'utf-8')).join('\n');
 
     expect(source).toContain("import { verifyMindOsWebHealth } from './mindos-web-health'");
     expect(source).toContain('if (await verifyMindOsWebHealth(port, 2000)) return true;');
@@ -60,7 +61,7 @@ describe('process-manager subprocess cleanup contract', () => {
   });
 
   it('does not depend on raw HTTP health checks for process readiness', () => {
-    const source = readFileSync(path.join(__dirname, 'process-manager.ts'), 'utf-8');
+    const source = ['process-manager.ts', 'process-kill.ts', 'process-cleanup.ts'].map((f) => readFileSync(path.join(__dirname, f), 'utf-8')).join('\n');
 
     expect(source).not.toContain("import http from 'http'");
     expect(source).not.toContain("path: '/api/health'");

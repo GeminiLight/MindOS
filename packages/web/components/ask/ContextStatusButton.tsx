@@ -74,6 +74,16 @@ function contextWindowSourceLabel(source: ContextUsageMetadata['contextWindowSou
   return 'runtime metadata';
 }
 
+/**
+ * Agents report spend with their own currency, and a cheap turn can cost well
+ * under a cent — rounding to 2 decimals would read as free, so keep up to 4.
+ */
+function formatSessionCost(cost: { amount: number; currency: string }): string {
+  const magnitude = Math.abs(cost.amount);
+  const fractionDigits = magnitude > 0 && magnitude < 0.01 ? 4 : 2;
+  return `${cost.amount.toFixed(fractionDigits)} ${cost.currency}`;
+}
+
 function buildTooltipLines(usage: ContextUsageMetadata, locale: string): string[] {
   const percent = usagePercent(usage);
   if (percent === null) return [locale === 'zh' ? '上下文用量暂不可用' : 'Context usage unavailable'];
@@ -97,6 +107,7 @@ function buildTooltipLines(usage: ContextUsageMetadata, locale: string): string[
       usage.contextWindowIsFallback ? '未知模型窗口，MindOS 使用保守预算。' : '',
       usage.runtimeMessageCompaction !== undefined ? `运行时历史压缩: ${usage.runtimeMessageCompaction ? '开启' : '关闭'}` : '',
       usage.compactedMessages !== undefined ? `已压缩历史消息: ${formatTokenCount(usage.compactedMessages)}` : '',
+      usage.cost ? `本次会话花费: ${formatSessionCost(usage.cost)}` : '',
       runtimeWillCompactHistory ? '历史将交由运行时按需压缩' : contextActionLabel(usage.action, locale),
     ].filter(Boolean);
   }
@@ -111,6 +122,7 @@ function buildTooltipLines(usage: ContextUsageMetadata, locale: string): string[
     usage.contextWindowIsFallback ? 'Unknown model window; MindOS used the conservative fallback budget.' : '',
     usage.runtimeMessageCompaction !== undefined ? `Runtime history compaction: ${usage.runtimeMessageCompaction ? 'on' : 'off'}` : '',
     usage.compactedMessages !== undefined ? `Compacted history messages: ${formatTokenCount(usage.compactedMessages)}` : '',
+    usage.cost ? `Session cost: ${formatSessionCost(usage.cost)}` : '',
     runtimeWillCompactHistory ? 'History will be compacted by the runtime as needed' : contextActionLabel(usage.action, locale),
   ].filter(Boolean);
 }

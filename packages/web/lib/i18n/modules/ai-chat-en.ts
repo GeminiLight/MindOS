@@ -28,6 +28,8 @@ export const aiChatEn = {
     attachFile: 'Context',
     attachFileLabel: 'Document',
     attachImageLabel: 'Image',
+    goalMenuLabel: 'Set a goal',
+    goalMenuActiveLabel: 'Goal in progress',
     uploadedFiles: 'Uploaded',
     uploadsProcessing: 'Wait for uploaded files to finish processing before sending.',
     queueFollowUpTitle: 'Queue follow-up',

@@ -6,6 +6,7 @@ import { createObsidianEditorWindow } from './obsidian-editor-window';
 import { openObsidianDraftStore, type DraftRecord } from './obsidian-draft-store';
 import { canRestoreObsidianDraft, createRecoverableObsidianSession } from './obsidian-recovery-session';
 import { untilAbort } from './obsidian-response';
+import { mt } from './i18n/main-strings';
 
 type Context = { window: BrowserWindow; baseUrl: string; token: string; isCurrent: () => boolean };
 
@@ -29,6 +30,7 @@ export function createObsidianEditorLauncher(getContext: () => Context | null, a
       const { pluginId, filePath } = input as Record<string, unknown>;
       if (typeof pluginId !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(pluginId)
         || typeof filePath !== 'string' || filePath.length > 1024 || !/\.md$/i.test(filePath)
+        // eslint-disable-next-line no-control-regex -- rejecting control characters is the point of this check
         || /[\\:\x00-\x1f]/.test(filePath) || filePath.split('/').some(part => !part || part.startsWith('.'))) {
         throw new Error('Invalid plugin or Markdown document path.');
       }
@@ -58,11 +60,14 @@ export function createObsidianEditorLauncher(getContext: () => Context | null, a
             const signal = AbortSignal.any([lifetime.signal, AbortSignal.timeout(60_000)]);
             signal.throwIfAborted();
             const result = await untilAbort(dialog.showMessageBox(context.window, {
-              type: 'warning', title: 'MindOS · 草稿恢复', message: matches ? '发现未保存的插件草稿' : '草稿对应的笔记或插件已发生变化',
+              type: 'warning', title: mt('obsidianRecoveryTitle'),
+              message: matches ? mt('obsidianRecoveryFound') : mt('obsidianRecoveryStale'),
               detail: `${latest.filePath}\n${new Date(latest.updatedAt).toLocaleString()}\n\n${matches
-                ? '恢复只载入编辑器，不会自动写入知识库。保存时仍会检查版本。'
-                : '为防止覆盖较新的内容，不直接恢复。请查看备份文件中的 content 字段，手动核对。'}\n\n共 ${records.length} 份备份，当前为最近一份；其余备份仍保留。`,
-              buttons: matches ? ['取消', '恢复草稿', '查看备份文件'] : ['取消', '查看备份文件'],
+                ? mt('obsidianRecoveryMatchDetail')
+                : mt('obsidianRecoveryStaleDetail')}\n\n${mt('obsidianRecoveryCount', { count: records.length })}`,
+              buttons: matches
+                ? [mt('cancel'), mt('obsidianRestoreDraft'), mt('obsidianOpenBackups')]
+                : [mt('cancel'), mt('obsidianOpenBackups')],
               defaultId: 0, cancelId: 0, noLink: true, signal,
             }), signal);
             check(); lifetime.signal.throwIfAborted();

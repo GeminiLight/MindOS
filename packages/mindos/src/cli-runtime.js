@@ -19,6 +19,7 @@ const viewsCmd = () => import('../bin/commands/views.js');
 const fileCmd = () => import('../bin/commands/file.js');
 const spaceCmd = () => import('../bin/commands/space.js');
 const searchCmd = () => import('../bin/commands/search.js');
+const echoCmd = () => import('../bin/commands/echo.js');
 const startCmd = () => import('../bin/commands/start.js');
 const devCmd = () => import('../bin/commands/dev.js');
 const stopCmd = () => import('../bin/commands/stop.js');
@@ -51,6 +52,7 @@ const commandLoaders = [
   viewsCmd,
   spaceCmd,
   searchCmd,
+  echoCmd,
   startCmd,
   devCmd,
   stopCmd,
@@ -89,6 +91,7 @@ const loaderByDisplayName = {
   views: viewsCmd,
   space: spaceCmd,
   search: searchCmd,
+  echo: echoCmd,
   mcp: mcpCmd,
   onboard: onboardCmd,
   init: onboardCmd,

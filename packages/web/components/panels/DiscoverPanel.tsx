@@ -17,7 +17,6 @@ export default function DiscoverPanel({ active }: DiscoverPanelProps) {
   const d = t.panels.discover;
   const pathname = usePathname() ?? '';
   const capabilityMarketActive = pathname === '/explore/capabilities';
-  const pluginMarketActive = pathname === '/explore/plugins';
   const skillMarketActive = pathname === '/explore/skills';
   const mcpMarketActive = pathname === '/explore/mcp';
   const useCasesActive = pathname === '/explore';
@@ -45,13 +44,6 @@ export default function DiscoverPanel({ active }: DiscoverPanelProps) {
           title={d.mcpServers}
           href="/explore/mcp"
           active={mcpMarketActive}
-          activeVariant="rail"
-        />
-        <PanelNavRow
-          icon={<Blocks size={14} className={pluginMarketActive ? 'text-[var(--amber)]' : 'text-muted-foreground'} />}
-          title={d.pluginMarket}
-          href="/explore/plugins"
-          active={pluginMarketActive}
           activeVariant="rail"
         />
         <PanelNavRow

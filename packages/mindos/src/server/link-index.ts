@@ -1,4 +1,10 @@
 import { extname, posix } from 'node:path';
+import {
+  collectScannableLines,
+  parseInlineTags,
+  parseWikiLinksInLine,
+  splitSubpath,
+} from '../foundation/shared/markdown/index.js';
 import { collectAllFilesFromMindRoot, readTextFileFromMindRoot } from './runtime.js';
 
 /**
@@ -279,29 +285,27 @@ function extractLinkHits(
     const snippet = line.original.trim();
     if (!snippet) continue;
 
-    const wikiRe = /!?\[\[([^\]\n]+)\]\]/g;
-    let match: RegExpExecArray | null;
-    while ((match = wikiRe.exec(line.text)) !== null) {
-      const parsed = parseWikiTarget(match[1]);
-      const target = parsed.targetText
-        ? resolveLinkTarget(parsed.targetText, sourceDir, fileSet, basenameMap, false, 'wiki')
+    for (const found of parseWikiLinksInLine(line.text, line.original)) {
+      const target = found.target
+        ? resolveLinkTarget(found.target, sourceDir, fileSet, basenameMap, false, 'wiki')
         : { target: source, resolution: 'resolved' as const };
       if (target) {
         hits.push({
           source,
           snippet,
           kind: 'wiki',
-          rawTarget: parsed.targetText,
-          displayText: parsed.displayText,
-          targetSubpath: parsed.subpath,
+          rawTarget: found.target,
+          displayText: found.alias,
+          targetSubpath: found.subpath,
           line: line.number,
-          column: match.index + 1,
+          column: found.column,
           ...target,
         });
       }
     }
 
     const markdownRe = /!?\[([^\]\n]*)\]\(([^)\n]+)\)/g;
+    let match: RegExpExecArray | null;
     while ((match = markdownRe.exec(line.text)) !== null) {
       if (match[0].startsWith('!')) continue;
       const parsed = parseMarkdownTarget(match[1], match[2]);
@@ -325,76 +329,11 @@ function extractLinkHits(
   return hits;
 }
 
-type ScannableLine = {
-  original: string;
-  text: string;
-  number: number;
-};
-
-function collectScannableLines(content: string): ScannableLine[] {
-  const rawLines = content.split(/\r?\n/);
-  const lines: ScannableLine[] = [];
-  let inFrontmatter = rawLines[0]?.trim() === '---';
-  let inFence = false;
-  let fenceChar: '`' | '~' | null = null;
-  let fenceLength = 0;
-
-  for (let index = 0; index < rawLines.length; index += 1) {
-    const original = rawLines[index] ?? '';
-    const trimmed = original.trim();
-
-    if (inFrontmatter) {
-      if (index > 0 && trimmed === '---') inFrontmatter = false;
-      continue;
-    }
-
-    const fenceMatch = original.match(/^\s*(`{3,}|~{3,})/);
-    if (inFence) {
-      if (fenceMatch && fenceChar && fenceMatch[1]?.startsWith(fenceChar) && fenceMatch[1].length >= fenceLength) {
-        inFence = false;
-        fenceChar = null;
-        fenceLength = 0;
-      }
-      continue;
-    }
-    if (fenceMatch) {
-      const marker = fenceMatch[1] ?? '';
-      fenceChar = marker[0] as '`' | '~';
-      fenceLength = marker.length;
-      inFence = true;
-      continue;
-    }
-
-    lines.push({
-      original,
-      text: maskInlineCode(original),
-      number: index + 1,
-    });
-  }
-
-  return lines;
-}
-
-function maskInlineCode(line: string): string {
-  return line.replace(/`+[^`]*?`+/g, (match) => ' '.repeat(match.length));
-}
-
 type ParsedTarget = {
   targetText: string;
   displayText?: string;
   subpath?: LinkTargetSubpath;
 };
-
-function parseWikiTarget(raw: string | undefined): ParsedTarget {
-  const value = raw?.trim() ?? '';
-  const [targetAndSubpath = '', alias] = value.split('|');
-  const { targetText, subpath } = splitSubpath(targetAndSubpath.trim());
-  return {
-    targetText,
-    displayText: alias?.trim() || undefined,
-    subpath,
-  };
-}
 
 function parseMarkdownTarget(label: string | undefined, rawDestination: string | undefined): ParsedTarget {
   let destination = rawDestination?.trim() ?? '';
@@ -408,22 +347,6 @@ function parseMarkdownTarget(label: string | undefined, rawDestination: string |
     displayText: label?.trim() || undefined,
     subpath,
   };
-}
-
-function splitSubpath(value: string): { targetText: string; subpath?: LinkTargetSubpath } {
-  const hashIndex = value.indexOf('#');
-  if (hashIndex === -1) return { targetText: value.trim() };
-
-  const targetText = value.slice(0, hashIndex).trim();
-  const rawSubpath = value.slice(hashIndex + 1).trim();
-  if (!rawSubpath) return { targetText };
-
-  if (rawSubpath.startsWith('^')) {
-    const block = rawSubpath.slice(1).trim();
-    return block ? { targetText, subpath: { type: 'block', value: block } } : { targetText };
-  }
-
-  return { targetText, subpath: { type: 'heading', value: rawSubpath } };
 }
 
 type ResolvedLinkTarget = {
@@ -587,9 +510,9 @@ function extractTags(content: string): string[] {
   }
 
   const scannableContent = collectScannableLines(content).map((line) => line.text).join('\n');
-  const inlineTagRe = /(^|\s)#([\p{L}\p{N}_/-]+)/gu;
-  let match: RegExpExecArray | null;
-  while ((match = inlineTagRe.exec(scannableContent)) !== null) addTag(tags, match[2]);
+  // Shared with the reading view so the graph and the reader agree on what a
+  // tag is — notably that a purely numeric `#1` is prose, not a tag.
+  for (const found of parseInlineTags(scannableContent)) addTag(tags, found.tag);
 
   return [...tags].sort((a, b) => a.localeCompare(b));
 }

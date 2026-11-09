@@ -5,11 +5,17 @@
 
 import type { SessionNotification, SessionUpdate } from '@agentclientprotocol/sdk';
 import type {
-  AcpContentBlock,
   AcpPermissionEvent,
+  AcpSessionUsage,
   AcpSession,
   AcpSessionUpdate,
+  AcpToolCallContentBlock,
+  AcpToolCallDiffBlock,
   AcpToolCallFull,
+} from './types.js';
+import {
+  ACP_TOOL_CALL_DIFF_MAX_COUNT,
+  ACP_TOOL_CALL_DIFF_MAX_TEXT,
 } from './types.js';
 import type { AcpClientCallbacks, AcpConnection } from './subprocess.js';
 import {
@@ -203,6 +209,11 @@ export function sdkNotificationToUpdate(
       base.configOptions = parseConfigOptions((update as Record<string, unknown>).configOptions);
       break;
 
+    case 'usage_update': {
+      base.usage = parseSessionUsage(update as Record<string, unknown>);
+      break;
+    }
+
     case 'session_info_update': {
       const info = update as Record<string, unknown>;
       base.sessionInfo = {
@@ -257,20 +268,27 @@ function parseToolCallLocations(value: unknown): NonNullable<AcpToolCallFull['lo
   return locations;
 }
 
-function parseToolCallContent(value: unknown): AcpContentBlock[] | undefined {
+function parseToolCallContent(value: unknown): AcpToolCallContentBlock[] | undefined {
   if (!Array.isArray(value)) return undefined;
-  const blocks: AcpContentBlock[] = [];
+  const blocks: AcpToolCallContentBlock[] = [];
+  let diffCount = 0;
   for (const item of value) {
     const block = parseToolCallContentBlock(item);
-    if (block) blocks.push(block);
+    if (!block) continue;
+    if (block.type === 'diff') {
+      if (diffCount >= ACP_TOOL_CALL_DIFF_MAX_COUNT) continue;
+      diffCount += 1;
+    }
+    blocks.push(block);
     if (blocks.length >= 50) break;
   }
   return blocks.length > 0 ? blocks : undefined;
 }
 
-function parseToolCallContentBlock(value: unknown): AcpContentBlock | null {
+function parseToolCallContentBlock(value: unknown): AcpToolCallContentBlock | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;
+  if (record.type === 'diff') return parseToolCallDiffBlock(record);
   if (record.type === 'resource_link' && typeof record.uri === 'string') {
     return {
       type: 'resource_link',
@@ -292,6 +310,51 @@ function parseToolCallContentBlock(value: unknown): AcpContentBlock | null {
     };
   }
   return null;
+}
+
+/**
+ * ACP reports `used` / `size` in tokens, and an optional cumulative `cost`.
+ * Usage above the window is legitimate — agents send it right before compacting
+ * — so only non-positive or non-numeric counts are rejected.
+ */
+function parseSessionUsage(record: Record<string, unknown>): AcpSessionUsage | undefined {
+  const usedTokens = record.used;
+  const contextWindow = record.size;
+  if (typeof usedTokens !== 'number' || !Number.isFinite(usedTokens) || usedTokens < 0) return undefined;
+  if (typeof contextWindow !== 'number' || !Number.isFinite(contextWindow) || contextWindow <= 0) return undefined;
+
+  const cost = record.cost;
+  if (cost && typeof cost === 'object' && !Array.isArray(cost)) {
+    const { amount, currency } = cost as Record<string, unknown>;
+    if (typeof amount === 'number' && Number.isFinite(amount) && typeof currency === 'string' && currency.trim()) {
+      return { usedTokens, contextWindow, cost: { amount, currency: currency.trim() } };
+    }
+  }
+  return { usedTokens, contextWindow };
+}
+
+/**
+ * ACP `Diff` requires `path` and `newText`; `oldText` is null for a new file.
+ * A block missing either required field describes an unknown file change, so we
+ * drop it rather than render a half-truth.
+ */
+function parseToolCallDiffBlock(record: Record<string, unknown>): AcpToolCallDiffBlock | null {
+  const path = typeof record.path === 'string' ? record.path.trim() : '';
+  if (!path) return null;
+  if (typeof record.newText !== 'string') return null;
+  if (record.oldText !== null && record.oldText !== undefined && typeof record.oldText !== 'string') return null;
+
+  const oldText = typeof record.oldText === 'string' ? record.oldText : '';
+  const newText = record.newText;
+  const truncated = oldText.length > ACP_TOOL_CALL_DIFF_MAX_TEXT || newText.length > ACP_TOOL_CALL_DIFF_MAX_TEXT;
+
+  return {
+    type: 'diff',
+    path,
+    oldText: oldText.slice(0, ACP_TOOL_CALL_DIFF_MAX_TEXT),
+    newText: newText.slice(0, ACP_TOOL_CALL_DIFF_MAX_TEXT),
+    ...(truncated ? { truncated: true } : {}),
+  };
 }
 
 function extractRawOutputPointers(value: unknown): {

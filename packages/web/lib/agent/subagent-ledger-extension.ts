@@ -27,6 +27,7 @@ import {
   findBuiltinWebRuntimePackagePath,
   resolveBuiltinWebRuntimePackagePath,
 } from './builtin-extension-runtime';
+import { resolveUpstreamSubagentEntry } from './subagent-extension-entry';
 import { effectiveAiConfig } from '../settings';
 import { getDefaultApi, getDefaultBaseUrl, getPreset, toPiProvider, type ProviderId } from './providers';
 
@@ -177,7 +178,8 @@ function normalizedPathKey(filePath: string): string {
 function isSubagentExtensionPath(filePath: string): boolean {
   const normalized = normalizedPathKey(filePath);
   return normalized.includes('/subagent-ledger-extension.')
-    || normalized.includes('/pi-subagents/src/extension/');
+    || normalized.includes('/pi-subagents/src/extension/')
+    || normalized.includes('/pi-subagents/bundle/');
 }
 
 function isKbExtensionPath(filePath: string): boolean {
@@ -508,7 +510,18 @@ export async function withMindosSubagentChildRuntime<T>(
 
 async function loadUpstreamSubagentExtension(): Promise<RegisterSubagentExtension> {
   const webAppDir = currentWebAppDir();
-  const upstreamPath = resolveBuiltinWebRuntimePackagePath(webAppDir, 'pi-subagents', 'src', 'extension', 'index.ts');
+  // 0.87 ships a prebuilt bundle and names its entry in `piExtension`; older
+  // releases shipped TypeScript source only. Read the manifest so the layout
+  // stays the package's business, not ours.
+  const manifestPath = resolveBuiltinWebRuntimePackagePath(webAppDir, 'pi-subagents', 'package.json');
+  const packageDir = path.dirname(manifestPath);
+  let manifest: Parameters<typeof resolveUpstreamSubagentEntry>[1] = {};
+  try {
+    manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8')) as typeof manifest;
+  } catch {
+    // An unreadable manifest falls back to the published source entry below.
+  }
+  const upstreamPath = resolveUpstreamSubagentEntry(packageDir, manifest);
   const upstreamRealPath = fs.realpathSync(upstreamPath);
   const jiti = createJiti(upstreamRealPath, {
     moduleCache: false,

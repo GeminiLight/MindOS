@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { flushSync } from 'react-dom';
 import { useRouter, usePathname } from 'next/navigation';
+import { onSearchQueryRequest } from '@/lib/search-events';
 import Link from 'next/link';
 import { Search, Settings, Menu, FolderInput } from 'lucide-react';
 import ActivityBar from './ActivityBar';
@@ -435,6 +436,14 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
     lp.setActivePanel('search');
     setSearchFocusRequest((request) => request + 1);
   }, [activeLeftPanel, lp]);
+
+  // Tag chips in the reading view ask for a search rather than navigating; the
+  // query is paired with a focus bump so repeat clicks on the same tag re-apply.
+  const [searchPresetQuery, setSearchPresetQuery] = useState<{ query: string; nonce: number } | null>(null);
+  useEffect(() => onSearchQueryRequest((query) => {
+    setSearchPresetQuery((current) => ({ query, nonce: (current?.nonce ?? 0) + 1 }));
+    openOrFocusSearchPanel();
+  }), [openOrFocusSearchPanel]);
 
   const closeSearchPanel = useCallback(() => {
     const nextPanel = resolveSearchClosePanel();
@@ -915,6 +924,7 @@ export default function SidebarLayout({ fileTree, mindSystemSlots, children }: S
             <SearchPanel
               active={activeLeftPanel === 'search'}
               focusRequest={searchFocusRequest}
+              presetQuery={searchPresetQuery}
               onClose={closeSearchPanel}
             />
           </div>

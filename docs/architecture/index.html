@@ -1,0 +1,1029 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MindOS 架构图</title>
+<meta name="description" content="MindOS 的客户端、产品核心、Agent 运行、协议与存储的可视化架构">
+<style>
+/*
+ * Tokens mirror packages/web/app/globals.css so the page reads as part of the
+ * product. The chart bar color is the one exception: the brand amber fails the
+ * dark-mode lightness band, so dark uses a validated step of the same hue.
+ */
+:root {
+  --background: #f8f6f1;
+  --foreground: #1c1a17;
+  --card: #f2efe9;
+  --muted: #e8e4db;
+  --muted-foreground: #685f52;
+  --accent: #d9d3c6;
+  --border: rgba(28, 26, 23, 0.1);
+  --border-strong: rgba(28, 26, 23, 0.2);
+  --amber: #c8873a;
+  --amber-subtle: rgba(200, 135, 30, 0.08);
+  --amber-line: rgba(200, 135, 58, 0.55);
+  --success: #234b2c;
+  --error: #762c2c;
+  --bar: #c8873a;
+  --edge: rgba(28, 26, 23, 0.16);
+  --shadow: 0 1px 2px rgba(28, 26, 23, 0.06), 0 8px 24px rgba(28, 26, 23, 0.06);
+  --font-sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-serif: "Lora", "Songti SC", Georgia, serif;
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --background: #131210;
+  --foreground: #e8e4dc;
+  --card: #1c1a17;
+  --muted: #252219;
+  --muted-foreground: #8a8275;
+  --accent: #2e2b22;
+  --border: rgba(232, 228, 220, 0.08);
+  --border-strong: rgba(232, 228, 220, 0.18);
+  --amber: #d4954a;
+  --amber-subtle: rgba(212, 149, 74, 0.10);
+  --amber-line: rgba(212, 149, 74, 0.6);
+  --success: #a0c4a4;
+  --error: #eeaaa4;
+  --bar: #c28035;
+  --edge: rgba(232, 228, 220, 0.14);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.25);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; border-radius: 6px; }
+code, .mono { font-family: var(--font-mono); font-size: 0.92em; }
+
+/* ── Header ─────────────────────────────────────────────────────────── */
+header.top {
+  position: sticky; top: 0; z-index: 30;
+  background: color-mix(in srgb, var(--background) 92%, transparent);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border);
+}
+.top-inner {
+  max-width: 1280px; margin: 0 auto; padding: 14px 28px 0;
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 24px;
+}
+.brand { display: flex; align-items: baseline; gap: 10px; flex: 1 1 auto; min-width: 260px; }
+.brand h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: 0.01em; }
+.brand .dot { width: 8px; height: 8px; border-radius: 99px; background: var(--amber); display: inline-block; transform: translateY(-1px); }
+.brand .meta { color: var(--muted-foreground); font-size: 12px; }
+.theme-toggle {
+  border: 1px solid var(--border-strong); background: transparent; border-radius: 8px;
+  padding: 5px 10px; font-size: 12px; cursor: pointer; color: var(--muted-foreground);
+  margin-bottom: 10px;
+}
+.theme-toggle:hover { color: var(--foreground); background: var(--muted); }
+nav.tabs { display: flex; gap: 2px; width: 100%; overflow-x: auto; }
+nav.tabs button {
+  border: 0; background: transparent; padding: 10px 14px 11px; cursor: pointer;
+  color: var(--muted-foreground); border-bottom: 2px solid transparent; white-space: nowrap;
+  transition: color 0.15s;
+}
+nav.tabs button:hover { color: var(--foreground); }
+nav.tabs button[aria-selected="true"] { color: var(--foreground); border-bottom-color: var(--amber); font-weight: 500; }
+
+main { max-width: 1280px; margin: 0 auto; padding: 28px 28px 80px; }
+section.view { display: none; }
+section.view.active { display: block; }
+.lede { max-width: 760px; margin: 0 0 24px; color: var(--muted-foreground); }
+.lede strong { color: var(--foreground); font-weight: 500; }
+h2 { font-size: 15px; font-weight: 600; margin: 32px 0 12px; }
+h2:first-child { margin-top: 0; }
+
+/* ── Overview map ───────────────────────────────────────────────────── */
+.map { position: relative; }
+.map svg.edges { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+/* Edges stay hidden until a module is hovered or selected: drawn all at once
+   they cross unrelated cards, and the layering already shows the structure. */
+.edges path { fill: none; stroke: var(--amber-line); stroke-width: 2; opacity: 0; transition: opacity 0.15s; }
+.edges path.hot { opacity: 1; }
+/* A halo in the page background keeps a label readable where it crosses a card. */
+.edges .edge-label {
+  font-size: 11px; fill: var(--foreground); font-family: var(--font-mono); opacity: 0; transition: opacity 0.15s;
+  stroke: var(--background); stroke-width: 4px; stroke-linejoin: round; paint-order: stroke;
+}
+.edges .edge-label.hot { opacity: 1; }
+
+.layer { position: relative; margin-bottom: 44px; }
+.layer:last-child { margin-bottom: 0; }
+.layer-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+.layer-head .name { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; color: var(--muted-foreground); text-transform: uppercase; }
+.layer-head .note { font-size: 12px; color: var(--muted-foreground); }
+.row { display: grid; gap: 12px; }
+.row.cols-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.row.cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.row.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.row.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.core-frame {
+  border: 1px solid var(--border-strong); border-radius: 14px; padding: 14px;
+  background: linear-gradient(180deg, var(--amber-subtle), transparent 70%);
+}
+.core-frame .core-title { display: flex; justify-content: space-between; gap: 12px; margin: 0 2px 12px; flex-wrap: wrap; }
+.core-frame .core-title b { font-weight: 600; }
+.core-frame .core-title span { color: var(--muted-foreground); font-size: 12px; }
+
+/* A <button> centers its content vertically by default; cards in one row must
+   share a top edge even when one subtitle wraps to two lines. */
+.node {
+  position: relative; text-align: left; cursor: pointer;
+  display: flex; flex-direction: column; justify-content: flex-start;
+  border: 1px solid var(--border); background: var(--card); border-radius: 10px;
+  padding: 11px 12px 12px; min-height: 92px;
+  transition: border-color 0.15s, box-shadow 0.15s, opacity 0.15s, transform 0.15s;
+}
+.node:hover, .node.selected { border-color: var(--amber-line); box-shadow: var(--shadow); }
+.node.selected { background: color-mix(in srgb, var(--card) 80%, var(--amber-subtle)); }
+.node.dim { opacity: 0.35; }
+.node .n-title { font-weight: 600; font-size: 13.5px; display: flex; align-items: center; gap: 6px; }
+.node .n-sub { color: var(--muted-foreground); font-size: 12px; margin-top: 2px; }
+.node .n-loc { position: absolute; top: 11px; right: 12px; font-family: var(--font-mono); font-size: 11px; color: var(--muted-foreground); }
+.node .n-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.tag {
+  font-size: 11px; padding: 1px 7px; border-radius: 99px; background: var(--muted);
+  color: var(--muted-foreground); white-space: nowrap;
+}
+.tag.amber { background: var(--amber-subtle); color: var(--foreground); box-shadow: inset 0 0 0 1px var(--amber-line); }
+.legend { display: flex; flex-wrap: wrap; gap: 16px; margin: 4px 0 22px; font-size: 12px; color: var(--muted-foreground); }
+.legend i { display: inline-block; width: 18px; height: 2px; background: var(--edge); vertical-align: middle; margin-right: 6px; }
+.legend i.hot { background: var(--amber-line); }
+.legend .hint { color: var(--foreground); }
+
+/* ── Detail drawer ──────────────────────────────────────────────────── */
+aside.drawer {
+  position: fixed; top: 0; right: 0; bottom: 0; z-index: 40; width: min(420px, 100vw);
+  background: var(--background); border-left: 1px solid var(--border-strong);
+  box-shadow: var(--shadow); transform: translateX(102%); transition: transform 0.25s ease;
+  display: flex; flex-direction: column;
+}
+aside.drawer.open { transform: translateX(0); }
+.drawer-head { padding: 18px 20px 14px; border-bottom: 1px solid var(--border); display: flex; gap: 12px; align-items: flex-start; }
+.drawer-head h3 { margin: 0; font-size: 16px; }
+.drawer-head .d-sub { color: var(--muted-foreground); font-size: 12px; margin-top: 2px; }
+.drawer-head .close { margin-left: auto; border: 0; background: transparent; cursor: pointer; color: var(--muted-foreground); font-size: 18px; line-height: 1; padding: 4px 6px; border-radius: 6px; }
+.drawer-head .close:hover { background: var(--muted); color: var(--foreground); }
+.drawer-body { padding: 16px 20px 28px; overflow-y: auto; }
+.drawer-body p { margin: 0 0 12px; }
+.drawer-body h4 { margin: 18px 0 8px; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; color: var(--muted-foreground); text-transform: uppercase; }
+.drawer-body ul { margin: 0; padding-left: 18px; }
+.drawer-body li { margin: 3px 0; }
+.drawer-body .files li { list-style: none; margin-left: -18px; }
+.drawer-body .files code { font-size: 12px; }
+.links { display: flex; flex-wrap: wrap; gap: 6px; }
+.links button { border: 1px solid var(--border-strong); background: transparent; border-radius: 99px; padding: 3px 10px; font-size: 12px; cursor: pointer; }
+.links button:hover { border-color: var(--amber-line); background: var(--amber-subtle); }
+.links .dir { color: var(--muted-foreground); margin-right: 4px; }
+.scrim { position: fixed; inset: 0; z-index: 30; background: rgba(0, 0, 0, 0.18); opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+.scrim.open { opacity: 1; pointer-events: auto; }
+
+/* ── Core layering ──────────────────────────────────────────────────── */
+.stack { display: grid; gap: 10px; }
+.stratum {
+  display: grid; grid-template-columns: 170px 1fr; gap: 16px; align-items: start;
+  border: 1px solid var(--border); background: var(--card); border-radius: 12px; padding: 14px 16px;
+}
+.stratum .s-name { font-weight: 600; }
+.stratum .s-name small { display: block; color: var(--muted-foreground); font-weight: 400; font-size: 12px; margin-top: 2px; }
+.stratum .s-allow { font-size: 12px; color: var(--muted-foreground); margin-bottom: 8px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: 12px; padding: 3px 9px; border-radius: 7px; background: var(--muted); }
+.chip b { font-weight: 500; }
+.chip span { font-family: var(--font-mono); color: var(--muted-foreground); margin-left: 6px; font-size: 11px; }
+.arrow-row { text-align: center; color: var(--muted-foreground); font-size: 12px; margin: -2px 0; }
+.callout {
+  border-left: 3px solid var(--amber); background: var(--amber-subtle); border-radius: 0 10px 10px 0;
+  padding: 12px 16px; margin: 18px 0; max-width: 900px;
+}
+.callout p { margin: 0 0 6px; }
+.callout p:last-child { margin-bottom: 0; }
+
+/* ── Lanes ──────────────────────────────────────────────────────────── */
+.lanes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.lane { border: 1px solid var(--border); background: var(--card); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+.lane.primary { border-color: var(--amber-line); }
+.lane .l-name { font-family: var(--font-mono); font-size: 13px; font-weight: 600; }
+.lane .l-how { font-size: 12px; color: var(--muted-foreground); }
+.lane .l-cover { font-size: 13px; }
+.lane .l-state { margin-top: auto; padding-top: 8px; border-top: 1px dashed var(--border-strong); font-size: 12px; color: var(--muted-foreground); }
+.runner {
+  margin: 0 0 12px; border: 1px dashed var(--border-strong); border-radius: 12px; padding: 12px 16px;
+  display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; font-size: 13px;
+}
+.runner code { color: var(--foreground); }
+.grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.panel { border: 1px solid var(--border); background: var(--card); border-radius: 12px; padding: 16px; }
+.panel h3 { margin: 0 0 10px; font-size: 14px; }
+.panel ul { margin: 0; padding-left: 18px; }
+.panel li { margin: 4px 0; }
+.ladder { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
+.ladder span { font-size: 12px; padding: 4px 10px; border-radius: 7px; background: var(--muted); }
+.ladder span.on { background: var(--amber-subtle); box-shadow: inset 0 0 0 1px var(--amber-line); }
+
+/* ── Flows ──────────────────────────────────────────────────────────── */
+.flow-picker { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+.flow-picker button {
+  border: 1px solid var(--border-strong); background: transparent; border-radius: 99px;
+  padding: 6px 14px; cursor: pointer; font-size: 13px;
+}
+.flow-picker button[aria-pressed="true"] { background: var(--amber-subtle); border-color: var(--amber-line); }
+.flow-intro { color: var(--muted-foreground); margin: 0 0 18px; max-width: 760px; }
+ol.steps { list-style: none; margin: 0; padding: 0; position: relative; max-width: 900px; }
+ol.steps::before { content: ""; position: absolute; left: 15px; top: 8px; bottom: 8px; width: 2px; background: var(--border-strong); }
+ol.steps li { position: relative; padding: 0 0 18px 46px; }
+ol.steps li:last-child { padding-bottom: 0; }
+ol.steps .num {
+  position: absolute; left: 0; top: 0; width: 32px; height: 32px; border-radius: 99px;
+  background: var(--card); border: 1px solid var(--border-strong); display: grid; place-items: center;
+  font-family: var(--font-mono); font-size: 12px;
+}
+ol.steps li.active .num { background: var(--amber); border-color: var(--amber); color: #ffffff; }
+ol.steps .s-card { border: 1px solid var(--border); background: var(--card); border-radius: 10px; padding: 10px 14px; transition: border-color 0.15s; }
+ol.steps li.active .s-card { border-color: var(--amber-line); }
+ol.steps .s-top { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+ol.steps .s-what { font-weight: 500; }
+ol.steps .s-where { font-family: var(--font-mono); font-size: 12px; color: var(--muted-foreground); }
+ol.steps .s-why { margin-top: 4px; color: var(--muted-foreground); font-size: 13px; }
+.flow-controls { display: flex; gap: 8px; margin: 18px 0 0 46px; }
+.flow-controls button { border: 1px solid var(--border-strong); background: var(--card); border-radius: 8px; padding: 5px 12px; cursor: pointer; font-size: 13px; }
+.flow-controls button:hover { border-color: var(--amber-line); }
+
+/* ── Scale chart ────────────────────────────────────────────────────── */
+.chart-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 4px; }
+.chart-head h3 { margin: 0; font-size: 14px; }
+.chart-head .sub { color: var(--muted-foreground); font-size: 12px; }
+.seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; background: transparent; padding: 4px 10px; font-size: 12px; cursor: pointer; color: var(--muted-foreground); }
+.seg button[aria-pressed="true"] { background: var(--muted); color: var(--foreground); }
+.chart { position: relative; margin: 14px 0 34px; }
+.bar-row { display: grid; grid-template-columns: 190px 1fr; gap: 12px; align-items: center; height: 30px; }
+.bar-label { font-size: 13px; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bar-label small { color: var(--muted-foreground); font-family: var(--font-mono); font-size: 11px; margin-left: 4px; }
+.bar-track { position: relative; height: 100%; display: flex; align-items: center; }
+.bar {
+  height: 16px; background: var(--bar); border-radius: 0 4px 4px 0; min-width: 2px;
+  transition: filter 0.15s;
+}
+.bar-hit { position: absolute; inset: 0; cursor: default; }
+.bar-row:hover .bar { filter: brightness(1.08); }
+.bar-value { margin-left: 8px; font-family: var(--font-mono); font-size: 11px; color: var(--muted-foreground); }
+.axis { display: grid; grid-template-columns: 190px 1fr; gap: 12px; margin-top: 4px; }
+.axis .ticks { position: relative; height: 18px; border-top: 1px solid var(--border-strong); }
+.axis .tick { position: absolute; top: 4px; transform: translateX(-50%); font-family: var(--font-mono); font-size: 10px; color: var(--muted-foreground); white-space: nowrap; }
+.axis .tick:first-child { transform: none; }
+.axis .tick:last-child { transform: translateX(-100%); }
+.gridline { position: absolute; top: 0; bottom: 22px; width: 1px; background: var(--border); }
+.tooltip {
+  position: fixed; z-index: 50; pointer-events: none; background: var(--foreground); color: var(--background);
+  font-size: 12px; padding: 6px 9px; border-radius: 7px; opacity: 0; transition: opacity 0.1s; max-width: 280px;
+}
+.tooltip.show { opacity: 1; }
+table.data { border-collapse: collapse; width: 100%; max-width: 720px; font-size: 13px; margin: 14px 0 34px; }
+table.data th, table.data td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); }
+table.data th { font-size: 12px; color: var(--muted-foreground); font-weight: 500; }
+table.data td.num { text-align: right; font-family: var(--font-mono); }
+
+footer.foot { max-width: 1280px; margin: 0 auto; padding: 0 28px 40px; color: var(--muted-foreground); font-size: 12px; }
+
+@media (max-width: 1000px) {
+  .row.cols-6 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .row.cols-5 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .lanes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 680px) {
+  .top-inner, main, footer.foot { padding-left: 16px; padding-right: 16px; }
+  .row.cols-6, .row.cols-5, .row.cols-3, .row.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lanes, .grid-2 { grid-template-columns: 1fr; }
+  .stratum { grid-template-columns: 1fr; }
+  .bar-row, .axis { grid-template-columns: 110px 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}
+@media print {
+  header.top { position: static; }
+  section.view { display: block !important; page-break-after: always; }
+  aside.drawer, .scrim, .theme-toggle, nav.tabs, .flow-controls { display: none !important; }
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-inner">
+    <div class="brand">
+      <span class="dot" aria-hidden="true"></span>
+      <h1>MindOS 架构图</h1>
+      <span class="meta" id="snapshot-meta"></span>
+    </div>
+    <button class="theme-toggle" id="theme-toggle" type="button" aria-label="切换浅色 / 深色">深色</button>
+    <nav class="tabs" role="tablist" aria-label="视图">
+      <button role="tab" data-view="overview" aria-selected="true">总览</button>
+      <button role="tab" data-view="core" aria-selected="false">产品核心分层</button>
+      <button role="tab" data-view="agents" aria-selected="false">Agent 怎么跑</button>
+      <button role="tab" data-view="flows" aria-selected="false">数据流</button>
+      <button role="tab" data-view="scale" aria-selected="false">代码规模</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <!-- ═══ 总览 ═══ -->
+  <section class="view active" id="view-overview" role="tabpanel">
+    <p class="lede">
+      MindOS 是<strong>一个本地 Markdown 知识库，加一个把多个外部 AI agent 接进来、让它们共享这个知识库的宿主</strong>。
+      所有客户端都是外壳，业务集中在产品核心 <code>@geminilight/mindos</code>；数据落在你本机。
+      点击任意模块查看职责、关键文件和它连向谁；悬停可高亮它的连线。
+    </p>
+    <div class="legend">
+      <span class="hint">悬停或点击一个模块，显示它的连线</span>
+      <span><i class="hot"></i>调用 / 依赖方向</span>
+      <span><span class="tag amber">产品核心</span></span>
+    </div>
+    <div class="map" id="map">
+      <svg class="edges" id="edges" aria-hidden="true"></svg>
+      <div id="map-layers"></div>
+    </div>
+  </section>
+
+  <!-- ═══ 核心分层 ═══ -->
+  <section class="view" id="view-core" role="tabpanel">
+    <p class="lede">
+      产品核心 <code>packages/mindos/src</code> 的依赖箭头<strong>只能单向</strong>：
+      <code>foundation ← knowledge ← agent ← server</code>，<code>protocols</code> 是低层 domain。
+      这条规则由 <code>packages/mindos/src/layering.test.ts</code> 静态扫描强制执行，例外清单为空——不是约定，是会让 CI 变红的契约。
+    </p>
+    <div class="stack" id="core-stack"></div>
+    <div class="callout">
+      <p><strong>为什么这样分：</strong>同一套业务逻辑被 Web、CLI（<code>packages/mindos/bin</code>）、MCP server 三个入口共用。
+      分层保证底层（文件、配置、权限）永远不会反向依赖上层（HTTP、agent），所以任何入口都能只取它需要的那一层。</p>
+      <p><strong>跨层接线：</strong>需要"下层调上层"的地方（比如 knowledge 读 agent 的运行数据）一律走 port：
+      模块加载时由上层安装实现，注册表是 <code>Symbol.for</code> 进程级，Next 多个 bundle 副本共享同一次安装。</p>
+    </div>
+  </section>
+
+  <!-- ═══ Agent ═══ -->
+  <section class="view" id="view-agents" role="tabpanel">
+    <p class="lede">
+      两件方向相反的事别混在一起：<strong>我们作为宿主去跑 agent</strong>（本页上半部分），以及
+      <strong>别人把我们当 MCP server 用</strong>（外部 agent 读写这个知识库，是"跨 agent 共享上下文"的实现方式）。
+    </p>
+
+    <h2>四条 lane：生命周期统一，对话方式不同</h2>
+    <div class="runner">
+      <span>所有 lane 的生命周期收敛到一个调用方</span>
+      <code>agent/runtime/runRuntimeLaneTurn</code>
+      <span class="tag">ledger 记录</span><span class="tag">取消 / 超时分类</span><span class="tag">断连宽限</span><span class="tag">capsule</span>
+    </div>
+    <div class="lanes" id="lanes"></div>
+
+    <div class="callout">
+      <p><strong>方向是 ACP-first。</strong>2026-06 自研 Claude / Codex lane 时，ACP adapter 还不支持 session 恢复。
+      这个前提在 2026-11 已不成立：<code>codex-acp</code> 底层驱动同一个 Codex App Server，<code>claude-agent-acp</code> 基于同一个 Claude Agent SDK。</p>
+      <p>所以先把 ACP lane 补齐到 ACP v1 完整能力（一次让 40+ 个 agent 都受益），再让两条专用 lane 退休。
+      Phase 1 已完成：diff 透传、用量与费用、结构化计划、图片输入、错误不再被吞。</p>
+    </div>
+
+    <div class="grid-2">
+      <div class="panel">
+        <h3>内置 agent：嵌入 Pi 框架</h3>
+        <ul>
+          <li>Pi 运行时 <code>@earendil-works/pi-coding-agent 1.5.0</code>，进程内运行</li>
+          <li>扩展：<code>pi-subagents</code>、<code>pi-mcp-adapter</code>、<code>pi-web-access</code>、<code>pi-schedule-prompt</code>（已打补丁，上游停更）</li>
+          <li>MindOS 自有扩展：知识库工具（23 个）、提问桥接、IM、子 agent ledger</li>
+          <li><strong>与用户自己的 Pi 隔离</strong>：状态放在 <code>~/.mindos/pi</code>，从不读写 <code>~/.pi</code>；派生子进程时把 <code>PI_CODING_AGENT_DIR</code> 还原成用户原值</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h3>权限：一条阶梯</h3>
+        <div class="ladder"><span>只读</span><span>计划</span><span class="on">询问（默认）</span><span>自动</span><span>完全</span></div>
+        <ul>
+          <li>「计划」是权限的一档：服务端对计划强制只读（<code>agent-turn-service.ts</code>）</li>
+          <li>「目标」不是权限，从输入框的 <code>+</code> 菜单设定</li>
+          <li>线上契约不变：<code>permissionMode</code> 仍是 <code>read|ask|auto|full</code>，映射收敛在 <code>lib/agent/composer-permission.ts</code></li>
+        </ul>
+      </div>
+    </div>
+
+    <h2>反方向：被外部 agent 当 MCP server 用</h2>
+    <div class="grid-2">
+      <div class="panel">
+        <h3>MCP server</h3>
+        <ul>
+          <li>源码 <code>packages/mindos/src/protocols/mcp-server</code>，发布为 <code>dist/protocols/mcp-server/index.cjs</code></li>
+          <li>传输：stdio（agent 直接 spawn）或 HTTP（<code>/mcp</code>，Bearer Token）</li>
+          <li>38 个 <code>mindos_*</code> 工具：读写文件、空间、CSV、bootstrap 等</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h3>谁在用</h3>
+        <ul>
+          <li>27 个 MCP agent 的配置路径由 <code>agent/config/registry.ts</code> 统一维护（Claude Code、Cursor、Windsurf、Gemini CLI、Kimi、Qwen …）</li>
+          <li>MindOS 能一键把自己写进这些 agent 的 MCP 配置，或复制 Skill 过去</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ 数据流 ═══ -->
+  <section class="view" id="view-flows" role="tabpanel">
+    <p class="lede">挑一条路径，按步骤看它穿过哪些层。点步骤或用"下一步"逐层展开。</p>
+    <div class="flow-picker" id="flow-picker"></div>
+    <p class="flow-intro" id="flow-intro"></p>
+    <ol class="steps" id="flow-steps"></ol>
+    <div class="flow-controls">
+      <button type="button" id="flow-prev">上一步</button>
+      <button type="button" id="flow-next">下一步</button>
+      <button type="button" id="flow-all">全部展开</button>
+    </div>
+  </section>
+
+  <!-- ═══ 规模 ═══ -->
+  <section class="view" id="view-scale" role="tabpanel">
+    <p class="lede">
+      源码行数，不含测试与生成物，口径是 <code>.ts / .tsx / .js / .mjs</code>。
+      <strong>Web 比产品核心大</strong>，主要因为组件、多语言文案本来就占地方；其中 <code>lib/obsidian-compat</code> 一块就约 2.7 万行。
+    </p>
+    <div id="charts"></div>
+  </section>
+</main>
+
+<footer class="foot" id="foot"></footer>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-hidden="true" aria-labelledby="d-title">
+  <div class="drawer-head">
+    <div>
+      <h3 id="d-title"></h3>
+      <div class="d-sub" id="d-sub"></div>
+    </div>
+    <button class="close" id="d-close" type="button" aria-label="关闭">×</button>
+  </div>
+  <div class="drawer-body" id="d-body"></div>
+</aside>
+<div class="tooltip" id="tooltip" role="status"></div>
+
+<script>
+/*
+ * Every number and path on this page was measured from the repository at the
+ * snapshot commit below. Regenerate by re-measuring (see the README beside
+ * this file) rather than editing values by hand.
+ */
+const SNAPSHOT = { commit: '2fd3bbd2', date: '2026-11-09' };
+
+// ── Nodes ──────────────────────────────────────────────────────────────
+// `layer` places the node; `links` are outgoing edges [targetId, label].
+const NODES = {
+  web: {
+    layer: 'clients', title: 'Web', sub: 'packages/web · Next.js 16', loc: 219691,
+    tags: ['App Router', 'React 19'],
+    desc: 'Web 是外壳，不是后端。app/api 下 64 个目录里，绝大多数路由只有一行 delegateToMindos(...)：请求经 Next 鉴权后交给产品核心同一张路由表。Web 只把宿主能力（agents、settings、channels、knowledge 写入等）注入核心的可选插槽。',
+    facts: ['页面：view / chat / agents / studio / echo / inbox / settings / wiki …', '17 类文件渲染器：CSV 看板、图谱、PDF、时间线、工作流 …', 'lib/obsidian-compat 约 2.7 万行：在 MindOS 里运行 Obsidian 社区插件', 'lib/i18n：中英双语，按 locale 拆分 bundle'],
+    files: ['app/api/_mindos-adapter.ts', 'app/api/_mindos-services.ts', 'components/chat/ChatContent.tsx', 'lib/agent/mindos-pi-runtime-host.ts'],
+    links: [['server', '路由委托'], ['agent', '内置 agent 宿主']],
+  },
+  desktop: {
+    layer: 'clients', title: 'Desktop', sub: 'packages/desktop · Electron', loc: 18949,
+    tags: ['本地 / 远程', '热更新内核'],
+    desc: '桌面壳负责启动和守护 MindOS 运行时，再把 Web UI 装进窗口。两套更新互不重复：electron-updater 更新 Electron 壳本身，core-updater 不重启地热替换 MindOS 内核包。',
+    facts: ['process-manager：拉起、监控、回收本地 MindOS 进程', 'core-updater：下载、校验 sha256、热替换内核 tarball', 'connect-window：选择本地模式或连接远程（含 SSH 隧道）', '托盘 + 全局快捷键 Cmd/Ctrl+Shift+M'],
+    files: ['src/main.ts', 'src/process-manager.ts', 'src/core-updater.ts', 'src/local-mode.ts', 'src/ssh-tunnel.ts'],
+    links: [['web', '加载 Web UI'], ['cli', '启动内核']],
+  },
+  mobile: {
+    layer: 'clients', title: 'Mobile', sub: 'packages/mobile · Expo', loc: 16573,
+    tags: ['远程连接'],
+    desc: '移动端通过 HTTP 连接一台正在运行的 MindOS：浏览笔记、对话、查看 agent 运行。类型只从 @geminilight/mindos/client-types 重导出（types-only 子路径，编译后是空模块），不会把服务端代码带进移动端 bundle。',
+    facts: ['连接管理与密钥安全存储', 'agent 运行时间线、任务草稿', '与 Web 共用同一套 SSE 事件语义'],
+    files: ['lib/api-client.ts', 'lib/connection-store.ts', 'lib/sse-parser.ts', 'app/agent-runs.tsx'],
+    links: [['server', 'HTTP API']],
+  },
+  extension: {
+    layer: 'clients', title: '浏览器扩展', sub: 'packages/browser-extension', loc: 2154,
+    tags: ['Web Clipper'],
+    desc: '网页剪藏：把当前页面的正文提取出来，送进 MindOS 的收集箱（Inbox），之后再整理归档。',
+    facts: ['popup + content script + background', '提交到 POST /api/inbox/clip'],
+    files: ['src/popup', 'src/content', 'src/background', 'src/manifest.json'],
+    links: [['server', '/api/inbox/clip']],
+  },
+  cli: {
+    layer: 'clients', title: 'CLI', sub: 'packages/mindos/bin · mindos', loc: 12314,
+    tags: ['npm 主入口'],
+    desc: 'npm 包 @geminilight/mindos 的正式入口。主包只带一个 shim，按当前平台解析 @geminilight/mindos-<platform> 运行时包，再执行完整 CLI：启动服务、同步、诊断、安装 MCP 等。',
+    facts: ['bin/mindos-shim.cjs：解析平台 runtime', 'bin/cli.js：命令分组与懒加载', 'Git 同步、doctor、mcp、views 等命令'],
+    files: ['bin/mindos-shim.cjs', 'bin/cli.js', 'bin/lib/sync.js', 'bin/commands/'],
+    links: [['server', '启动 / 调用']],
+  },
+  im: {
+    layer: 'clients', title: 'IM 渠道', sub: 'packages/web/lib/im', loc: 4264,
+    tags: ['9 个平台'],
+    desc: '把 agent 接到聊天工具里：飞书收消息、触发 agent、再回复；其它平台主要是出站发送。都直接用各平台官方 SDK，IMAdapter 是很薄的一层抽象。',
+    facts: ['飞书（含 lark-cli 通道）、Slack、Discord、Telegram', '钉钉、企业微信、微信、QQ', '飞书入站：官方 WSClient 自动重连 + EventDispatcher'],
+    files: ['lib/im/adapters/', 'lib/im/feishu-ws-client.ts', 'lib/im/feishu-dispatcher.ts'],
+    links: [['agent', '触发 agent']],
+  },
+
+  acpAgents: {
+    layer: 'external', title: '外部 agent（我们去跑它）', sub: 'ACP · spawn 子进程', loc: null,
+    tags: ['Claude Code', 'Codex', 'Gemini', '40+'],
+    desc: 'MindOS 作为宿主，通过 Agent Client Protocol 启动外部 agent 子进程并和它对话。Agent 列表读取 ACP 官方注册表（CDN，缓存 7 天，失败回退内置表），实测 45 个。',
+    facts: ['ACP v1 稳定：恢复会话、模式、模型、计划、diff、用量、图片', 'Claude Code / Codex 另有自研专用 lane，正在向 ACP 迁移', '所有外部进程经共享 supervisor 派生，统一回收'],
+    files: ['packages/mindos/src/protocols/acp/', 'agent/runtime/agent-descriptor-table.ts', 'protocols/acp/registry.ts'],
+    links: [['protocols', 'ACP JSON-RPC']],
+  },
+  mcpClients: {
+    layer: 'external', title: '外部 agent（它来用我们）', sub: 'MCP · stdio / HTTP', loc: null,
+    tags: ['27 个 agent', '38 个工具'],
+    desc: '反方向：外部 agent 把 MindOS 当 MCP server，直接读写这个知识库。这是"跨 agent 共享上下文"的实现方式——你在 Cursor 里写的结论，Claude Code 下一轮就能读到。',
+    facts: ['stdio：agent spawn dist/protocols/mcp-server/index.cjs', 'HTTP：POST /mcp，Bearer Token 认证', 'MindOS 可一键写入这些 agent 的 MCP 配置'],
+    files: ['packages/mindos/src/protocols/mcp-server/tools.ts', 'agent/config/registry.ts'],
+    links: [['protocols', 'MCP']],
+  },
+
+  server: {
+    layer: 'core', title: 'server', sub: 'HTTP 路由表 + 处理器', loc: 35703,
+    tags: ['Hono', '147 条路由'],
+    desc: 'HTTP 层是一张路由表加一个 Hono 应用：按领域导出路由定义，createMindosApp 从表构建应用（契约鉴权、body 限额、ETag、SSE、静态回退）。新增路由只需在对应领域文件加一行。',
+    facts: ['领域：files / search / knowledge / agent / acp / a2a / im / automations / settings / mcp / skills / views …', '/api/events：服务端事件流，支持 Last-Event-ID 重放', 'automations：定时与事件驱动的 agent 任务', 'search：BM25 + 中日韩分词'],
+    files: ['src/server/routes/*.ts', 'src/server/contract.ts', 'src/server/route-ownership.ts', 'src/server/app.ts', 'src/server/events/bus.ts'],
+    links: [['agent', '发起 turn'], ['knowledge', '读写知识'], ['foundation', '']],
+  },
+  agent: {
+    layer: 'core', title: 'agent', sub: '运行 agent 的一切', loc: 36964,
+    tags: ['4 条 lane', 'Pi 1.5'],
+    desc: '跑 agent 的全部逻辑：请求契约、上下文组装、lane 生命周期、流式事件、运行 ledger、子 agent、权限策略。最大的子模块 runtime（约 1.4 万行）是"同时调度多种外部运行时"的那一层，这是产品特有的，没有现成库能替代。',
+    facts: ['runtime 1.38 万：lane-runner、process-supervisor、Claude / Codex / ACP 适配', 'ledger 3.3 千：每次运行的可审计记录', 'turn 3.2 千：请求契约、SSE、ACP lane 映射', 'mindos-pi 2.1 千：嵌入 Pi 的接缝'],
+    files: ['src/agent/runtime/lane-runner.ts', 'src/agent/turn/acp-lane.ts', 'src/agent/stream/stream-consumer.ts', 'src/agent/mindos-pi/session.ts'],
+    links: [['knowledge', '知识库工具'], ['foundation', '']],
+  },
+  knowledge: {
+    layer: 'core', title: 'knowledge', sub: '笔记、空间、链接、审计', loc: 16942,
+    tags: ['knowledge-ops'],
+    desc: '知识库本身的领域逻辑：存储与文件监听、空间（Space）、wiki 链接解析、审计与变更日志、Git 历史，以及视图、回响（Echo）、学习回路等上层知识功能。',
+    facts: ['views 5 千：人脉 / 任务等生成式视图', 'coevolution、inquiries、longitudinal：回响与长期复盘', 'storage：本地文件读写与监听', 'knowledge-ops：所有写入的统一内核'],
+    files: ['src/knowledge/knowledge-ops/', 'src/knowledge/storage/', 'src/knowledge/views/', 'src/knowledge/audit/'],
+    links: [['foundation', ''], ['vault', '读写文件']],
+  },
+  protocols: {
+    layer: 'core', title: 'protocols', sub: 'ACP · MCP 运行时', loc: 7150,
+    tags: ['低层 domain'],
+    desc: '外部协议的传输与 SDK 适配：ACP 客户端（spawn agent、会话、权限请求、终端）和 MCP server。协议的业务规则归产品核心，protocols 只做协议这一层，避免复制产品逻辑。',
+    facts: ['acp：会话、子进程、权限回调、diff 与用量解析', 'mcp-server：38 个工具，stdio + HTTP 传输', '发布为独立 bundle：dist/protocols/*'],
+    files: ['src/protocols/acp/session.ts', 'src/protocols/acp/subprocess.ts', 'src/protocols/mcp-server/tools.ts'],
+    links: [['agent', '驱动 turn'], ['foundation', '']],
+  },
+  foundation: {
+    layer: 'core', title: 'foundation', sub: '跨层原语', loc: 5672,
+    tags: ['无内部依赖'],
+    desc: '最底层，不依赖任何其他内部模块：配置、错误、日志、权限、安全与脱敏、插件安装原语、SQLite 存储与跨进程租约、mind-root 解析、内嵌 Pi 的目录隔离。',
+    facts: ['storage：node:sqlite（WAL）+ 跨进程 lease', 'security：路径安全、redaction（客户端可用的子路径）', 'pi-agent-dir：内嵌 Pi 状态放在 ~/.mindos/pi', 'native-import：躲开 bundler 的原生动态 import'],
+    files: ['src/foundation/storage/sqlite.ts', 'src/foundation/security/', 'src/foundation/pi-agent-dir/index.ts', 'src/foundation/config/'],
+    links: [['sqlite', '派生状态'], ['home', '配置与扩展']],
+  },
+
+  vault: {
+    layer: 'storage', title: '知识库 my-mind/', sub: 'Markdown + CSV + JSON', loc: null,
+    tags: ['Git 版本控制', '真值'],
+    desc: '你的笔记本身：纯文本文件，人和 agent 都直接读写。这是唯一的真值来源，可以用任何编辑器打开，也可以用 Git 同步到你自己的远端。',
+    facts: ['兼容 Obsidian 数据：wiki 链接、callout、笔记嵌入', '原子写入：临时文件 + rename，防止写入中断丢数据', 'Git 同步：本地守护进程定时提交与推送'],
+    files: [],
+    links: [],
+  },
+  sqlite: {
+    layer: 'storage', title: '派生状态', sub: '.mindos/db/*.sqlite', loc: null,
+    tags: ['不进 Git'],
+    desc: '可以重建的索引与记录：内容变更日志、agent 运行 ledger、capsule 索引。用 SQLite 是为了按索引查询和多进程并发安全；它们不进 Git 同步，删掉也能从知识库重建或自然累积。',
+    facts: ['变更日志：谁、何时、改了哪个文件', 'run ledger：每次 agent 运行的事件流', '跨进程：Web 与 CLI 守护进程共用'],
+    files: [],
+    links: [],
+  },
+  home: {
+    layer: 'storage', title: '~/.mindos', sub: '用户级配置', loc: null,
+    tags: ['MindOS 自有'],
+    desc: 'MindOS 自己的用户目录：AI provider、MCP 配置、web 搜索配置、用户扩展、内嵌 Pi 的状态。MindOS 不读写你自己安装的其他工具的目录（比如 ~/.pi）。',
+    facts: ['config.json：provider、模型、端口', 'extensions/：用户自装的 Pi 扩展', 'pi/：内嵌 Pi 的 agentDir'],
+    files: [],
+    links: [],
+  },
+};
+
+const LAYERS = [
+  { id: 'clients', name: '入口', note: '客户端外壳：都不含核心业务', cols: 6, ids: ['web', 'desktop', 'mobile', 'extension', 'cli', 'im'] },
+  { id: 'external', name: '外部 agent', note: '两个方向：我们跑它 · 它用我们', cols: 2, ids: ['acpAgents', 'mcpClients'] },
+  { id: 'core', name: '产品核心', note: '', cols: 5, ids: ['server', 'agent', 'knowledge', 'protocols', 'foundation'], framed: true },
+  { id: 'storage', name: '存储', note: '数据都在你本机', cols: 3, ids: ['vault', 'sqlite', 'home'] },
+];
+
+// ── Core layering ──────────────────────────────────────────────────────
+const STRATA = [
+  { name: 'server', note: 'HTTP 与服务装配', allow: '可依赖全部下层', loc: 35703,
+    subs: [['handlers', 23987], ['automations', 2247], ['routes', 1329], ['projections', 682], ['search', 661], ['connections', 658], ['events', 613]] },
+  { name: 'agent', note: '运行 agent', allow: '可依赖 foundation、knowledge；protocols 只经 acp-types 这一扇门', loc: 36964,
+    subs: [['runtime', 13838], ['ledger', 3311], ['turn', 3239], ['config', 3136], ['tool', 2524], ['mindos-pi', 2140], ['bridges', 1686], ['capsules', 1424], ['subagent', 1367], ['stream', 1226], ['automations', 1149], ['prompt', 967]] },
+  { name: 'knowledge', note: '知识领域', allow: '可依赖 foundation、retrieval', loc: 16942,
+    subs: [['views', 5035], ['coevolution', 1794], ['inquiries', 1246], ['longitudinal', 1048], ['storage', 1013], ['context-assets', 977], ['method-checks', 960], ['research', 897], ['learning', 697], ['context-feedback', 666]] },
+  { name: 'protocols', note: '低层 domain', allow: '可依赖 foundation、agent；包内只有 server 与 acp-types 能反向引用它', loc: 7150,
+    subs: [['acp', null], ['mcp-server', null]] },
+  { name: 'foundation', note: '跨层原语', allow: '不依赖任何内部模块', loc: 5672,
+    subs: [['config', null], ['errors', null], ['logger', null], ['permissions', null], ['security', null], ['storage', null], ['plugins', null], ['mind-root', null], ['pi-agent-dir', null]] },
+];
+
+// ── Lanes ──────────────────────────────────────────────────────────────
+const LANES = [
+  { name: 'mindos-pi', primary: false, how: '进程内 · Pi 1.5 session', cover: '内置 agent，可直接调用知识库工具', state: '稳定：本次已升级到 Pi 1.5.0' },
+  { name: 'acp', primary: true, how: 'spawn 子进程 + JSON-RPC', cover: '40+ 个外部 agent：Gemini、Qwen、Kimi、OpenCode …', state: '主方向：Phase 1 已补齐 diff、用量、计划、图片、错误' },
+  { name: 'claude', primary: false, how: 'Claude Agent SDK 或直启 claude CLI', cover: '仅 Claude Code', state: '待迁移；直启 CLI 保留为订阅登录兜底' },
+  { name: 'codex', primary: false, how: '自研 Codex app-server 客户端', cover: '仅 Codex', state: '待迁移；codex-acp 底层是同一个 App Server' },
+];
+
+// ── Flows ──────────────────────────────────────────────────────────────
+const FLOWS = [
+  {
+    id: 'turn', name: '一条消息：输入框 → agent → 屏幕',
+    intro: '最核心的一条路径。注意第 6 步：lane 边界是一套独立的窄类型，只在协议层解析了新字段却没在这里声明，数据会静默丢失，编译器不报错。',
+    steps: [
+      ['你在输入框发出消息', 'web · components/chat/ChatContent.tsx', '权限阶梯与 +菜单里的目标，在这里解析成 permissionMode 与 agentMode'],
+      ['请求进入 turn 路由', 'POST /api/agent/sessions/:sessionId/turns', '这是少数由 Next 自己实现的 stream 路由，因为它要保持一条 SSE 长连接'],
+      ['请求契约校验', 'agent/turn/request.ts', '单一来源：Next 宿主与 standalone Product Server 都只是包装它'],
+      ['组装本轮上下文', 'agent/turn/context.ts', '时间、会话上下文、当前与附加文件、上传文件、主动召回'],
+      ['进入统一的 lane 生命周期', 'agent/runtime/runRuntimeLaneTurn', 'ledger 开始、capsule 捕获、取消与超时分类、断连宽限'],
+      ['lane 与 agent 对话', 'mindos-pi / acp / claude / codex', 'ACP：protocols/acp 解析 agent 的 session/update，再由 turn/acp-lane.ts 映射成 SSE'],
+      ['事件流回浏览器', 'SSE：text_delta · tool_diff · agent_plan · context_usage', 'tool_diff 是文件改动，agent_plan 是计划清单，context_usage 带累计花费'],
+      ['聚合成消息', 'agent/stream/stream-consumer.ts', '同一个计划只保留一份并整体替换；同一文件的 diff 以最新为准'],
+      ['渲染到屏幕', 'MessageList · ToolCallDiffView · AgentPlanBlock', 'diff 与 /changes 页面用同一套行级算法，所以两处看到的改动一致'],
+    ],
+  },
+  {
+    id: 'mcp', name: '外部 agent 通过 MCP 写笔记',
+    intro: '"跨 agent 共享上下文"就是这条路。你在 Cursor 里让 agent 记下的东西，MindOS 的界面和下一个 agent 都能立刻看到。',
+    steps: [
+      ['外部 agent 调用工具', 'Claude Code / Cursor / … → mindos_create_file', '通过 stdio（spawn 我们的 MCP bundle）或 HTTP /mcp'],
+      ['MCP server 接收', 'protocols/mcp-server/tools.ts', 'HTTP 方式经 Bearer Token 认证与安全检查'],
+      ['走统一写入内核', 'knowledge/knowledge-ops', 'MCP、Web、CLI 的写入都经过同一个内核，规则只写一处'],
+      ['原子写入文件', 'my-mind/*.md', '临时文件 + rename，写入中断也不会留下半个文件'],
+      ['记录变更', '.mindos/db · 变更日志', '谁、何时、改了哪个文件，可审计'],
+      ['广播事件', 'server/events/bus.ts → /api/events', 'tree.changed 事件；跨进程的变更由 ledger tail bridge 补发'],
+      ['界面自动刷新', 'Web 侧边栏 / 文件树', 'Web 用事件流代替固定间隔轮询'],
+    ],
+  },
+  {
+    id: 'clip', name: '网页剪藏进收集箱',
+    intro: '浏览器扩展只负责提取和提交，整理归档留在 MindOS 里做。',
+    steps: [
+      ['在网页上点扩展', 'browser-extension · popup', 'content script 提取正文'],
+      ['提交到 MindOS', 'POST /api/inbox/clip', '经 Next 代理鉴权后交给核心路由表'],
+      ['进入收集箱', 'Inbox', '先收进来，不打断你当前的工作'],
+      ['整理归档', 'AI Organize / 手动', '之后再决定放进哪个空间'],
+    ],
+  },
+  {
+    id: 'desktop', name: '桌面端启动',
+    intro: '桌面壳和 MindOS 内核是两层，各自更新。',
+    steps: [
+      ['启动 Electron', 'desktop · src/main.ts', '读取连接配置：本地模式或远程'],
+      ['准备运行时', 'node-bootstrap.ts · core-updater.ts', '校验内置 MindOS 内核；有新版本时不重启热替换'],
+      ['拉起本地进程', 'process-manager.ts', '启动、健康检查、崩溃回收'],
+      ['或连接远程', 'connect-window.ts · ssh-tunnel.ts', '连到另一台机器上运行的 MindOS'],
+      ['加载 Web UI', 'BrowserWindow', '窗口里就是同一个 Web 界面'],
+    ],
+  },
+  {
+    id: 'im', name: '飞书消息触发 agent',
+    intro: 'IM 渠道让 agent 出现在你已经在用的聊天工具里。',
+    steps: [
+      ['飞书收到消息', 'lib/im/feishu-ws-client.ts', '官方 WSClient 长连接，自动重连'],
+      ['分发事件', 'lib/im/feishu-dispatcher.ts', '官方 EventDispatcher 的薄封装'],
+      ['发起 agent turn', 'agent 运行时', '和网页对话走同一套 lane 生命周期'],
+      ['回复到飞书', 'lib/im/adapters/feishu.ts', '经平台官方 SDK 发送'],
+    ],
+  },
+];
+
+// ── Scale ──────────────────────────────────────────────────────────────
+const CHARTS = [
+  { title: '各包源码行数', sub: '客户端与产品核心', rows: [
+    ['Web', 'packages/web', 219691],
+    ['产品核心', 'packages/mindos/src', 105879],
+    ['Desktop', 'packages/desktop', 18949],
+    ['Mobile', 'packages/mobile', 16573],
+    ['CLI', 'packages/mindos/bin', 12314],
+    ['浏览器扩展', 'packages/browser-extension', 2154],
+  ] },
+  { title: '产品核心各层', sub: 'packages/mindos/src', rows: [
+    ['agent', 'src/agent', 36964],
+    ['server', 'src/server', 35703],
+    ['knowledge', 'src/knowledge', 16942],
+    ['protocols', 'src/protocols', 7150],
+    ['foundation', 'src/foundation', 5672],
+  ] },
+  { title: 'Web 里最大的几块', sub: 'packages/web', rows: [
+    ['obsidian-compat', 'lib/obsidian-compat', 27225],
+    ['echo', 'components/echo', 17904],
+    ['settings', 'components/settings', 15900],
+    ['studio', 'components/studio', 14946],
+    ['agents', 'components/agents', 13733],
+    ['ask', 'components/ask', 10166],
+    ['i18n', 'lib/i18n', 8685],
+  ] },
+];
+
+// ═══════════════════════════════════════════════════════════════════════
+const $ = (sel, root = document) => root.querySelector(sel);
+const fmt = (n) => n == null ? '' : n >= 10000 ? `${(n / 10000).toFixed(1).replace(/\.0$/, '')} 万` : n.toLocaleString('zh-CN');
+/** "22 万行" / "2,154 行": no space between 万 and 行. */
+const locLabel = (n) => n >= 10000 ? `${fmt(n)}行` : `${fmt(n)} 行`;
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+$('#snapshot-meta').textContent = `基于 main ${SNAPSHOT.commit} · ${SNAPSHOT.date}`;
+$('#foot').innerHTML = `所有数字与路径均从仓库 <code>${SNAPSHOT.commit}</code> 实测。更新方法见同目录 <code>README.md</code>。文字架构说明见 <code>wiki/20-system-architecture.md</code>。`;
+
+// ── Theme ──────────────────────────────────────────────────────────────
+const themeBtn = $('#theme-toggle');
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  themeBtn.textContent = theme === 'dark' ? '浅色' : '深色';
+  try { localStorage.setItem('mindos-arch-theme', theme); } catch {}
+  requestAnimationFrame(drawEdges);
+}
+let storedTheme = null;
+try { storedTheme = localStorage.getItem('mindos-arch-theme'); } catch {}
+applyTheme(storedTheme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+themeBtn.addEventListener('click', () => applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'));
+
+// ── Tabs ───────────────────────────────────────────────────────────────
+const tabs = [...document.querySelectorAll('nav.tabs button')];
+function showView(id) {
+  tabs.forEach((t) => t.setAttribute('aria-selected', String(t.dataset.view === id)));
+  document.querySelectorAll('section.view').forEach((v) => v.classList.toggle('active', v.id === `view-${id}`));
+  history.replaceState(null, '', `#${id}`);
+  if (id === 'overview') requestAnimationFrame(drawEdges);
+}
+tabs.forEach((t) => t.addEventListener('click', () => showView(t.dataset.view)));
+tabs.forEach((t, i) => t.addEventListener('keydown', (e) => {
+  if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+  const next = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+  next.focus(); showView(next.dataset.view);
+}));
+
+// ── Overview map ───────────────────────────────────────────────────────
+const EDGES = [];
+for (const [from, node] of Object.entries(NODES)) {
+  for (const [to, label] of node.links) EDGES.push({ from, to, label });
+}
+
+function renderMap() {
+  const host = $('#map-layers');
+  host.innerHTML = LAYERS.map((layer) => {
+    const cards = layer.ids.map((id) => {
+      const n = NODES[id];
+      const tags = n.tags.map((t) => `<span class="tag${layer.id === 'core' ? ' amber' : ''}">${esc(t)}</span>`).join('');
+      return `<button type="button" class="node" data-id="${id}">
+        <div class="n-title">${esc(n.title)}</div>
+        <div class="n-sub">${esc(n.sub)}</div>
+        ${n.loc ? `<span class="n-loc">${locLabel(n.loc)}</span>` : ''}
+        <div class="n-tags">${tags}</div>
+      </button>`;
+    }).join('');
+    const row = `<div class="row cols-${layer.cols}">${cards}</div>`;
+    const body = layer.framed
+      ? `<div class="core-frame"><div class="core-title"><b>@geminilight/mindos</b><span>依赖单向：foundation ← knowledge ← agent ← server</span></div>${row}</div>`
+      : row;
+    return `<div class="layer"><div class="layer-head"><span class="name">${esc(layer.name)}</span><span class="note">${esc(layer.note)}</span></div>${body}</div>`;
+  }).join('');
+
+  host.querySelectorAll('.node').forEach((el) => {
+    el.addEventListener('mouseenter', () => highlight(el.dataset.id));
+    el.addEventListener('mouseleave', () => highlight(selectedId));
+    el.addEventListener('focus', () => highlight(el.dataset.id));
+    el.addEventListener('blur', () => highlight(selectedId));
+    el.addEventListener('click', () => openNode(el.dataset.id));
+  });
+}
+
+function center(el, root) {
+  const r = el.getBoundingClientRect();
+  return { x: r.left - root.left + r.width / 2, top: r.top - root.top, bottom: r.bottom - root.top, left: r.left - root.left, right: r.right - root.left, cy: r.top - root.top + r.height / 2 };
+}
+
+function drawEdges() {
+  const map = $('#map');
+  const svg = $('#edges');
+  if (!map || !map.offsetParent) return;
+  const root = map.getBoundingClientRect();
+  const parts = [];
+  EDGES.forEach((e, i) => {
+    const a = map.querySelector(`.node[data-id="${e.from}"]`);
+    const b = map.querySelector(`.node[data-id="${e.to}"]`);
+    if (!a || !b) return;
+    const p = center(a, root), q = center(b, root);
+    let d, lx, ly;
+    if (Math.abs(p.cy - q.cy) < 10) {
+      // Same row: arc underneath, so it neither crosses the cards between nor
+      // runs over the core frame's title above them.
+      const x1 = p.x, x2 = q.x, y = Math.max(p.bottom, q.bottom);
+      const drop = 22 + Math.min(34, Math.abs(x2 - x1) / 12);
+      d = `M ${x1} ${y} C ${x1} ${y + drop}, ${x2} ${y + drop}, ${x2} ${y}`;
+      lx = (x1 + x2) / 2; ly = y + drop * 0.75 + 12;
+    } else {
+      const down = q.cy > p.cy;
+      const y1 = down ? p.bottom : p.top, y2 = down ? q.top : q.bottom;
+      const mid = (y1 + y2) / 2;
+      d = `M ${p.x} ${y1} C ${p.x} ${mid}, ${q.x} ${mid}, ${q.x} ${y2}`;
+      lx = (p.x + q.x) / 2; ly = mid - 4;
+    }
+    parts.push(`<path d="${d}" data-i="${i}" marker-end="url(#arrow)"/>`);
+    if (e.label) parts.push(`<text class="edge-label" data-i="${i}" x="${lx}" y="${ly}" text-anchor="middle">${esc(e.label)}</text>`);
+  });
+  svg.setAttribute('viewBox', `0 0 ${root.width} ${root.height}`);
+  svg.innerHTML = `<defs><marker id="arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z" fill="var(--muted-foreground)" opacity="0.6"/></marker></defs>${parts.join('')}`;
+  highlight(hoverOrSelected());
+}
+
+let selectedId = null;
+const hoverOrSelected = () => selectedId;
+
+function highlight(id) {
+  const svg = $('#edges');
+  const related = new Set(id ? [id] : []);
+  EDGES.forEach((e, i) => {
+    const hot = id && (e.from === id || e.to === id);
+    if (hot) { related.add(e.from); related.add(e.to); }
+    svg.querySelectorAll(`[data-i="${i}"]`).forEach((el) => el.classList.toggle('hot', Boolean(hot)));
+  });
+  document.querySelectorAll('#map .node').forEach((el) => {
+    el.classList.toggle('dim', Boolean(id) && !related.has(el.dataset.id));
+    el.classList.toggle('selected', el.dataset.id === selectedId);
+  });
+}
+
+// ── Drawer ─────────────────────────────────────────────────────────────
+const drawer = $('#drawer'), scrim = $('#scrim');
+let lastFocus = null;
+function openNode(id) {
+  const n = NODES[id];
+  if (!n) return;
+  selectedId = id;
+  lastFocus = document.activeElement;
+  $('#d-title').textContent = n.title;
+  $('#d-sub').textContent = [n.sub, n.loc ? `${n.loc.toLocaleString('zh-CN')} 行` : ''].filter(Boolean).join(' · ');
+  const outgoing = EDGES.filter((e) => e.from === id);
+  const incoming = EDGES.filter((e) => e.to === id);
+  const linkBtn = (target, dir, label) => `<button type="button" data-goto="${target}"><span class="dir">${dir}</span>${esc(NODES[target].title)}${label ? ` · ${esc(label)}` : ''}</button>`;
+  $('#d-body').innerHTML = `
+    <p>${esc(n.desc)}</p>
+    ${n.facts.length ? `<h4>要点</h4><ul>${n.facts.map((f) => `<li>${esc(f)}</li>`).join('')}</ul>` : ''}
+    ${n.files.length ? `<h4>关键文件</h4><ul class="files">${n.files.map((f) => `<li><code>${esc(f)}</code></li>`).join('')}</ul>` : ''}
+    ${outgoing.length || incoming.length ? `<h4>连接</h4><div class="links">
+      ${outgoing.map((e) => linkBtn(e.to, '→', e.label)).join('')}
+      ${incoming.map((e) => linkBtn(e.from, '←', e.label)).join('')}
+    </div>` : ''}`;
+  $('#d-body').querySelectorAll('[data-goto]').forEach((b) => b.addEventListener('click', () => openNode(b.dataset.goto)));
+  drawer.classList.add('open'); scrim.classList.add('open');
+  drawer.setAttribute('aria-hidden', 'false');
+  highlight(id);
+  $('#d-close').focus();
+}
+function closeDrawer() {
+  selectedId = null;
+  drawer.classList.remove('open'); scrim.classList.remove('open');
+  drawer.setAttribute('aria-hidden', 'true');
+  highlight(null);
+  if (lastFocus && lastFocus.focus) lastFocus.focus();
+}
+$('#d-close').addEventListener('click', closeDrawer);
+scrim.addEventListener('click', closeDrawer);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && drawer.classList.contains('open')) closeDrawer(); });
+
+// ── Core stack ─────────────────────────────────────────────────────────
+function renderCore() {
+  $('#core-stack').innerHTML = STRATA.map((s, i) => {
+    const chips = s.subs.map(([name, loc]) => `<span class="chip"><b>${esc(name)}</b>${loc ? `<span>${fmt(loc)}</span>` : ''}</span>`).join('');
+    const arrow = i < STRATA.length - 1 ? `<div class="arrow-row" aria-hidden="true">↓ 依赖</div>` : '';
+    return `<div class="stratum">
+      <div class="s-name">${esc(s.name)}<small>${esc(s.note)} · ${locLabel(s.loc)}</small></div>
+      <div><div class="s-allow">${esc(s.allow)}</div><div class="chips">${chips}</div></div>
+    </div>${arrow}`;
+  }).join('');
+}
+
+// ── Lanes ──────────────────────────────────────────────────────────────
+function renderLanes() {
+  $('#lanes').innerHTML = LANES.map((l) => `<div class="lane${l.primary ? ' primary' : ''}">
+    <div class="l-name">${esc(l.name)}${l.primary ? ' <span class="tag amber">主方向</span>' : ''}</div>
+    <div class="l-how">${esc(l.how)}</div>
+    <div class="l-cover">${esc(l.cover)}</div>
+    <div class="l-state">${esc(l.state)}</div>
+  </div>`).join('');
+}
+
+// ── Flows ──────────────────────────────────────────────────────────────
+let flowIndex = 0, stepIndex = 0;
+function renderFlowPicker() {
+  $('#flow-picker').innerHTML = FLOWS.map((f, i) => `<button type="button" data-flow="${i}" aria-pressed="${i === flowIndex}">${esc(f.name)}</button>`).join('');
+  $('#flow-picker').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { flowIndex = Number(b.dataset.flow); stepIndex = 0; renderFlow(); renderFlowPicker(); }));
+}
+function renderFlow() {
+  const f = FLOWS[flowIndex];
+  $('#flow-intro').textContent = f.intro;
+  $('#flow-steps').innerHTML = f.steps.map(([what, where, why], i) => `<li data-step="${i}" class="${i === stepIndex ? 'active' : ''}"${i > stepIndex ? ' style="opacity:.45"' : ''}>
+    <span class="num">${i + 1}</span>
+    <div class="s-card" role="button" tabindex="0">
+      <div class="s-top"><span class="s-what">${esc(what)}</span><span class="s-where">${esc(where)}</span></div>
+      ${i <= stepIndex ? `<div class="s-why">${esc(why)}</div>` : ''}
+    </div>
+  </li>`).join('');
+  $('#flow-steps').querySelectorAll('li').forEach((li) => {
+    const go = () => { stepIndex = Number(li.dataset.step); renderFlow(); };
+    li.querySelector('.s-card').addEventListener('click', go);
+    li.querySelector('.s-card').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+  });
+  $('#flow-prev').disabled = stepIndex === 0;
+  $('#flow-next').disabled = stepIndex >= f.steps.length - 1;
+}
+$('#flow-prev').addEventListener('click', () => { stepIndex = Math.max(0, stepIndex - 1); renderFlow(); });
+$('#flow-next').addEventListener('click', () => { stepIndex = Math.min(FLOWS[flowIndex].steps.length - 1, stepIndex + 1); renderFlow(); });
+$('#flow-all').addEventListener('click', () => { stepIndex = FLOWS[flowIndex].steps.length - 1; renderFlow(); });
+
+// ── Charts ─────────────────────────────────────────────────────────────
+// One series per chart, so one hue and no legend: the title names it. The
+// brand amber is below 3:1 on the light surface, so every bar also carries a
+// visible value and each chart has a table view.
+const tooltip = $('#tooltip');
+/** Round tick steps (1/2/5 × 10ⁿ) across about five intervals, so every tick is a readable number. */
+function niceTicks(rawMax) {
+  const rough = rawMax / 5;
+  const mag = 10 ** Math.floor(Math.log10(rough));
+  const r = rough / mag;
+  const step = (r <= 1 ? 1 : r <= 2 ? 2 : r <= 5 ? 5 : 10) * mag;
+  const max = Math.ceil(rawMax / step) * step;
+  const ticks = [];
+  for (let t = 0; t <= max + step / 2; t += step) ticks.push(t);
+  return { max, ticks };
+}
+function renderCharts() {
+  $('#charts').innerHTML = CHARTS.map((c, ci) => {
+    const { max, ticks } = niceTicks(Math.max(...c.rows.map((r) => r[2])));
+    const bars = c.rows.map(([label, path, v]) => `<div class="bar-row" data-tip="${esc(`${label} · ${path}`)}|${v.toLocaleString('zh-CN')} 行">
+      <div class="bar-label" title="${esc(path)}">${esc(label)}</div>
+      <div class="bar-track"><div class="bar" style="width:${(v / max) * 100}%"></div><span class="bar-value">${fmt(v)}</span><span class="bar-hit"></span></div>
+    </div>`).join('');
+    const grid = ticks.slice(1).map((t) => `<div class="gridline" style="left:calc(190px + 12px + (100% - 202px) * ${t / max})"></div>`).join('');
+    const axis = `<div class="axis"><div></div><div class="ticks">${ticks.map((t) => `<span class="tick" style="left:${(t / max) * 100}%">${fmt(t) || '0'}</span>`).join('')}</div></div>`;
+    const table = `<table class="data" hidden><thead><tr><th>模块</th><th>路径</th><th class="num">行数</th></tr></thead><tbody>${c.rows.map(([l, p, v]) => `<tr><td>${esc(l)}</td><td><code>${esc(p)}</code></td><td class="num">${v.toLocaleString('zh-CN')}</td></tr>`).join('')}</tbody></table>`;
+    return `<div class="chart-block" data-chart="${ci}">
+      <div class="chart-head"><div><h3>${esc(c.title)}</h3><span class="sub">${esc(c.sub)}</span></div>
+        <div class="seg" role="group" aria-label="显示方式"><button type="button" data-mode="chart" aria-pressed="true">图</button><button type="button" data-mode="table" aria-pressed="false">表</button></div>
+      </div>
+      <div class="chart">${grid}${bars}${axis}</div>${table}
+    </div>`;
+  }).join('');
+
+  document.querySelectorAll('.chart-block').forEach((block) => {
+    block.querySelectorAll('.seg button').forEach((b) => b.addEventListener('click', () => {
+      const asTable = b.dataset.mode === 'table';
+      block.querySelectorAll('.seg button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+      block.querySelector('.chart').hidden = asTable;
+      block.querySelector('table.data').hidden = !asTable;
+    }));
+    block.querySelectorAll('.bar-row').forEach((row) => {
+      row.addEventListener('mousemove', (e) => {
+        const [name, value] = row.dataset.tip.split('|');
+        tooltip.innerHTML = `${esc(name)}<br><b>${esc(value)}</b>`;
+        tooltip.style.left = `${Math.min(e.clientX + 14, innerWidth - 290)}px`;
+        tooltip.style.top = `${e.clientY + 14}px`;
+        tooltip.classList.add('show');
+      });
+      row.addEventListener('mouseleave', () => tooltip.classList.remove('show'));
+    });
+  });
+}
+
+// ── Boot ───────────────────────────────────────────────────────────────
+renderMap();
+renderCore();
+renderLanes();
+renderFlowPicker();
+renderFlow();
+renderCharts();
+const initial = location.hash.replace('#', '');
+if (tabs.some((t) => t.dataset.view === initial)) showView(initial);
+requestAnimationFrame(drawEdges);
+let resizeTimer;
+addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(drawEdges, 80); });
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(drawEdges);
+</script>
+</body>
+</html>

@@ -5,15 +5,27 @@ import { createServer } from 'node:net';
 import type { prepareNativeObsidianPluginSession } from './obsidian-native-session';
 import { untilAbort } from './obsidian-response';
 import { installObsidianPluginDocument } from './obsidian-plugin-document';
+import { getUiLang } from './i18n/lang';
+import { mtIn, obsidianEditorStrings, type ObsidianEditorStrings } from './i18n/main-strings';
 
 type ApprovedSession = NonNullable<Awaited<ReturnType<typeof prepareNativeObsidianPluginSession>>>;
 type Options = { session: ApprovedSession; runtimeSource: string; preloadPath: string; timeoutMs?: number;
   recovery?: { readonly error: string; flush(): Promise<void>; discard(): Promise<void> } };
 const CHANNEL = 'obsidian-editor';
 class DraftCaptureError extends Error {}
-const shell = (frameOrigin: string) => `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline'; frame-src ${frameOrigin}; img-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'; worker-src 'none'"><title>MindOS · 隔离插件编辑器</title>
-<style>:root{color-scheme:light dark}body{margin:0;background:var(--background,Canvas);color:var(--foreground,CanvasText)}.font-sans{font-family:var(--font-sans,system-ui),sans-serif}header{display:flex;align-items:center;gap:12px;padding:12px;border-bottom:1px solid var(--border,GrayText)}strong{flex:1}button{padding:6px 12px;border-radius:6px}button:focus-visible{outline:2px solid var(--ring,var(--amber,Highlight))}iframe{border:0;width:100%;height:calc(100vh - 64px)}output{max-width:40%;font-size:13px}</style>
-<body class="font-sans"><header><strong id="title">隔离插件编辑器</strong><button id="refresh-vault" hidden disabled>刷新知识库</button><button id="save" disabled>保存笔记</button><output id="status" role="status">准备中…</output></header><main id="host"></main>`;
+
+function escapeHtml(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/**
+ * The isolated editor chrome used to be hardcoded Chinese (title, both buttons,
+ * the status line and every dialog), so an English-locale user got a fully
+ * Chinese window. Strings now come from the shared main-process table.
+ */
+const shell = (frameOrigin: string, s: ObsidianEditorStrings) => `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline'; frame-src ${frameOrigin}; img-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'; worker-src 'none'"><title>${escapeHtml(s.title)}</title>
+<style>:root{color-scheme:light dark}body{margin:0;background:var(--background,Canvas);color:var(--foreground,CanvasText)}.font-sans{font-family:var(--font-sans,system-ui),sans-serif}header{display:flex;align-items:center;gap:12px;padding:12px;border-bottom:1px solid var(--border,GrayText)}strong{flex:1;overflow-wrap:anywhere}button{padding:6px 12px;border-radius:6px}button:focus-visible{outline:2px solid var(--ring,var(--amber,Highlight))}iframe{border:0;width:100%;height:calc(100vh - 64px)}output{max-width:40%;font-size:13px;overflow-wrap:anywhere}</style>
+<body class="font-sans"><header><strong id="title">${escapeHtml(s.heading)}</strong><button id="refresh-vault" hidden disabled>${escapeHtml(s.refreshVault)}</button><button id="save" disabled>${escapeHtml(s.saveNote)}</button><output id="status" role="status">${escapeHtml(s.preparing)}</output></header><main id="host"></main>`;
 
 /** Runs captured original plugin bytes only inside an offline cross-origin frame. */
 export async function createObsidianEditorWindow(options: Options) {
@@ -55,7 +67,9 @@ export async function createObsidianEditorWindow(options: Options) {
     partition.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
     partition.setPermissionCheckHandler(() => false);
     partition.on('will-download', event => event.preventDefault());
-    pluginDocument = installObsidianPluginDocument(partition, runtimeSource, shell);
+    const lang = getUiLang();
+    const strings = obsidianEditorStrings(lang);
+    pluginDocument = installObsidianPluginDocument(partition, runtimeSource, (origin: string) => shell(origin, strings));
     const frameUrl = pluginDocument.url;
     const url = pluginDocument.shellUrl;
     let frameRequested = false;
@@ -86,7 +100,22 @@ export async function createObsidianEditorWindow(options: Options) {
       if (!ready) rejectReady(reason);
       if (!window.isDestroyed()) window.destroy();
     };
-    const sendState = () => { if (!window.isDestroyed()) window.webContents.send(CHANNEL, { kind: 'state', snapshot: approved.snapshot, saving: saving || closing, refreshing, error: error || options.recovery?.error }); };
+    let lastStateSignature = '';
+    const buildState = () => ({ kind: 'state', snapshot: approved.snapshot, saving: saving || closing, refreshing, error: error || options.recovery?.error });
+    const sendState = () => {
+      if (window.isDestroyed()) return;
+      const state = buildState();
+      lastStateSignature = JSON.stringify(state);
+      window.webContents.send(CHANNEL, state);
+    };
+    /** Only push when something actually changed — the watchdog ticks 4x/s. */
+    const sendStateIfChanged = () => {
+      if (window.isDestroyed()) return;
+      const signature = JSON.stringify(buildState());
+      if (signature === lastStateSignature) return;
+      lastStateSignature = signature;
+      window.webContents.send(CHANNEL, JSON.parse(signature));
+    };
     const captureDraft = () => new Promise<void>((resolve, reject) => {
       if (closed || capture) { reject(new Error('Cannot capture the editor draft right now.')); return; }
       const id = randomUUID();
@@ -95,7 +124,10 @@ export async function createObsidianEditorWindow(options: Options) {
       window.webContents.send(CHANNEL, { kind: 'capture', id });
     });
     watchdog = setInterval(() => {
-      if (options.recovery?.error) sendState();
+      // Previously an unconditional sendState() whenever a recovery error
+      // existed: four IPC messages and four renderer updates per second for the
+      // whole lifetime of the window.
+      if (options.recovery?.error) sendStateIfChanged();
       if (approved.snapshot.status === 'closed') stop();
       else if (Date.now() - lastActivity > (ready ? Math.max(timeoutMs, 2000) : timeoutMs)) {
         // Main remains responsive even if plugin evaluation never yields.
@@ -122,9 +154,14 @@ export async function createObsidianEditorWindow(options: Options) {
           await captureDraft();
           if (approved.snapshot.dirty) {
             const decision = await dialog.showMessageBox(window, {
-              type: 'warning', title: 'MindOS', message: '笔记有未保存的修改',
-              detail: '关闭前保存，或继续编辑。放弃修改后无法恢复。',
-              buttons: ['继续编辑', '保存并关闭', '放弃修改'], defaultId: 0, cancelId: 0, noLink: true,
+              type: 'warning', title: 'MindOS', message: mtIn(lang, 'obsidianDirtyMessage'),
+              detail: mtIn(lang, 'obsidianDirtyDetail'),
+              buttons: [
+                mtIn(lang, 'obsidianKeepEditing'),
+                mtIn(lang, 'obsidianSaveAndClose'),
+                mtIn(lang, 'obsidianDiscard'),
+              ],
+              defaultId: 0, cancelId: 0, noLink: true,
               signal: lifetime.signal,
             });
             if (closed || decision.response === 0) return;
@@ -144,9 +181,10 @@ export async function createObsidianEditorWindow(options: Options) {
           if (failure instanceof DraftCaptureError && !closed) {
             try {
               const decision = await dialog.showMessageBox(window, {
-                type: 'warning', title: 'MindOS', message: '插件没有返回最新草稿',
-                detail: '可以继续等待，或强制关闭此插件窗口。强制关闭会丢失未保存的修改。',
-                buttons: ['继续编辑', '强制关闭'], defaultId: 0, cancelId: 0, noLink: true, signal: lifetime.signal,
+                type: 'warning', title: 'MindOS', message: mtIn(lang, 'obsidianNoDraftMessage'),
+                detail: mtIn(lang, 'obsidianNoDraftDetail'),
+                buttons: [mtIn(lang, 'obsidianKeepEditing'), mtIn(lang, 'obsidianForceClose')],
+                defaultId: 0, cancelId: 0, noLink: true, signal: lifetime.signal,
               });
               if (!closed && decision.response === 1) stop();
             } catch (dialogError) { error = (dialogError as Error).message; }
@@ -163,7 +201,7 @@ export async function createObsidianEditorWindow(options: Options) {
       const data = message as { kind?: string; content?: unknown; id?: unknown; operation?: unknown; data?: unknown };
       if (data.kind === 'ready' && !initialized) {
         initialized = true;
-        window.webContents.send(CHANNEL, { kind: 'init', frameUrl, package: approved.package, document: approved.snapshot, vault: approved.vault });
+        window.webContents.send(CHANNEL, { kind: 'init', frameUrl, package: approved.package, document: approved.snapshot, vault: approved.vault, strings });
       } else if (data.kind === 'plugin-data' && initialized && !closing && typeof data.id === 'string' && /^[a-f0-9-]{36}$/.test(data.id)) {
         const id = data.id;
         if (configurationRequests >= 32) { stop(new Error('Plugin configuration request limit exceeded.')); return; }

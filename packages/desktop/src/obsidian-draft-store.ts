@@ -19,6 +19,7 @@ function assertScope(scope: DraftScope) {
   if (!scope || !HASH.test(scope.vaultId) || !HASH.test(scope.fingerprint)
     || typeof scope.pluginId !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(scope.pluginId)
     || typeof scope.filePath !== 'string' || scope.filePath.length > 1024 || !/\.md$/i.test(scope.filePath)
+    // eslint-disable-next-line no-control-regex -- rejecting control characters is the point of this check
     || /[\\:\x00-\x1f]/.test(scope.filePath) || scope.filePath.split('/').some(part => !part || part.startsWith('.'))) {
     throw new Error('Invalid recovery scope.');
   }

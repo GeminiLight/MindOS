@@ -8,6 +8,7 @@ export const MINDOS_CORE_COMMANDS = [
   'views',
   'space',
   'search',
+  'echo',
   'mcp',
   'onboard',
   'config',

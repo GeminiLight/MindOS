@@ -285,9 +285,9 @@
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.3.170",
     "@anthropic-ai/sdk": "^0.124.0",
-    "@earendil-works/pi-agent-core": "0.84.4",
-    "@earendil-works/pi-ai": "0.84.4",
-    "@earendil-works/pi-coding-agent": "0.84.4",
+    "@earendil-works/pi-agent-core": "1.5.0",
+    "@earendil-works/pi-ai": "1.5.0",
+    "@earendil-works/pi-coding-agent": "1.5.0",
     "@hono/node-server": "^1.19.14",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@sinclair/typebox": "^0.34.33",

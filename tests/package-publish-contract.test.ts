@@ -22,21 +22,27 @@ describe('product npm publish contract', () => {
       dependencies?: Record<string, string>;
     }>('packages/web/package.json');
 
+    // The risk this guards is version skew, not a particular release: the
+    // product and Web must load one Pi instance, so a drift between the two
+    // would give the session two incompatible copies. Pinning the literal
+    // version here only forced an edit on every upgrade.
+    const EXACT_VERSION = /^\d+\.\d+\.\d+$/;
+
     for (const name of [
       '@earendil-works/pi-agent-core',
       '@earendil-works/pi-ai',
       '@earendil-works/pi-coding-agent',
     ]) {
-      expect(product.dependencies?.[name], name).toBe('0.84.4');
-      expect(web.dependencies?.[name], name).toBe('0.84.4');
+      const pinned = product.dependencies?.[name];
+      expect(pinned, name).toMatch(EXACT_VERSION);
+      expect(web.dependencies?.[name], `${name} must match the product pin`).toBe(pinned);
     }
-    expect(web.dependencies?.['@earendil-works/pi-ai']).toBe('0.84.4');
-    expect(web.dependencies).toEqual(expect.objectContaining({
-      'pi-mcp-adapter': '2.31.0',
-      'pi-schedule-prompt': '0.4.1',
-      'pi-subagents': '0.62.0',
-      'pi-web-access': '0.27.0',
-    }));
+
+    // Pi extensions are loaded by Web only, and must also be exact-pinned so a
+    // transitive bump cannot swap the extension under a running session.
+    for (const name of ['pi-mcp-adapter', 'pi-schedule-prompt', 'pi-subagents', 'pi-web-access']) {
+      expect(web.dependencies?.[name], name).toMatch(EXACT_VERSION);
+    }
   });
 
   it('declares the minimum Node.js version required by the Pi runtime', () => {

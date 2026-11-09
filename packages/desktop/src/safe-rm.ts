@@ -14,7 +14,7 @@
  */
 
 import path from 'path';
-import { lstatSync, rmSync, existsSync, statSync } from 'fs';
+import { lstatSync, rmSync, existsSync, statSync, mkdirSync } from 'fs';
 
 function isOutsideDirectory(root: string, target: string): boolean {
   const relative = path.relative(path.resolve(root), path.resolve(target));
@@ -144,13 +144,15 @@ export function safeRmSync(dir: string, options: SafeRmOptions = {}): void {
 /**
  * Create a directory with security checks.
  * Refuses to create if symlinks exist in parent chain.
+ *
+ * Returns `dir`. It used to return mkdirSync's own result, which is undefined
+ * when the directory already exists — the `string` return type was untrue,
+ * hidden only because mkdirSync came from an untyped require().
  */
 export function safeMkdir(
   dir: string,
   options: { recursive?: boolean; mode?: number } = {}
 ): string {
-  const { mkdirSync } = require('fs');
-
   // Check parent chain for symlinks
   let current = path.dirname(dir);
   const rootBoundary = path.dirname(current); // One level up
@@ -164,7 +166,8 @@ export function safeMkdir(
     current = parent;
   }
 
-  return mkdirSync(dir, { recursive: true, ...options });
+  mkdirSync(dir, { recursive: true, ...options });
+  return dir;
 }
 
 /**

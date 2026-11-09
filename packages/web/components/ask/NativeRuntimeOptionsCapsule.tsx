@@ -11,6 +11,9 @@ import type {
 
 const STORAGE_PREFIX = 'mindos-native-runtime-options.v1';
 const DEFAULT_EFFORT_VALUE = '__default__';
+
+/** Claude Code resolves these to the current model, so they never go stale. */
+const CLAUDE_MODEL_ALIASES = ['sonnet', 'opus', 'haiku'] as const;
 type CodexModelCapability = {
   id: string;
   model: string;
@@ -107,6 +110,9 @@ export default function NativeRuntimeOptionsCapsule({
   const [codexModels, setCodexModels] = useState<CodexModelListPayload['data']>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const defaultModelLabel = 'Default';
+  // Claude Code has no model-list endpoint. Offer aliases rather than pinned
+  // ids: an alias keeps resolving to the current model, an id goes stale.
+  const modelAliases = runtimeKind === 'claude' ? CLAUDE_MODEL_ALIASES : [];
   const placeholder = runtimeKind === 'codex' ? 'gpt-5.4-codex' : 'sonnet';
 
   useEffect(() => {
@@ -232,6 +238,34 @@ export default function NativeRuntimeOptionsCapsule({
                 autoComplete="off"
               />
             </div>
+            {modelAliases.length > 0 && (
+              <div className="mt-2 flex flex-wrap items-center gap-1">
+                {modelAliases.map((alias) => {
+                  const selected = modelOverride.trim() === alias;
+                  return (
+                    <button
+                      key={alias}
+                      type="button"
+                      data-model-suggestion={alias}
+                      aria-pressed={selected}
+                      disabled={disabled}
+                      onClick={() => {
+                        setDraftModel(alias);
+                        commitModel(alias);
+                        close();
+                      }}
+                      className={`inline-flex h-7 items-center rounded-md border px-2 font-mono text-2xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${
+                        selected
+                          ? 'border-[var(--amber)] bg-[var(--amber)]/10 text-foreground'
+                          : 'border-border/45 bg-background text-muted-foreground hover:bg-muted/35 hover:text-foreground'
+                      }`}
+                    >
+                      {alias}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             <div className="mt-2 flex items-center justify-between gap-2">
               <button
                 type="button"

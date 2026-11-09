@@ -162,8 +162,8 @@ export function isValidDirName(name: string): boolean {
 export function sanitizeDirName(name: string): string {
   if (!name) throw new Error('Empty directory name');
   // Remove path separators, null bytes, and suspicious characters
-  let sanitized = name
-    .replace(/[\/\\]/g, '_')
+  const sanitized = name
+    .replace(/[/\\]/g, '_')
     .replace(/\0/g, '')
     .replace(/\.\./g, '__')
     .replace(/^\./, '_');

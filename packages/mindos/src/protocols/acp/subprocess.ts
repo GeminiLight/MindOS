@@ -40,6 +40,7 @@ import {
 import type { AcpPermissionEvent, AcpPermissionOption, AcpRegistryEntry } from './types.js';
 import { resolveAgentCommand, findUserOverride, type AcpAgentOverride } from './agent-descriptors.js';
 import { resolveCommandPathSync } from './detect-local.js';
+import { toHostChildEnv } from '../../foundation/pi-agent-dir/index.js';
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
 
@@ -690,7 +691,9 @@ export function createMindosClient(
         const terminalSpawn = resolveTerminalSpawn(params.command);
         const child = spawn(terminalSpawn.command, params.args ?? [], {
           cwd: terminalCwd,
-          env: { ...process.env, ...runtimeEnv, ...envObj },
+          // A command an ACP agent runs in a terminal is the user's, so it
+          // sees the user's PI_CODING_AGENT_DIR, not MindOS's.
+          env: toHostChildEnv({ ...process.env, ...runtimeEnv, ...envObj }),
           shell: terminalSpawn.shell,
           stdio: ['pipe', 'pipe', 'pipe'],
           // Own process group on Unix so killAgent / shutdown can reap the

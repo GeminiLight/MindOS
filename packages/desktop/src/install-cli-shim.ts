@@ -21,6 +21,7 @@ import { getDefaultBundledMindOsDirectory } from './mindos-runtime-path';
 import { resolveCliPath } from './mindos-runtime-layout';
 import { getDesktopConfigDir, getDesktopHome } from './desktop-home';
 import { MINDOS_DOWNLOAD_URL } from './public-urls';
+import { getUiLang } from './i18n/lang';
 import semver from 'semver';
 
 const SHELL_MARKER = '# MindOS Desktop — CLI (mindos)';
@@ -87,7 +88,7 @@ function resolveCliJs(): string | null {
 
 /** Safe single-quoted literal for POSIX sh. */
 function shellSingleQuote(s: string): string {
-  return `'${s.replace(/'/g, `'\"'\"'`)}'`;
+  return `'${s.replace(/'/g, `'"'"'`)}'`;
 }
 
 export function buildUnixShimScript(cliJs: string): string {
@@ -108,7 +109,7 @@ node_is_compatible() {
 
 # If target CLI is missing (e.g. Desktop .app deleted), try npm global fallback
 if [ ! -f "$CLI" ]; then
-  NPM_ROOT=\$(npm root -g 2>/dev/null)
+  NPM_ROOT=$(npm root -g 2>/dev/null)
   NPM_CLI="\${NPM_ROOT}/@geminilight/mindos/bin/cli.js"
   if [ -f "$NPM_CLI" ]; then
     CLI="$NPM_CLI"
@@ -352,7 +353,7 @@ export function buildWindowsPathRegistryScript(): string {
 /**
  * Append ~/.mindos/bin to user PATH on Windows via the raw registry API.
  * Async on purpose — the synchronous variant blocked the Electron main process
- * for 0.5-3s before the splash could paint. Returns true if PATH was modified.
+ * for 0.5-3s before the first frame could paint. Returns true if PATH was modified.
  */
 export async function appendMindosBinToWindowsPath(): Promise<boolean> {
   try {
@@ -610,12 +611,12 @@ rmdir "$HOME/.mindos/bin" 2>/dev/null || true
 
 # 4. Clean PATH injection from shell rc files
 for rc in "$HOME/.zshenv" "$HOME/.zshrc" "$HOME/.zprofile" "$HOME/.bash_profile" "$HOME/.bashrc" "$HOME/.profile"; do
-  if [ -f "$rc" ] && grep -Eq '# MindOS Desktop|# MindOS CLI|export PATH="\$HOME/\.mindos/bin:\$PATH"' "$rc"; then
+  if [ -f "$rc" ] && grep -Eq '# MindOS Desktop|# MindOS CLI|export PATH="\\$HOME/\\.mindos/bin:\\$PATH"' "$rc"; then
     # Remove current Desktop marker blocks, legacy CLI marker blocks, and exact raw PATH lines.
     if [ "$(uname)" = "Darwin" ]; then
-      sed -i '' -e '/# MindOS Desktop/,+1d' -e '/# MindOS CLI/,+1d' -e '\\#export PATH="$HOME/.mindos/bin:$PATH"#d' "$rc"
+      sed -i '' -e '/# MindOS Desktop/,+1d' -e '/# MindOS CLI/,+1d' -e '\\#export PATH="\\$HOME/\\.mindos/bin:\\$PATH"#d' "$rc"
     else
-      sed -i -e '/# MindOS Desktop/,+1d' -e '/# MindOS CLI/,+1d' -e '\\#export PATH="$HOME/.mindos/bin:$PATH"#d' "$rc"
+      sed -i -e '/# MindOS Desktop/,+1d' -e '/# MindOS CLI/,+1d' -e '\\#export PATH="\\$HOME/\\.mindos/bin:\\$PATH"#d' "$rc"
     fi
     echo "  Cleaned $rc"
   fi
@@ -707,11 +708,13 @@ function notifyPathAppendedOnce(): void {
     /* still try notification */
   }
 
-  const zh = app.getLocale()?.toLowerCase().startsWith('zh');
+  const zh = getUiLang() === 'zh';
   const title = zh ? 'mindos 命令行已就绪' : 'mindos CLI is ready';
+  // Say which files were touched and how to undo it — this edits the user's
+  // shell startup files without a prompt, so the notice must be specific.
   const body = zh
-    ? '已写入 ~/.mindos/bin 并加入 PATH。请新开终端后运行 mindos --help'
-    : '~/.mindos/bin added to PATH. Open a new terminal, then run mindos --help';
+    ? '已写入 ~/.mindos/bin 并在 shell 配置中加入 PATH。新开终端后运行 mindos --help；卸载 MindOS 会自动移除这些改动。'
+    : '~/.mindos/bin was created and added to PATH in your shell startup files. Open a new terminal, then run mindos --help. Uninstalling MindOS removes these changes.';
 
   if (Notification.isSupported()) {
     try {
@@ -804,7 +807,7 @@ export interface ShimDeferrableWindow {
 }
 
 /**
- * Run the shim install only after the given window (splash) has painted.
+ * Run the shim install only after the given window (the boot shell) has painted.
  * Installing before first paint white-screened every Windows launch because
  * the PATH step shells out to PowerShell. A fallback timer guarantees the
  * install still happens if the window never fires 'show' (e.g. closed early).
@@ -863,7 +866,7 @@ export function buildRefreshCliSuccessDialog(
 /** Tray / manual: refresh shim + show result (and Windows PATH hint). Forced — bypasses the install stamp. */
 export async function refreshMindosCliAndNotify(parent: BrowserWindow | null): Promise<void> {
   const r = await ensureMindosCliShim({ appendPath: true, force: true });
-  const zh = app.getLocale()?.toLowerCase().startsWith('zh');
+  const zh = getUiLang() === 'zh';
   if (r.ok) {
     showMessageBoxSafe(parent, buildRefreshCliSuccessDialog(process.platform, zh, r.pathAppended === true));
     return;

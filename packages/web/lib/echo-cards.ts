@@ -1,7 +1,7 @@
 export const ECHO_CARD_SEGMENTS = ['imprint', 'insight', 'promotion'] as const;
 export type EchoCardSegment = (typeof ECHO_CARD_SEGMENTS)[number];
 
-export type EchoCardKind = 'digest' | 'moment' | 'pattern' | 'judgment' | 'playbook' | 'practice';
+export type EchoCardKind = 'digest' | 'moment' | 'pattern' | 'judgment' | 'agreement' | 'playbook' | 'practice';
 
 export type EchoCardSourceMessageRef = {
   messageIndex: number;

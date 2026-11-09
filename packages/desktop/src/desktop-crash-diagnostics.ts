@@ -106,7 +106,7 @@ export function buildWebCrashDiagnostic({
     cause === 'node-native-crash' && isSameFilesystemPath(nodePath, privateNodePath, platform);
 
   const hint = getLocalizedCrashHint(cause, zh, shouldRefreshPrivateNode);
-  const logLine = zh ? `详细日志：${crashLogPath}` : `Details: ${crashLogPath}`;
+  const logLine = zh ? `日志：${crashLogPath}` : `Log: ${crashLogPath}`;
   const output = lastOutput ? `\n\n--- Last output ---\n${lastOutput}` : '';
 
   return {
@@ -114,7 +114,7 @@ export function buildWebCrashDiagnostic({
     lastOutput,
     shouldRefreshPrivateNode,
     actions: getWebCrashDialogActions(zh, shouldRefreshPrivateNode),
-    message: `${zh ? 'Web 服务连续崩溃 3 次。' : 'The web server crashed 3 times.'}${hint}\n\n${logLine}${output}`,
+    message: `${zh ? 'MindOS 服务连续崩溃了 3 次。' : 'The MindOS service crashed 3 times in a row.'}${hint}\n\n${logLine}${output}`,
   };
 }
 
@@ -127,7 +127,7 @@ export function getWebCrashDialogActions(
       ? { id: 'repair-private-node', label: zh ? '修复并重启' : 'Repair and Restart' }
       : { id: 'restart-services', label: zh ? '重启服务' : 'Restart Services' },
     { id: 'open-log', label: zh ? '打开日志' : 'Open Log' },
-    { id: 'dismiss', label: zh ? '稍后处理' : 'Dismiss' },
+    { id: 'dismiss', label: zh ? '稍后处理' : 'Later' },
   ];
 }
 
@@ -136,36 +136,41 @@ function getLocalizedCrashHint(
   zh: boolean,
   shouldRefreshPrivateNode: boolean,
 ): string {
+  // "Send us crash.log" used to stop there, with no way to do it. The Help
+  // menu has a Report Issue entry, so every hint points at it.
+  const report = zh
+    ? '如果问题反复出现，可以通过「帮助 → 报告问题」把 crash.log 发给我们。'
+    : 'If it keeps happening, send us crash.log via Help → Report Issue.';
   switch (cause) {
     case 'oom':
       return zh
-        ? '\n\n可能原因：内存不足 (OOM)。尝试关闭其他应用后重启。'
-        : '\n\nLikely cause: out of memory (OOM). Close other apps and restart.';
+        ? '\n\n可能原因：内存不足。关闭一些其他应用后再重启服务。'
+        : '\n\nLikely cause: the computer ran out of memory. Close some other apps, then restart services.';
     case 'disk-full':
       return zh
-        ? '\n\n可能原因：磁盘空间不足。请清理磁盘后重启。'
-        : '\n\nLikely cause: disk full. Free up disk space and restart.';
+        ? '\n\n可能原因：磁盘空间不足。清理出一些空间后再重启服务。'
+        : '\n\nLikely cause: the disk is full. Free up some space, then restart services.';
     case 'port-in-use':
       return zh
-        ? '\n\n可能原因：端口被占用。请关闭占用端口的程序后重启。'
-        : '\n\nLikely cause: port in use. Close the program using the port and restart.';
+        ? '\n\n可能原因：端口被其他程序占用。关闭那个程序后再重启服务。'
+        : '\n\nLikely cause: another program is using the port. Close it, then restart services.';
     case 'stale-build':
       return zh
-        ? '\n\n可能原因：构建产物过期。请在终端运行 mindos start 重新编译。'
-        : '\n\nLikely cause: stale build. Run "mindos start" in terminal to rebuild.';
+        ? '\n\n可能原因：构建文件已过期。在终端运行 mindos start 可以重新构建。'
+        : '\n\nLikely cause: the build is out of date. Run `mindos start` in a terminal to rebuild it.';
     case 'node-native-crash':
       if (shouldRefreshPrivateNode) {
         return zh
-          ? '\n\n可能原因：MindOS 私有 Node.js 运行时发生 native 崩溃（V8/OpenSSL）。点击「修复并重启」会自动刷新运行时并重新启动服务；如果先稍后处理，MindOS 也会在下次启动时自动刷新。若仍复现，请把 crash.log 发给我们。'
-          : '\n\nLikely cause: the private MindOS Node.js runtime crashed natively (V8/OpenSSL). Click "Repair and Restart" to refresh the runtime and restart services now; if you dismiss it, MindOS will still refresh the runtime on the next launch. If it repeats, send crash.log to support.';
+          ? `\n\n可能原因：MindOS 内置的 Node.js 意外崩溃。点「修复并重启」会重新准备它并重启服务；选择稍后处理的话，下次启动时也会自动修复。${report}`
+          : `\n\nLikely cause: the Node.js built into MindOS crashed. "Repair and Restart" prepares it again and restarts services. If you choose Later, MindOS repairs it on the next launch. ${report}`;
       }
       return zh
-        ? '\n\n可能原因：Node.js 运行时发生 native 崩溃（V8/OpenSSL），这通常不是知识库内容或普通设置错误。请完全退出 MindOS 后重新打开，并更新到最新桌面版；若仍复现，请把 crash.log 发给我们。'
-        : '\n\nLikely cause: the Node.js runtime crashed natively (V8/OpenSSL), usually not a note-content or normal settings issue. Fully quit and reopen MindOS, update to the latest Desktop build, and send crash.log if it repeats.';
+        ? `\n\n可能原因：Node.js 意外崩溃，这通常和你的笔记或设置无关。请完全退出 MindOS 再打开，并更新到最新的桌面版。${report}`
+        : `\n\nLikely cause: Node.js crashed. This is usually unrelated to your notes or settings. Quit MindOS completely, reopen it, and update to the latest desktop version. ${report}`;
     case 'unknown':
     default:
       return zh
-        ? '\n\n暂未识别具体原因。请完全退出 MindOS 后重新打开；若仍复现，请把 crash.log 发给我们。'
-        : '\n\nThe exact cause is not recognized yet. Fully quit and reopen MindOS, and send crash.log if it repeats.';
+        ? `\n\n暂时无法判断原因。请完全退出 MindOS 再打开。${report}`
+        : `\n\nThe cause isn't clear yet. Quit MindOS completely and reopen it. ${report}`;
   }
 }

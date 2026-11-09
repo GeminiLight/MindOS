@@ -5,7 +5,7 @@
 <h1 align="center">MindOS</h1>
 
 <p align="center">
-  <strong>人类在此思考，Agent 依此行动。</strong>
+  <strong>知行相生 · 让认知沉淀，让心手并进</strong>
 </p>
 
 <p align="center">
@@ -24,7 +24,7 @@
   <a href="https://github.com/GeminiLight/MindOS/releases?q=clipper"><img src="https://img.shields.io/badge/网页剪藏-安装-c8873a.svg?style=for-the-badge" alt="网页剪藏"></a>
 </p>
 
-MindOS 是一个本地优先的知识库，用来在你和常用 AI Agent 之间共享长期上下文。**在一处思考，让 Agent 带着共同上下文行动。**
+MindOS 是一个本地优先的知识工作台。**你在这里想清楚，Agent 带着同一份上下文去做；做过的事再经你确认，沉淀成下一次的判断依据。**
 
 ---
 

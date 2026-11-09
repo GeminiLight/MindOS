@@ -286,14 +286,14 @@ export default function PluginViewPageClient({ pluginId, viewType, sourcePath = 
               <div className="px-4 py-10 text-center">
                 <div className="text-sm font-medium text-foreground">No plugin views are available yet.</div>
                 <p className="mx-auto mt-1 max-w-md text-xs leading-relaxed text-muted-foreground">
-                  Install or import an Obsidian plugin with a custom view, then enable and load it from plugin settings.
+                  Import an Obsidian plugin with a custom view from an existing vault, then enable and load it from plugin settings.
                 </p>
                 <Link
-                  href="/explore/plugins"
+                  href="/settings?tab=plugins&panel=import"
                   className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-md border border-[var(--amber)] bg-[var(--amber)] px-3 text-xs font-medium text-[var(--amber-foreground)] transition-colors hover:bg-[var(--amber)]/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <Puzzle size={13} />
-                  Open plugin market
+                  Import from Obsidian
                 </Link>
               </div>
             ) : (

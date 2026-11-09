@@ -35,6 +35,41 @@ export type AcpContentBlock =
   | { type: 'resource_link'; uri: string; name: string }
   | { type: 'resource'; resource: { uri: string; text?: string; blob?: string } };
 
+/* ── Tool-call content (ACP `ToolCallContent`) ────────────────────────── */
+
+/**
+ * A file modification an Agent reports inside a tool call. ACP sends `oldText:
+ * null` for a newly created file; we normalize that to an empty string so every
+ * consumer can diff two strings without a null check.
+ */
+export interface AcpToolCallDiffBlock {
+  type: 'diff';
+  path: string;
+  oldText: string;
+  newText: string;
+  /** Set when either side was clipped by the size caps below. */
+  truncated?: boolean;
+}
+
+/**
+ * Diffs are persisted with the chat session, so an agent rewriting a large file
+ * must not be able to blow up the store. Both caps are deliberately generous
+ * enough for ordinary source edits.
+ */
+export const ACP_TOOL_CALL_DIFF_MAX_TEXT = 64 * 1024;
+export const ACP_TOOL_CALL_DIFF_MAX_COUNT = 20;
+
+export type AcpToolCallContentBlock = AcpContentBlock | AcpToolCallDiffBlock;
+
+/* ── Usage (ACP `usage_update`) ───────────────────────────────────────── */
+
+/** Context consumption and cumulative spend an Agent reports for a session. */
+export interface AcpSessionUsage {
+  usedTokens: number;
+  contextWindow: number;
+  cost?: { amount: number; currency: string };
+}
+
 /* ── StopReason ───────────────────────────────────────────────────────── */
 
 export type AcpStopReason = 'end_turn' | 'max_tokens' | 'max_turn_requests' | 'refusal' | 'cancelled';
@@ -211,7 +246,7 @@ export interface AcpToolCallFull {
   status: AcpToolCallStatus;
   rawInput?: string;
   rawOutput?: string;
-  content?: AcpContentBlock[];
+  content?: AcpToolCallContentBlock[];
   locations?: { path: string; line?: number }[];
 }
 
@@ -249,6 +284,7 @@ export type AcpUpdateType =
   | 'current_mode_update'
   | 'config_option_update'
   | 'session_info_update'
+  | 'usage_update'
   | 'permission_request'
   | 'permission_resolved'
   // Legacy compat (mapped internally)
@@ -276,6 +312,8 @@ export interface AcpSessionUpdate {
   configOptions?: AcpConfigOption[];
   /** Session info update */
   sessionInfo?: { title?: string; updatedAt?: string };
+  /** Context consumption and cumulative cost for the session */
+  usage?: AcpSessionUsage;
   /** Permission request/resolution surfaced by the ACP client bridge */
   permission?: AcpPermissionEvent;
   /** Error message */

@@ -6,7 +6,7 @@ import {
   getProcessGlobal,
 } from '../global-state.js';
 import { redactSensitiveObject, redactSensitiveText } from '../../foundation/security/redaction.js';
-import type { AcpContentBlock, AcpToolCallFull } from '../runtime/acp-types.js';
+import type { AcpToolCallContentBlock, AcpToolCallFull } from '../runtime/acp-types.js';
 import {
   ARTIFACT_TRIM_SLACK,
   MAX_ARTIFACTS,
@@ -296,13 +296,19 @@ function artifactPointersFromAcpToolCall(toolCall: AcpToolCallFull): Array<{
   return dedupePointers(pointers);
 }
 
-function pointerFromContentBlock(block: AcpContentBlock): {
+function pointerFromContentBlock(block: AcpToolCallContentBlock): {
   path?: string;
   uri?: string;
   mimeType?: string;
   kind?: AgentArtifactKind;
   summary?: string;
 } | null {
+  // A diff block names the file the Agent actually edited, so it is the most
+  // reliable artifact pointer an external ACP agent gives us.
+  if (block.type === 'diff') {
+    const path = sanitizePointerText(block.path, MAX_PATH_CHARS);
+    return path ? { path, kind: kindFromPath(path) } : null;
+  }
   if (block.type === 'resource_link') {
     return pointerFromUri(block.uri, block.name);
   }

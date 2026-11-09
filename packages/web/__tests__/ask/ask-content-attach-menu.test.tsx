@@ -178,7 +178,7 @@ vi.mock('@/components/ask/PiThinkingLevelCapsule', () => ({
 }));
 vi.mock('@/components/ask/ModeCapsule', () => ({
   default: () => null,
-  getPersistedPermissionMode: () => 'ask',
+  getPersistedPermissionChoice: () => 'ask',
 }));
 vi.mock('@/lib/utils', () => ({ cn: (...parts: Array<string | false | null | undefined>) => parts.filter(Boolean).join(' ') }));
 

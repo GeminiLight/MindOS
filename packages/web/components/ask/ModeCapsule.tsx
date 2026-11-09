@@ -1,87 +1,101 @@
 'use client';
 
-import { Shield, ShieldAlert, ShieldCheck, ShieldQuestion } from 'lucide-react';
+import { ListChecks, Shield, ShieldAlert, ShieldCheck, ShieldQuestion } from 'lucide-react';
 import AskOptionCapsule, { type AskOptionCapsuleOption } from '@/components/ask/AskOptionCapsule';
 import { useLocale } from '@/lib/stores/locale-store';
-import type { AgentPermissionMode } from '@/lib/types';
+import {
+  COMPOSER_PERMISSION_CHOICES,
+  isComposerPermissionChoice,
+  type ComposerPermissionChoice,
+} from '@/lib/agent/composer-permission';
 
 const STORAGE_KEY = 'mindos-permission-level.v1';
 
 interface ModeCapsuleProps {
-  mode: AgentPermissionMode;
-  onChange: (mode: AgentPermissionMode) => void;
+  choice: ComposerPermissionChoice;
+  onChange: (choice: ComposerPermissionChoice) => void;
   disabled?: boolean;
 }
 
-function isPersistedPermissionMode(value: unknown): value is Exclude<AgentPermissionMode, 'read'> {
-  return value === 'ask' || value === 'auto' || value === 'full';
-}
-
-export function getPersistedPermissionMode(): AgentPermissionMode {
+export function getPersistedPermissionChoice(): ComposerPermissionChoice {
   if (typeof window === 'undefined') return 'ask';
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (isPersistedPermissionMode(stored)) return stored;
+    if (isComposerPermissionChoice(stored)) return stored;
   } catch {
     // localStorage unavailable; keep the in-memory default.
   }
   return 'ask';
 }
 
-export function persistPermissionMode(mode: AgentPermissionMode): void {
+export function persistPermissionChoice(choice: ComposerPermissionChoice): void {
   try {
-    localStorage.setItem(STORAGE_KEY, mode === 'read' ? 'ask' : mode);
+    localStorage.setItem(STORAGE_KEY, choice);
   } catch {
-    // localStorage unavailable; the current render still uses the selected value.
+    // localStorage unavailable; the current render still uses the selection.
   }
 }
 
-function permissionIcon(mode: AgentPermissionMode, size = 11) {
-  if (mode === 'read') return <Shield size={size} className="shrink-0" />;
-  if (mode === 'ask') return <ShieldQuestion size={size} className="shrink-0" />;
-  if (mode === 'auto') return <ShieldCheck size={size} className="shrink-0" />;
+function permissionIcon(choice: ComposerPermissionChoice, size = 11) {
+  if (choice === 'read') return <Shield size={size} className="shrink-0" />;
+  if (choice === 'plan') return <ListChecks size={size} className="shrink-0" />;
+  if (choice === 'ask') return <ShieldQuestion size={size} className="shrink-0" />;
+  if (choice === 'auto') return <ShieldCheck size={size} className="shrink-0" />;
   return <ShieldAlert size={size} className="shrink-0" />;
 }
 
-export default function ModeCapsule({ mode, onChange, disabled }: ModeCapsuleProps) {
+/**
+ * One ladder, least capable first. Plan sits here rather than in a separate
+ * 「模式」control because the server coerces a plan run to read-only; keeping
+ * the two apart meant this capsule could read "Auto" while the run could not
+ * write a thing. Goal is not on the ladder — it is an objective with a
+ * lifecycle, set from the + menu.
+ */
+export default function ModeCapsule({ choice, onChange, disabled }: ModeCapsuleProps) {
   const { locale } = useLocale();
   const zh = locale === 'zh';
 
-  const copy = {
-    title: zh ? '权限' : 'Permission',
-    read: zh ? '只读' : 'Read only',
-    readDesc: zh ? '只读文件和知识库，不执行修改。' : 'Read files and knowledge without making edits.',
-    ask: zh ? '询问' : 'Ask',
-    askDesc: zh ? '编辑、联网和有副作用操作前先询问。' : 'Ask before edits, internet access, or side-effect tools.',
-    auto: zh ? '自动' : 'Auto',
-    autoDesc: zh ? '低风险操作自动执行，敏感操作再询问。' : 'Run low-risk actions automatically; ask for risky actions.',
-    full: zh ? '完全' : 'Full',
-    fullDesc: zh ? '本地工具完全开放；仅在可信任务中使用。' : 'Unrestricted local tools. Use with care.',
-  };
+  const copy: Record<ComposerPermissionChoice, { label: string; description: string }> = zh
+    ? {
+      read: { label: '只读', description: '只读文件和知识库，不执行修改。' },
+      plan: { label: '计划', description: '只读梳理上下文，产出可审阅的计划。' },
+      ask: { label: '询问', description: '编辑、联网和有副作用操作前先询问。' },
+      auto: { label: '自动', description: '低风险操作自动执行，敏感操作再询问。' },
+      full: { label: '完全', description: '本地工具完全开放；仅在可信任务中使用。' },
+    }
+    : {
+      read: { label: 'Read only', description: 'Read files and knowledge without making edits.' },
+      plan: { label: 'Plan', description: 'Read-only review that produces a plan you can approve.' },
+      ask: { label: 'Ask', description: 'Ask before edits, internet access, or side-effect tools.' },
+      auto: { label: 'Auto', description: 'Run low-risk actions automatically; ask for risky actions.' },
+      full: { label: 'Full', description: 'Unrestricted local tools. Use with care.' },
+    };
 
-  const options: Array<AskOptionCapsuleOption<AgentPermissionMode>> = [
-    { value: 'ask', label: copy.ask, description: copy.askDesc, icon: permissionIcon('ask', 13) },
-    { value: 'auto', label: copy.auto, description: copy.autoDesc, icon: permissionIcon('auto', 13) },
-    { value: 'full', label: copy.full, description: copy.fullDesc, icon: permissionIcon('full', 13) },
-  ];
+  const options: Array<AskOptionCapsuleOption<ComposerPermissionChoice>> = COMPOSER_PERMISSION_CHOICES
+    .map((value) => ({
+      value,
+      label: copy[value].label,
+      description: copy[value].description,
+      icon: permissionIcon(value, 13),
+    }));
 
-  const selected = options.find((option) => option.value === mode) ?? options[0]!;
+  const selected = options.find((option) => option.value === choice) ?? options[2]!;
 
   return (
     <AskOptionCapsule
-      title="Permission"
-      ariaLabel="Permission"
-      icon={permissionIcon(mode)}
+      title={zh ? '权限' : 'Permission'}
+      ariaLabel={zh ? '权限' : 'Permission'}
+      icon={permissionIcon(choice)}
       label={selected.label}
       tooltip={selected.description}
-      value={mode}
+      value={choice}
       options={options}
       onChange={(next) => {
         onChange(next);
-        persistPermissionMode(next);
+        persistPermissionChoice(next);
       }}
       disabled={disabled}
-      active={mode !== 'read'}
+      active={choice !== 'ask'}
       dropdownWidthClassName="min-w-[250px] max-w-[300px]"
     />
   );

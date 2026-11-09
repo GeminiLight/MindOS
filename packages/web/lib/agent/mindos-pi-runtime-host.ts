@@ -1,6 +1,7 @@
 import path from 'path';
-import os from 'os';
 import type { MindosPiCodingAgentRuntimeHostServices } from '@geminilight/mindos/agent/mindos-pi';
+import { installMindosPiAgentDir } from '@geminilight/mindos/foundation';
+import { syncPiWebSearchConfig } from '@/lib/web-search-config';
 import { getModelConfig, hasImages } from '@/lib/agent/model';
 import { estimateStringTokens, getOllamaContextWindow } from '@/lib/agent/context';
 import { isProviderId, toPiProvider, type ProviderId } from '@/lib/agent/providers';
@@ -37,6 +38,11 @@ export function getMindosWebPiRuntimePaths(input: {
   serverSettings: WebServerSettings;
   permissionPolicy?: MindosAgentPermissionPolicy;
 }): { agentDir: string; additionalSkillPaths: string[]; additionalExtensionPaths: string[] } {
+  // First, before anything can load an extension: Pi auto-discovers
+  // extensions, skills and prompts under agentDir, and Pi's own extensions
+  // (pi-subagents, pi-web-access) read PI_CODING_AGENT_DIR. Both must point at
+  // MindOS's directory, never the user's own ~/.pi.
+  const agentDir = installMindosPiAgentDir();
   const policy = input.permissionPolicy ?? createMindosAgentPermissionPolicy('ask');
   const webAppDir = path.join(input.projectRoot, 'packages', 'web');
   const additionalExtensionPaths: string[] = [];
@@ -52,6 +58,9 @@ export function getMindosWebPiRuntimePaths(input: {
     additionalExtensionPaths.push(resolveMindosWebRuntimeSourcePath(webAppDir, 'lib', 'agent', 'ask-user-question-bridge-extension.ts'));
   }
   if (hasMindosExtensionScope(policy, 'pi-web-access')) {
+    // Expose the saved config where pi-web-access reads it, so a config saved
+    // before this release reaches the session without waiting for a re-save.
+    syncPiWebSearchConfig();
     additionalExtensionPaths.push(resolveBuiltinWebRuntimePackagePath(webAppDir, 'pi-web-access', 'index.ts'));
   }
   if (hasMindosExtensionScope(policy, 'user-extensions')) {
@@ -74,7 +83,7 @@ export function getMindosWebPiRuntimePaths(input: {
   }
 
   return {
-    agentDir: path.join(os.homedir(), '.pi'),
+    agentDir,
     additionalSkillPaths: getSkillSearchPaths(input.projectRoot, input.mindRoot, input.serverSettings as any),
     additionalExtensionPaths,
   };

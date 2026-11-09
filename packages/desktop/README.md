@@ -43,6 +43,48 @@ base64 -i AuthKey_XXXXXXXX.p8 | tr -d '\n'  # API Key → APPLE_API_KEY_BASE64
 
 ---
 
+## 运行时开关（环境变量）
+
+| 变量 | 作用 |
+|------|------|
+| `MINDOS_OPEN_DEVTOOLS=1` | 启动后打开 DevTools，并转发 web/MCP 子进程日志到主进程 console |
+| `MINDOS_VERBOSE_CHILD_LOGS=1` | 只开子进程日志转发（默认关闭：每条 Next 请求日志都会压在 UI 线程上） |
+| `MINDOS_DISABLE_GLOBAL_SHORTCUT=1` | 不注册全局 `Cmd/Ctrl+Shift+M`（该快捷键是系统级抢占，可能与其它应用冲突） |
+| `MINDOS_DISABLE_CLI_SHIM_PATH_APPEND=1` | 安装 `~/.mindos/bin/mindos` 但不改写 shell 启动文件的 PATH |
+| `MINDOS_DISABLE_OBSIDIAN_SECRET_STORAGE_BROKER=1` | 关闭 Obsidian SecretStorage safeStorage broker |
+| `MINDOS_NODE_BIN` | 指定 Node.js 可执行文件，跳过自动探测 |
+| `MINDOS_RUNTIME_POLICY` | `prefer-newer`(默认) / `bundled-only` / `user-only` |
+| `MINDOS_DESKTOP_CI_LOG` | 把主进程日志写入指定文件（CI smoke 用），同时开启子进程日志转发 |
+| `MINDOS_TELEMETRY_ENDPOINT` | 配置后 `telemetry.flush()` 才真正上报；未配置时事件只在内存里保留并有上限 |
+
+界面语言与 `app.getLocale()` 之外的显式选择保存在 `mindos-app-config` 的 `uiLang`（`system` / `zh` / `en`），
+引导界面、connect 窗口、托盘、菜单与所有对话框共用这一个值（见 `src/i18n/lang.ts`）。
+菜单「语言 / Language」子菜单可切换。
+
+### 启动流程：单窗口
+
+应用启动即创建主窗口（恢复上次的尺寸与位置），在其中加载 `connect.html?shell=boot` 作为**引导界面**：
+首次运行的模式选择、启动进度、启动失败与恢复操作都在这个窗口内完成，服务就绪后**同一个窗口**导航到产品页面。
+不再有独立的 splash 窗口或启动期模式选择窗口。详见 `src/boot-shell.ts` 与 `wiki/specs/spec-desktop-single-window-boot.md`。
+
+会话中途的「切换模式」和「更换服务器」仍然使用独立窗口——那时主窗口里有用户的实时状态，不能卸载。
+
+preload 只有一个（`src/preload.ts`），按文档 URL 分流三种 surface：
+
+| 文档 | 暴露 | 说明 |
+|------|------|------|
+| `mindos-connect://…?shell=boot` | `mindosConnect`（含 `onStatus` / `action`） | 主窗口内的引导界面 |
+| `mindos-connect://…` | `mindosConnect` | 独立的 connect / 模式选择对话框 |
+| 其它（产品 origin） | `mindos` | Web 应用 |
+
+产品 origin 永远拿不到 `mindosConnect`：协议判断不可伪造（该 scheme 只由自己的 protocol handler 提供），
+且 `bootApp()` 在导航到产品页之前会先 `releaseBootShell()` 注销全部 `connect:*` handler。
+
+远程模式会对服务器 `/api/health` 报告的 `version` 应用 `~/.mindos/config.json` 的 `minMindOsVersion`
+（与本地 runtime 同一个阈值）；低于阈值时弹窗提示，可选择「仍然连接」。
+
+---
+
 ## CI/CD（GitHub Actions）
 
 三平台并行打包，通过 `build-desktop.yml` workflow 触发。

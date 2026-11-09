@@ -40,8 +40,6 @@ export default defineConfig({
         external: electronMainExternal,
         input: {
           index: resolve(__dirname, 'src/preload.ts'),
-          'connect-preload': resolve(__dirname, 'src/connect-preload.ts'),
-          'splash-preload': resolve(__dirname, 'src/splash-preload.ts'),
         },
         output: {
           entryFileNames: '[name].js',

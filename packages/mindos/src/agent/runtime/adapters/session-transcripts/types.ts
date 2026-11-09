@@ -11,6 +11,7 @@ export type RuntimeSessionTranscriptSource =
   | 'gemini-cli'
   | 'opencode'
   | 'claude-code'
+  | 'codex'
   | 'qwen-code'
   | 'codebuddy-code'
   | 'openclaw'

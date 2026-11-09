@@ -207,7 +207,7 @@ describe('PluginViewPageClient', () => {
     ))).toBe(true);
   });
 
-  it('links empty plugin views to the plugin market instead of the settings manager', async () => {
+  it('points the empty plugin views state at the Obsidian import panel', async () => {
     mocks.fetchPluginSurfaces.mockResolvedValueOnce([]);
 
     await act(async () => {
@@ -217,8 +217,10 @@ describe('PluginViewPageClient', () => {
 
     expect(host.textContent).toContain('No plugin views are available yet.');
     const links = Array.from(host.querySelectorAll('a')).map((link) => link.getAttribute('href'));
-    expect(links).toContain('/explore/plugins');
-    expect(links).not.toContain('/settings?tab=plugins&panel=community');
-    expect(host.textContent).toContain('Open plugin market');
+    // The community plugin market was removed; importing from an existing vault
+    // is the only supported way to get an Obsidian plugin into MindOS.
+    expect(links).toContain('/settings?tab=plugins&panel=import');
+    expect(links).not.toContain('/explore/plugins');
+    expect(host.textContent).toContain('Import from Obsidian');
   });
 });

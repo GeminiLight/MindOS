@@ -10,6 +10,7 @@ import {
 } from './claude-stream-json-mapper.js';
 import type { MindosSelectedSkill } from '../selected-skills.js';
 import type { MindosRuntimeAttachment } from './attachments.js';
+import { toHostChildEnv } from '../../foundation/pi-agent-dir/index.js';
 
 export type ClaudeCodeCliTransport = {
   run(args: string[], options: { cwd: string; signal?: AbortSignal }): AsyncIterable<string>;
@@ -96,7 +97,7 @@ export function createClaudeCodeCliStdioTransport(options: {
       const proc = spawn(command, args, {
         cwd: runOptions.cwd,
         stdio: ['ignore', 'pipe', 'pipe'],
-        env: { ...process.env, ...(options.env ?? {}) },
+        env: toHostChildEnv({ ...process.env, ...(options.env ?? {}) }),
       });
       child = proc;
 

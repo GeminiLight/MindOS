@@ -140,6 +140,17 @@ body {
   --logo-sparkle: #FEF3C7;
   --success: #234b2c;
   --error: #762c2c;
+
+  /* JSON Canvas preset colours 1-6 (jsoncanvas.org). These encode *user data*
+     categories authored in a .canvas file, not MindOS semantic UI state, so they
+     are a separate muted group rather than reuses of --success / --error. Files
+     may also carry explicit hex, which is rendered verbatim. */
+  --canvas-1: #9c4a4a;
+  --canvas-2: #a4682c;
+  --canvas-3: #8a7320;
+  --canvas-4: #3f6b45;
+  --canvas-5: #3a6670;
+  --canvas-6: #6a5080;
   --tool-read: #5a8ab4;
   --tool-search: #9a7ab4;
   --sidebar: #ede9e1;
@@ -185,6 +196,14 @@ body {
   --logo-sparkle: #FEF3C7;
   --success: #a0c4a4;
   --error: #eeaaa4;
+
+  /* JSON Canvas preset colours, dark variants. See the light block for rationale. */
+  --canvas-1: #d99a9a;
+  --canvas-2: #d6a575;
+  --canvas-3: #c9b870;
+  --canvas-4: #93c09a;
+  --canvas-5: #8cb6c0;
+  --canvas-6: #b09ec6;
   --tool-read: #8ab4d8;
   --tool-search: #c8a0d8;
   --sidebar: #1c1a17;
@@ -404,6 +423,127 @@ body {
 .prose ol { list-style-type: decimal; }
 .prose li { margin-bottom: 0.15em; }
 .prose blockquote { border-left: 3px solid var(--amber); padding-left: 0.95em; margin: 1em 0; color: var(--prose-subtle); font-style: italic; font-weight: 500; }
+
+/* Obsidian callouts (`> [!note] Title`). Types map onto existing semantic tokens
+   rather than introducing new colour variables; unknown types fall back to amber.
+   Warning/caution deliberately share the amber default: in this warm palette the
+   brand hue already *is* the caution hue, so a dedicated --warning token would be
+   near-identical to --amber in light and too dim to read in dark. The title text
+   carries the distinction instead.
+   Deliberately restrained per the design principles — a tinted rule and title,
+   not a filled block. */
+.prose blockquote.callout {
+  --callout-color: var(--amber);
+  border-left-color: var(--callout-color);
+  background: color-mix(in srgb, var(--callout-color) 6%, transparent);
+  border-radius: 0 6px 6px 0;
+  padding: 0.7em 0.95em;
+  color: var(--prose-body);
+  font-style: normal;
+  font-weight: 400;
+}
+.prose blockquote.callout[data-callout='success'],
+.prose blockquote.callout[data-callout='check'],
+.prose blockquote.callout[data-callout='done'] { --callout-color: var(--success); }
+.prose blockquote.callout[data-callout='danger'],
+.prose blockquote.callout[data-callout='error'],
+.prose blockquote.callout[data-callout='bug'],
+.prose blockquote.callout[data-callout='fail'],
+.prose blockquote.callout[data-callout='failure'],
+.prose blockquote.callout[data-callout='missing'] { --callout-color: var(--error); }
+.prose blockquote.callout[data-callout='quote'],
+.prose blockquote.callout[data-callout='cite'] { --callout-color: var(--muted-foreground); }
+.prose blockquote.callout .callout-title {
+  color: var(--callout-color);
+  font-weight: 600;
+  font-style: normal;
+  text-transform: capitalize;
+  margin-bottom: 0.3em;
+}
+.prose blockquote.callout .callout-title:last-child { margin-bottom: 0; }
+.prose blockquote.callout p:last-child { margin-bottom: 0; }
+
+/* Canvas text nodes reuse `.prose` so wiki links and callouts render the same as
+   in the reading view, but a node is a card a few hundred pixels wide — full
+   article typography overflows it. Scale down via the existing size hook and
+   flatten heading/paragraph rhythm. (`prose-sm` is Tailwind-typography syntax
+   and does nothing here: `.prose` is hand-written above.) */
+.canvas-node-prose {
+  --prose-font-size-override: 0.8125rem;
+  max-width: none;
+}
+.canvas-node-prose :is(h1, h2, h3, h4, h5, h6) {
+  font-size: 0.9375rem;
+  margin: 0 0 0.35em;
+  padding: 0;
+  border: 0;
+}
+.canvas-node-prose p { margin: 0 0 0.5em; }
+.canvas-node-prose > :last-child { margin-bottom: 0; }
+/* A canvas card already frames its content; an embed inside a file node should
+   fill the card, not float inside it with article spacing. */
+.prose.canvas-node-prose .markdown-embed { margin: 0; height: 100%; }
+.canvas-node-prose ul, .canvas-node-prose ol { margin: 0 0 0.5em; padding-left: 1.2em; }
+
+/* Wiki links resolve through the same anchor path as markdown links; the data
+   attribute is kept so future vault-aware styling (e.g. unresolved targets) can
+   hook on without another render pass. */
+.prose a[data-wikilink] { text-decoration-style: dotted; text-underline-offset: 0.2em; }
+/* A wiki link whose target does not exist in the vault. Muted rather than red:
+   during a migration most broken links are "not imported yet", which is a state
+   to notice, not an error to alarm about. */
+/* Transcluded note (`![[note]]` on its own line). Framed so it reads as "this
+   came from elsewhere", with the source note's name as the header. Restrained:
+   a left rule and faint tint, no nested card chrome. */
+.prose .markdown-embed {
+  border-left: 2px solid var(--border);
+  background: color-mix(in srgb, var(--muted) 25%, transparent);
+  border-radius: 0 6px 6px 0;
+  margin: 1em 0;
+  padding: 0.6em 0.95em;
+}
+.prose .markdown-embed-title {
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+  margin-bottom: 0.4em;
+}
+/* Obsidian inline tags (`#tag`). A chip, not a link: a tag has no vault path,
+   clicking opens search for it. Kept quiet so a tag-heavy note is still readable
+   as prose. */
+.prose .markdown-tag {
+  display: inline;
+  border: 1px solid color-mix(in srgb, var(--amber) 30%, transparent);
+  background: var(--amber-subtle);
+  color: var(--amber-text);
+  border-radius: 4px;
+  padding: 0.05em 0.4em;
+  font-size: 0.875em;
+  line-height: inherit;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+.prose .markdown-tag:hover {
+  background: var(--amber-dim);
+  border-color: color-mix(in srgb, var(--amber) 55%, transparent);
+}
+.prose .markdown-tag:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.prose .markdown-embed-title a { color: var(--muted-foreground); text-decoration-style: dotted; }
+.prose .markdown-embed-state { font-size: 0.8125rem; color: var(--muted-foreground); margin: 0; }
+.prose .markdown-embed-body > :first-child { margin-top: 0; }
+.prose .markdown-embed-body > :last-child { margin-bottom: 0; }
+/* The embed frame already separates the quote; a heading rule on top of it reads
+   as a divider cutting the frame in half. */
+.prose .markdown-embed-body :is(h1, h2, h3, h4, h5, h6) { border-bottom: 0; padding-bottom: 0; }
+
+.prose a[data-wikilink-unresolved] {
+  color: var(--muted-foreground);
+  text-decoration-style: dashed;
+  opacity: 0.85;
+}
 .prose code:not(pre code) { background: var(--prose-code-border); color: var(--prose-heading); padding: 0.15em 0.45em; border-radius: 4px; font-size: 0.855em; font-family: var(--font-code); }
 .prose pre { background: var(--prose-pre-bg); border: 1px solid var(--prose-code-border); border-radius: 8px; padding: 0.9em 1em; overflow-x: auto; margin: 1em 0; color: var(--prose-pre-color); max-width: 100%; }
 @media (min-width: 640px) {

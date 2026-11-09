@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildWebCrashDiagnostic,
+  getWebCrashDialogActions,
   classifyWebCrash,
   getCrashLastOutput,
   isNodeNativeCrashOutput,
@@ -56,9 +57,11 @@ describe('desktop crash diagnostics', () => {
       'open-log',
       'dismiss',
     ]);
-    expect(diagnostic.message).toContain('私有 Node.js 运行时发生 native 崩溃');
+    expect(diagnostic.message).toContain('内置的 Node.js 意外崩溃');
     expect(diagnostic.message).toContain('修复并重启');
-    expect(diagnostic.message).toContain('下次启动时自动刷新');
+    expect(diagnostic.message).toContain('下次启动时也会自动修复');
+    // Implementation detail stays in crash.log, not in the dialog.
+    expect(diagnostic.message).not.toMatch(/V8|OpenSSL|native/);
     expect(diagnostic.message).not.toContain('请检查 Node.js 环境');
     expect(diagnostic.message).toContain('--- Last output ---');
   });
@@ -80,12 +83,38 @@ describe('desktop crash diagnostics', () => {
       'open-log',
       'dismiss',
     ]);
-    expect(diagnostic.message).toContain('Node.js runtime crashed natively');
+    expect(diagnostic.message).toContain('Likely cause: Node.js crashed');
+    // Not the built-in runtime, so no promise to repair it.
+    expect(diagnostic.message).not.toContain('Repair and Restart');
     expect(diagnostic.message).not.toContain('Please check your Node.js environment');
   });
 
   it('compares Windows paths case-insensitively while preserving POSIX case sensitivity', () => {
     expect(isSameFilesystemPath('C:\\MindOS\\node.exe', 'c:/mindos/node.exe', 'win32')).toBe(true);
     expect(isSameFilesystemPath('/tmp/MindOS/node', '/tmp/mindos/node', 'linux')).toBe(false);
+  });
+});
+
+describe('crash dialog wording', () => {
+  // "Please send us crash.log" used to be the whole instruction, with no way
+  // to do it. Every cause that asks for the log must also say where to send it.
+  const causes: Array<{ name: string; exitCode: number | null; stderr: string[] }> = [
+    { name: 'native crash', exitCode: null, stderr: WINDOWS_V8_NATIVE_STACK },
+    { name: 'unknown', exitCode: 1, stderr: ['something odd happened'] },
+  ];
+
+  for (const zh of [true, false]) {
+    for (const c of causes) {
+      it(`points to Help → Report Issue (${zh ? 'zh' : 'en'}, ${c.name})`, () => {
+        const { message } = buildWebCrashDiagnostic({ zh, exitCode: c.exitCode, stderrLines: c.stderr });
+        expect(message).toContain(zh ? '帮助 → 报告问题' : 'Help → Report Issue');
+      });
+    }
+  }
+
+  it('labels the dismiss action the same way as the other startup dialogs', () => {
+    const labels = getWebCrashDialogActions(false, false).map((a) => a.label);
+    expect(labels).toContain('Later');
+    expect(labels).not.toContain('Dismiss');
   });
 });

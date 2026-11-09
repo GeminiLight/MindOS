@@ -3,11 +3,28 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!--
+    This page is served over the privileged mindos-connect:// scheme and renders
+    user-controlled values (server addresses, SSH host names, command output).
+    Lock it down: no remote code, no remote assets, no outbound connections.
+    'unsafe-inline' covers the pre-paint theme script and the style block below.
+  -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-src 'none'; object-src 'none'">
   <title>MindOS</title>
   <!-- Sync theme + document language before first paint (avoids light/dark or zh/en flash). -->
   <script>
 (function () {
   document.documentElement.classList.add('connect-hydrating');
+  /*
+    Hosted inside the main window (titleBarStyle: 'hidden' on macOS) rather
+    than in a dialog with its own frame. Marked before first paint so the drag
+    region and traffic-light clearance are there from the very first frame.
+  */
+  try {
+    if (new URLSearchParams(location.search).get('shell') === 'boot') {
+      document.documentElement.classList.add('shell-boot');
+    }
+  } catch (_) { /* URLSearchParams unavailable — dialog styling is the safe default */ }
   function systemLangIsZh() {
     try { return (navigator.language || '').toLowerCase().startsWith('zh'); } catch (_) { return false; }
   }
@@ -17,6 +34,8 @@
     else if (th === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
     else document.documentElement.removeAttribute('data-theme');
 
+    // Pre-paint hint only. The authoritative preference lives in the main
+    // process (i18n/lang.ts) and is applied as soon as the renderer boots.
     var lg = localStorage.getItem('mindos-lang');
     var resolved;
     if (lg === 'zh') resolved = 'zh';
@@ -39,7 +58,10 @@
       --amber-dim: rgba(200, 135, 58, 0.12);
       --amber-foreground: #ffffff;
       --success: #2d8a3e;
+      --success-dim: rgba(45, 138, 62, 0.10);
       --error: #c85050;
+      --error-dim: rgba(200, 80, 80, 0.10);
+      --logo-sparkle: #FEF3C7;
       --radius: 0.75rem;
       --shadow: 0 1px 3px rgba(0,0,0,0.06);
       color-scheme: light dark;
@@ -56,10 +78,13 @@
         --muted-foreground: #8a8275;
         --amber: #d4954a;
         --amber-dim: rgba(212, 149, 74, 0.20);
-        --amber-foreground: #131210;
+        --amber-foreground: #ffffff;
         --success: #7aad80;
+        --success-dim: rgba(122, 173, 128, 0.12);
         --error: #c85050;
-        --shadow: 0 1px 3px rgba(0,0,0,0.3);
+        --error-dim: rgba(200, 80, 80, 0.14);
+        --logo-sparkle: #FEF3C7;
+      --shadow: 0 1px 3px rgba(0,0,0,0.3);
       }
     }
 
@@ -75,7 +100,10 @@
       --amber-dim: rgba(200, 135, 58, 0.12);
       --amber-foreground: #ffffff;
       --success: #2d8a3e;
+      --success-dim: rgba(45, 138, 62, 0.10);
       --error: #c85050;
+      --error-dim: rgba(200, 80, 80, 0.10);
+      --logo-sparkle: #FEF3C7;
       --shadow: 0 1px 3px rgba(0,0,0,0.06);
     }
     html[data-theme="dark"] {
@@ -87,9 +115,12 @@
       --muted-foreground: #8a8275;
       --amber: #d4954a;
       --amber-dim: rgba(212, 149, 74, 0.20);
-      --amber-foreground: #131210;
+      --amber-foreground: #ffffff;
       --success: #7aad80;
+      --success-dim: rgba(122, 173, 128, 0.12);
       --error: #c85050;
+      --error-dim: rgba(200, 80, 80, 0.14);
+      --logo-sparkle: #FEF3C7;
       --shadow: 0 1px 3px rgba(0,0,0,0.3);
     }
 
@@ -98,15 +129,21 @@
     html.connect-hydrating body {
       opacity: 0;
     }
+    /*
+      `align-items: center` clipped the top of any panel taller than the window
+      (setup errors, 5 recents + password) and the window was not resizable, so
+      the clipped content was unreachable. `margin: auto` on the child centres
+      the same way but still allows scrolling in both directions.
+    */
     body {
       background: var(--background);
       color: var(--foreground);
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
       display: flex;
-      align-items: center;
-      justify-content: center;
+      position: relative;
       min-height: 100vh;
       padding: 24px;
+      overflow-y: auto;
       -webkit-font-smoothing: antialiased;
       transition: opacity 0.12s ease-out;
     }
@@ -114,6 +151,7 @@
     .container {
       width: 100%;
       max-width: 400px;
+      margin: auto;
     }
 
     /* ── Brand ── */
@@ -121,17 +159,28 @@
       text-align: center;
       margin-bottom: 28px;
     }
-    .brand h1 {
+    /*
+      The Asymmetric Infinity (wiki/21-design-principle.md). The shell used to
+      print the text glyph `∞`, so the first screen of the product showed a
+      different mark from the product itself.
+    */
+    .brand-lockup {
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+    }
+    .brand-mark { width: 48px; height: 24px; color: var(--amber); flex-shrink: 0; }
+    .brand-word {
       font-size: 26px;
       font-weight: 700;
       color: var(--amber);
-      font-family: 'Lora', Georgia, serif;
+      /* Lora is not bundled and this window must work offline. */
+      font-family: Georgia, 'Times New Roman', serif;
       letter-spacing: -0.01em;
+      line-height: 1;
     }
     .brand p {
       font-size: 13px;
       color: var(--muted-foreground);
-      margin-top: 4px;
+      margin-top: 8px;
     }
 
     /* ── Mode Cards ── */
@@ -151,7 +200,7 @@
       border-radius: var(--radius);
       background: var(--card);
       cursor: pointer;
-      transition: all 0.15s ease;
+      transition: border-color 0.15s ease, background 0.15s ease;
       text-align: left;
       box-shadow: var(--shadow);
     }
@@ -165,7 +214,7 @@
     .mode-card:focus-visible {
       border-color: var(--amber);
       outline: none;
-      box-shadow: 0 0 0 3px rgba(200, 135, 58, 0.3);
+      box-shadow: 0 0 0 3px var(--amber-dim);
     }
     .mode-icon {
       width: 42px;
@@ -175,9 +224,10 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 20px;
       flex-shrink: 0;
+      color: var(--amber);
     }
+    .mode-icon svg { width: 20px; height: 20px; }
     .mode-info h3 {
       font-size: 15px;
       font-weight: 600;
@@ -188,6 +238,11 @@
       font-size: 12px;
       color: var(--muted-foreground);
       line-height: 1.4;
+    }
+    .mode-sub {
+      margin-top: 4px;
+      font-size: 11px;
+      color: var(--amber);
     }
 
     /* ── Recent servers ── */
@@ -223,6 +278,13 @@
       flex-shrink: 0;
     }
     .recent-dot.online { background: var(--success); }
+    .recent-dot.offline { background: var(--error); }
+    .recent-dot.checking {
+      background: var(--amber);
+      animation: dot-pulse 1.2s ease-in-out infinite;
+    }
+    @keyframes dot-pulse { 50% { opacity: 0.35; } }
+    @media (prefers-reduced-motion: reduce) { .recent-dot.checking { animation: none; } }
     .recent-info { flex: 1; min-width: 0; }
     .recent-label-text {
       font-size: 13px; font-weight: 500;
@@ -232,16 +294,27 @@
       font-size: 11px;
       color: var(--muted-foreground);
       font-family: ui-monospace, 'SF Mono', monospace;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .recent-forget {
       font-size: 11px; color: var(--muted-foreground);
       background: none; border: none; cursor: pointer;
       padding: 4px 8px; border-radius: 6px;
-      transition: color 0.15s, background 0.15s;
+      flex-shrink: 0;
+      opacity: 0;
+      transition: color 0.15s, background 0.15s, opacity 0.15s;
     }
+    .recent-item:hover .recent-forget,
+    .recent-item:focus-within .recent-forget,
+    .recent-forget:focus-visible { opacity: 1; }
+    @media (hover: none) { .recent-forget { opacity: 1; } }
     .recent-forget:hover {
       color: var(--error);
-      background: rgba(200,80,80,0.10);
+      background: var(--error-dim);
+    }
+    .recent-forget:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 2px var(--amber);
     }
 
     .divider {
@@ -264,7 +337,7 @@
       font-size: 14px; font-family: ui-monospace, 'SF Mono', monospace;
       outline: none; transition: border-color 0.15s;
     }
-    input:focus { border-color: var(--amber); }
+    input:focus-visible { border-color: var(--amber); box-shadow: 0 0 0 2px var(--amber-dim); }
     input::placeholder { color: var(--muted-foreground); opacity: 0.5; }
     .field { margin-bottom: 12px; }
 
@@ -278,17 +351,24 @@
       margin-top: 6px;
     }
     .test-btn:hover { border-color: var(--amber); }
+    .test-btn:focus-visible { outline: none; border-color: var(--amber); box-shadow: 0 0 0 2px var(--amber-dim); }
     .test-btn:disabled { opacity: 0.5; cursor: default; }
 
+    /*
+      Status text can be a long address, a shell command or a command tail.
+      Wrap it instead of letting it stretch the (fixed-width) window.
+    */
     .status-bar {
-      display: flex; align-items: center; gap: 8px;
+      display: flex; align-items: flex-start; gap: 8px;
       padding: 9px 12px; border-radius: var(--radius);
       font-size: 13px; margin: 10px 0;
       background: var(--amber-dim);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
     }
-    .status-bar.success { color: var(--success); }
-    .status-bar.error { color: var(--error); }
-    .status-bar.info { color: var(--muted-foreground); }
+    .status-bar.success { color: var(--success); background: var(--success-dim); }
+    .status-bar.error { color: var(--error); background: var(--error-dim); }
+    .status-bar.info { color: var(--muted-foreground); background: var(--amber-dim); }
 
     .connect-btn {
       width: 100%; padding: 11px; border: none;
@@ -298,6 +378,7 @@
       cursor: pointer; transition: opacity 0.15s; margin-top: 6px;
     }
     .connect-btn:hover { opacity: 0.9; }
+    .connect-btn:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--amber); }
     .connect-btn:disabled { opacity: 0.4; cursor: default; }
 
     .hint {
@@ -317,10 +398,13 @@
       color: var(--foreground);
       border-color: var(--muted-foreground);
     }
+    .switch-mode:focus-visible { outline: none; border-color: var(--amber); box-shadow: 0 0 0 2px var(--amber-dim); }
 
     /* ── Theme + language icon toolbar ── */
+    /* Absolute (not fixed): with a scrolling body a fixed toolbar sat on top of
+       the first recent-server row and covered its Forget button. */
     .connect-toolbar {
-      position: absolute; top: 12px; right: 12px;
+      position: absolute; top: 12px; right: 12px; z-index: 10;
       display: flex; gap: 6px; align-items: center;
     }
     .icon-btn {
@@ -356,16 +440,19 @@
       border: 1px solid var(--amber); border-radius: var(--radius);
       background: var(--amber-dim); color: var(--amber);
       font-size: 13px; font-weight: 500; cursor: pointer;
-      transition: all 0.15s;
+      transition: background 0.15s ease, color 0.15s ease;
     }
     .setup-btn:hover {
       background: var(--amber);
       color: var(--amber-foreground);
     }
+    .setup-btn:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--amber); }
+    .setup-btn:disabled { opacity: 0.6; cursor: default; }
     .setup-section {
       margin-top: 16px; padding: 14px;
       border: 1px dashed var(--border); border-radius: var(--radius);
       background: var(--card);
+      text-align: left;
     }
     .setup-section h4 { font-size: 14px; color: var(--foreground); margin-bottom: 10px; }
     .setup-section p { font-size: 12px; color: var(--muted-foreground); margin-bottom: 6px; line-height: 1.5; }
@@ -374,28 +461,29 @@
       background: var(--background); padding: 2px 6px; border-radius: 4px; font-size: 11px;
     }
     .install-progress {
-      display: flex; align-items: center; gap: 8px;
+      display: block;
       margin-top: 10px; padding: 9px 12px;
       background: var(--card); border-radius: var(--radius);
       font-size: 13px; color: var(--muted-foreground);
       border: 1px solid var(--border);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      max-height: 180px;
+      overflow-y: auto;
+    }
+    .install-progress small {
+      display: block; margin-top: 6px;
+      font-family: ui-monospace, 'SF Mono', monospace;
+      font-size: 11px; opacity: 0.85;
     }
     .install-progress.success {
       color: var(--success); border-color: var(--success);
-      background: rgba(45, 138, 62, 0.06);
+      background: var(--success-dim);
     }
     .install-progress.error {
       color: var(--error); border-color: var(--error);
-      background: rgba(200, 80, 80, 0.06);
+      background: var(--error-dim);
     }
-    @media (prefers-color-scheme: dark) {
-      :root:not([data-theme="light"]) .install-progress.success { background: rgba(122, 173, 128, 0.1); }
-      :root:not([data-theme="light"]) .install-progress.error { background: rgba(200, 80, 80, 0.1); }
-    }
-    html[data-theme="dark"] .install-progress.success { background: rgba(122, 173, 128, 0.1); }
-    html[data-theme="dark"] .install-progress.error { background: rgba(200, 80, 80, 0.1); }
-    html[data-theme="light"] .install-progress.success { background: rgba(45, 138, 62, 0.06); }
-    html[data-theme="light"] .install-progress.error { background: rgba(200, 80, 80, 0.06); }
 
     .hidden { display: none !important; }
     .spinner {
@@ -403,8 +491,13 @@
       border: 2px solid var(--amber-dim); border-top-color: var(--amber);
       border-radius: 50%; animation: spin 0.6s linear infinite;
       display: inline-block;
+      vertical-align: -2px;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) {
+      .spinner { animation-duration: 2s; }
+      * { transition-duration: 0.01ms !important; }
+    }
 
     /* ── Connection tabs ── */
     .conn-tabs {
@@ -416,19 +509,141 @@
       flex: 1; padding: 7px 0; text-align: center;
       font-size: 12px; font-weight: 500; border: none;
       background: transparent; color: var(--muted-foreground);
-      border-radius: 8px; cursor: pointer; transition: all 0.15s;
+      border-radius: 8px; cursor: pointer; transition: background 0.15s ease, color 0.15s ease;
     }
     .conn-tab:hover { color: var(--foreground); }
+    .conn-tab:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--amber); }
     .conn-tab.active { background: var(--amber); color: var(--amber-foreground); }
+
+    /*
+      Keyboard affordance. Principle 2 is "Keyboard First, Mouse Welcome", but
+      the shell shipped no discoverable shortcut at all.
+    */
+    .kbd-hint {
+      margin-top: 18px; text-align: center;
+      font-size: 11px; color: var(--muted-foreground);
+    }
+    .kbd-hint kbd {
+      font-family: ui-monospace, 'SF Mono', monospace;
+      font-size: 10px; padding: 1px 5px;
+      /* Breathing room on both sides, so "回车确认" reads like "Enter to confirm". */
+      margin: 0 3px;
+      border: 1px solid var(--border); border-radius: 4px;
+      background: var(--card); color: var(--foreground);
+    }
 
     .ssh-note {
       font-size: 11px; color: var(--muted-foreground);
       margin-top: 8px; line-height: 1.4;
     }
+
+    /* ── Boot shell (hosted in the main window) ── */
+
+    /*
+      The main window hides its titlebar on macOS, so the boot shell has to
+      supply its own drag region — otherwise the window is immovable for the
+      1-3 minutes a first-run build takes. The toolbar sits clear of the
+      traffic lights, which the dialog windows never had to worry about.
+    */
+    html.shell-boot body::before {
+      content: '';
+      position: fixed; inset: 0 0 auto 0; height: 38px;
+      -webkit-app-region: drag;
+      z-index: 0;
+    }
+    html.shell-boot .connect-toolbar { top: 9px; right: 12px; -webkit-app-region: no-drag; }
+    html.shell-boot .container { position: relative; z-index: 1; }
+
+    .boot-screen { text-align: center; }
+    .boot-screen .brand { margin-bottom: 22px; }
+
+    .boot-status {
+      font-size: 13px; color: var(--muted-foreground);
+      min-height: 18px; line-height: 1.5;
+      /* Tabular digits keep the elapsed counter from shifting the text. */
+      font-variant-numeric: tabular-nums;
+    }
+
+    /*
+      A 36px wordmark above a 12px error told the user which app had failed,
+      not what to do about it. When something breaks, the brand steps back and
+      the message takes the top line.
+    */
+    body.has-error .boot-screen .brand { margin-bottom: 14px; }
+    body.has-error .boot-screen .brand-mark { width: 32px; height: 16px; }
+    body.has-error .boot-screen .brand-word { font-size: 15px; opacity: 0.6; }
+    /*
+      The whole error used to be red text on a red box — heavy to read, and a
+      command meant to be copied was set in body type and wrapped mid-flag.
+      Now: a short title carries the alarm, the explanation is ordinary text,
+      and commands sit in a monospace block that can be selected whole.
+    */
+    .boot-title {
+      font-size: 15px; font-weight: 600; color: var(--error);
+      margin-bottom: 10px;
+    }
+    body.has-error .boot-status {
+      font-size: 13px; line-height: 1.6; color: var(--foreground);
+      /* Command output and paths arrive verbatim; never clip them. */
+      white-space: pre-wrap; overflow-wrap: anywhere; text-align: left;
+      background: var(--error-dim); border-radius: 8px; padding: 12px 14px;
+      user-select: text; -webkit-user-select: text; cursor: text;
+    }
+    .boot-code {
+      display: block; margin: 8px 0 2px;
+      font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px;
+      white-space: pre; overflow-x: auto;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 6px; padding: 8px 10px;
+      user-select: all; -webkit-user-select: all;
+    }
+
+    .boot-progress {
+      margin: 16px auto 0; width: 180px; height: 2px;
+      background: var(--border); border-radius: 1px; overflow: hidden;
+    }
+    .boot-bar {
+      display: block; width: 40%; height: 100%;
+      background: var(--amber); border-radius: 1px;
+      animation: boot-slide 1.4s ease-in-out infinite;
+    }
+    @keyframes boot-slide {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(350%); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .boot-bar { animation: none; width: 100%; opacity: 0.5; }
+    }
+
+    .boot-hint {
+      margin-top: 14px; font-size: 11px; line-height: 1.5;
+      color: var(--muted-foreground);
+    }
+
+    .boot-actions {
+      margin-top: 22px;
+      display: flex; flex-direction: column; gap: 8px;
+      align-items: stretch;
+    }
+    .boot-actions button {
+      padding: 9px 14px; font-size: 13px; cursor: pointer;
+      border-radius: 8px; border: 1px solid var(--border);
+      background: var(--card); color: var(--foreground);
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+    .boot-actions button:hover { border-color: var(--amber); }
+    .boot-actions button:focus-visible {
+      outline: none; border-color: var(--amber); box-shadow: 0 0 0 2px var(--amber-dim);
+    }
+    .boot-actions button.primary {
+      background: var(--amber); border-color: var(--amber);
+      color: var(--amber-foreground);
+    }
+    .boot-actions button.primary:hover { filter: brightness(1.05); }
   </style>
 </head>
 <body>
-  <div class="connect-toolbar" role="toolbar" aria-label="Appearance">
+  <div class="connect-toolbar" role="toolbar" data-i18n-aria="ariaToolbar" aria-label="Appearance">
     <button type="button" class="icon-btn" id="btn-theme" aria-label="Theme"></button>
     <button type="button" class="icon-btn" id="btn-lang" aria-label="Language"></button>
   </div>
@@ -437,70 +652,138 @@
     <!-- Mode Selection Screen -->
     <div id="mode-selection" class="mode-selection">
       <div class="brand">
-        <h1>∞ MindOS</h1>
+        <div class="brand-lockup">
+          <svg class="brand-mark" viewBox="0 0 80 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <defs>
+              <linearGradient id="human-a" x1="35" y1="20" x2="5" y2="20" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="currentColor" stop-opacity="0.8"/>
+                <stop offset="100%" stop-color="currentColor" stop-opacity="0.3"/>
+              </linearGradient>
+              <linearGradient id="agent-a" x1="35" y1="20" x2="75" y2="20" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="currentColor" stop-opacity="0.8"/>
+                <stop offset="100%" stop-color="currentColor" stop-opacity="1"/>
+              </linearGradient>
+            </defs>
+            <path d="M35,20 C25,35 8,35 8,20 C8,5 25,5 35,20" stroke="url(#human-a)" stroke-width="3" stroke-dasharray="2 4" stroke-linecap="round"/>
+            <path d="M35,20 C45,2 75,2 75,20 C75,38 45,38 35,20" stroke="url(#agent-a)" stroke-width="4.5" stroke-linecap="round"/>
+            <path d="M35,17.5 Q35,20 37.5,20 Q35,20 35,22.5 Q35,20 32.5,20 Q35,20 35,17.5 Z" fill="var(--logo-sparkle)"/>
+          </svg>
+          <span class="brand-word">MindOS</span>
+        </div>
         <p data-i18n="subtitle"></p>
       </div>
 
       <div class="mode-cards">
         <!-- Events bound by JS via querySelectorAll('.mode-card') -->
-        <div class="mode-card" role="button" tabindex="0" aria-label="Local mode">
-          <div class="mode-icon">⚡</div>
+        <div class="mode-card" role="button" tabindex="0" data-i18n-aria="ariaLocalMode" aria-label="Local mode">
+          <div class="mode-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8.5 21h7M12 17v4"/></svg></div>
           <div class="mode-info">
             <h3 data-i18n="localTitle"></h3>
             <p data-i18n="localDesc"></p>
+            <p class="mode-sub" data-i18n="localSub"></p>
           </div>
         </div>
 
-        <div class="mode-card" role="button" tabindex="0" aria-label="Remote mode">
-          <div class="mode-icon">🌐</div>
+        <div class="mode-card" role="button" tabindex="0" data-i18n-aria="ariaRemoteMode" aria-label="Remote mode">
+          <div class="mode-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18"/></svg></div>
           <div class="mode-info">
             <h3 data-i18n="remoteTitle"></h3>
             <p data-i18n="remoteDesc"></p>
+            <p class="mode-sub" data-i18n="remoteSub"></p>
           </div>
         </div>
       </div>
 
-      <!-- Setup section for local mode — shown when MindOS CLI not found -->
-      <div class="setup-section" id="local-setup" style="display:none;">
-        <h4 data-i18n="missingCli"></h4>
+      <!--
+        Three independent setup panels. These used to be one container whose
+        innerHTML was replaced, which permanently destroyed the install button
+        once the build panel had been shown (dead end with no way back).
+      -->
+      <div class="setup-section hidden" id="setup-install">
+        <h4 id="setup-install-title" data-i18n="missingCli"></h4>
         <p data-i18n="missingCliDesc"></p>
         <button class="setup-btn" id="install-btn" data-i18n="installBtn"></button>
-        <div id="install-status" class="hidden"></div>
-        <button class="setup-btn" id="retry-btn" data-i18n="retryLocal" style="display:none; margin-top:10px;"></button>
+        <div id="install-status" class="install-progress hidden"></div>
+        <button class="setup-btn hidden" id="install-retry-btn" data-i18n="retryCheck"></button>
       </div>
+
+      <div class="setup-section hidden" id="setup-build">
+        <h4 id="setup-build-title" data-i18n="cliInstalled"></h4>
+        <p data-i18n="cliInstalledDesc"></p>
+        <button class="setup-btn" id="build-btn" data-i18n="buildBtn"></button>
+        <div id="build-status" class="install-progress hidden"></div>
+        <button class="setup-btn hidden" id="build-retry-btn" data-i18n="retryCheck"></button>
+      </div>
+
+      <div class="setup-section hidden" id="setup-bundled">
+        <h4 id="setup-bundled-title" data-i18n="bundledIncomplete"></h4>
+        <p data-i18n="bundledIncompleteDesc"></p>
+        <button class="setup-btn" id="bundled-retry-btn" data-i18n="retryCheck"></button>
+      </div>
+
+      <!--
+        Escape hatch from a failed local setup. Without it, a user who cannot
+        install or build locally had no way out of this screen.
+      -->
+      <button type="button" class="switch-mode hidden" id="setup-remote-btn" data-i18n="switchRemote"></button>
+
+      <p class="kbd-hint" id="kbd-hint-modes"></p>
     </div>
 
     <!-- Remote Connection Screen (hidden initially) -->
     <div id="remote-screen" class="hidden">
       <div class="brand">
-        <h1>∞ MindOS</h1>
+        <div class="brand-lockup">
+          <svg class="brand-mark" viewBox="0 0 80 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <defs>
+              <linearGradient id="human-b" x1="35" y1="20" x2="5" y2="20" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="currentColor" stop-opacity="0.8"/>
+                <stop offset="100%" stop-color="currentColor" stop-opacity="0.3"/>
+              </linearGradient>
+              <linearGradient id="agent-b" x1="35" y1="20" x2="75" y2="20" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="currentColor" stop-opacity="0.8"/>
+                <stop offset="100%" stop-color="currentColor" stop-opacity="1"/>
+              </linearGradient>
+            </defs>
+            <path d="M35,20 C25,35 8,35 8,20 C8,5 25,5 35,20" stroke="url(#human-b)" stroke-width="3" stroke-dasharray="2 4" stroke-linecap="round"/>
+            <path d="M35,20 C45,2 75,2 75,20 C75,38 45,38 35,20" stroke="url(#agent-b)" stroke-width="4.5" stroke-linecap="round"/>
+            <path d="M35,17.5 Q35,20 37.5,20 Q35,20 35,22.5 Q35,20 32.5,20 Q35,20 35,17.5 Z" fill="var(--logo-sparkle)"/>
+          </svg>
+          <span class="brand-word">MindOS</span>
+        </div>
         <p data-i18n="connectServer"></p>
       </div>
 
       <!-- Connection method tabs -->
       <div class="conn-tabs">
-        <button class="conn-tab" id="tab-ssh" data-i18n="sshTab"></button>
-        <button class="conn-tab active" id="tab-http" data-i18n="httpTab"></button>
+        <button type="button" class="conn-tab" id="tab-ssh" data-i18n="sshTab"></button>
+        <button type="button" class="conn-tab active" id="tab-http" data-i18n="httpTab"></button>
       </div>
 
       <!-- SSH Panel -->
       <div id="ssh-panel" class="hidden">
+        <!-- Saved SSH hosts: previously filtered out of the list entirely, so an
+             SSH host (and its stored passphrase) could never be forgotten. -->
+        <div id="ssh-recent-section" class="recent hidden">
+          <div class="recent-label" data-i18n="sshRecentHosts"></div>
+          <div id="ssh-recent-list"></div>
+        </div>
         <div class="field">
-          <label data-i18n="sshHost"></label>
+          <label for="ssh-host-input" data-i18n="sshHost"></label>
           <input id="ssh-host-input" type="text" placeholder="user@hostname" autocomplete="off" spellcheck="false" list="ssh-host-list" data-i18n-placeholder="sshSelectHost" />
           <datalist id="ssh-host-list"></datalist>
         </div>
         <div class="field">
-          <label data-i18n="sshPort"></label>
+          <label for="ssh-port" data-i18n="sshPort"></label>
           <input id="ssh-port" type="number" value="3456" min="1" max="65535" style="font-family:ui-monospace,'SF Mono',monospace" />
         </div>
-        <div id="ssh-status" class="status-bar hidden"></div>
+        <div id="ssh-status" class="status-bar hidden" role="status"></div>
         <!-- SSH Key Passphrase (shown when key needs passphrase) -->
         <div id="ssh-passphrase-section" class="field hidden">
           <label for="ssh-passphrase" data-i18n="sshPassphrase"></label>
           <input id="ssh-passphrase" type="password" data-i18n-placeholder="sshEnterPassphrase" placeholder="" />
           <label class="checkbox-label" style="margin-top:6px; display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer">
-            <input id="ssh-remember-passphrase" type="checkbox" checked />
+            <input id="ssh-remember-passphrase" type="checkbox" checked style="width:auto" />
             <span data-i18n="sshRememberPassphrase"></span>
           </label>
         </div>
@@ -509,7 +792,7 @@
           <label for="ssh-password" data-i18n="password"></label>
           <input id="ssh-password" type="password" data-i18n-placeholder="enterPassword" placeholder="" />
         </div>
-        <button id="ssh-connect-btn" class="connect-btn" data-i18n="sshConnect"></button>
+        <button type="button" id="ssh-connect-btn" class="connect-btn" data-i18n="sshConnect"></button>
         <p class="ssh-note" id="ssh-note"></p>
       </div>
 
@@ -527,11 +810,11 @@
         <div class="field">
           <label for="address" data-i18n="serverAddress"></label>
           <input id="address" type="text" placeholder="http://192.168.1.100:3456" autocomplete="off" spellcheck="false" />
-          <button id="test-btn" class="test-btn" data-i18n="testConnection"></button>
+          <button type="button" id="test-btn" class="test-btn" data-i18n="testConnection"></button>
         </div>
 
         <!-- Status -->
-        <div id="status" class="status-bar hidden"></div>
+        <div id="status" class="status-bar hidden" role="status"></div>
 
         <!-- Password (shown when authRequired) -->
         <div id="password-section" class="field hidden">
@@ -540,14 +823,59 @@
         </div>
 
         <!-- Connect button -->
-        <button id="connect-btn" class="connect-btn hidden" disabled data-i18n="connect"></button>
+        <button type="button" id="connect-btn" class="connect-btn hidden" disabled data-i18n="connect"></button>
 
         <!-- Hint -->
         <div class="hint" data-i18n="hint"></div>
       </div>
 
-      <!-- Switch to local -->
-      <button class="switch-mode" data-i18n="switchLocal"></button>
+      <!--
+        Label and meaning depend on where this window was opened from:
+        - mode-select window → "← Back to mode selection" (local screen toggle)
+        - connect window     → "← Switch to Local Mode"   (resolves switch-local)
+        It used to always resolve null, which app.whenReady() read as a cancel
+        and turned into app.quit().
+      -->
+      <button type="button" class="switch-mode" id="back-btn" data-i18n="switchLocal"></button>
+
+      <p class="kbd-hint" id="kbd-hint-remote"></p>
+    </div>
+
+    <!--
+      Boot Screen — only ever shown when connect.html is hosted inside the
+      main window (?shell=boot). This replaced a separate 360x240 splash
+      window: the startup phase now happens in the window the user keeps,
+      at the size they chose, so nothing jumps when the product loads.
+    -->
+    <div id="boot-screen" class="boot-screen hidden">
+      <div class="brand">
+        <div class="brand-lockup">
+          <svg class="brand-mark" viewBox="0 0 80 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <defs>
+              <linearGradient id="human-c" x1="35" y1="20" x2="5" y2="20" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="currentColor" stop-opacity="0.8"/>
+                <stop offset="100%" stop-color="currentColor" stop-opacity="0.3"/>
+              </linearGradient>
+              <linearGradient id="agent-c" x1="35" y1="20" x2="75" y2="20" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="currentColor" stop-opacity="0.8"/>
+                <stop offset="100%" stop-color="currentColor" stop-opacity="1"/>
+              </linearGradient>
+            </defs>
+            <path d="M35,20 C25,35 8,35 8,20 C8,5 25,5 35,20" stroke="url(#human-c)" stroke-width="3" stroke-dasharray="2 4" stroke-linecap="round"/>
+            <path d="M35,20 C45,2 75,2 75,20 C75,38 45,38 35,20" stroke="url(#agent-c)" stroke-width="4.5" stroke-linecap="round"/>
+            <path d="M35,17.5 Q35,20 37.5,20 Q35,20 35,22.5 Q35,20 32.5,20 Q35,20 35,17.5 Z" fill="var(--logo-sparkle)"/>
+          </svg>
+          <span class="brand-word">MindOS</span>
+        </div>
+      </div>
+
+      <!-- Error state only: one line saying what happened, before the detail. -->
+      <h2 class="boot-title hidden" id="boot-title"></h2>
+      <!-- A div, not a p: error details can contain a command block. -->
+      <div class="boot-status" id="boot-status" role="status" aria-live="polite"></div>
+      <div class="boot-progress" id="boot-progress" role="presentation"><span class="boot-bar"></span></div>
+      <p class="boot-hint hidden" id="boot-hint"></p>
+      <div class="boot-actions hidden" id="boot-actions"></div>
     </div>
   </div>
 

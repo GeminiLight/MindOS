@@ -19,6 +19,7 @@ export type {
   AgentRunTimelineEvent,
   AgentRunTimelineEventCategory,
   AgentRunTimelineEventData,
+  AgentPlanPart,
   AgentRunTimelinePart,
   AgentRunTimelineRecord,
   AskUserQuestion,

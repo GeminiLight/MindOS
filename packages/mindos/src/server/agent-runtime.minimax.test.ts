@@ -42,7 +42,11 @@ describe('standalone MiniMax request path', () => {
     }, { apiKey: cfg.apiKey });
     expect(result.stopReason).toBe('stop');
     expect(requests).toHaveLength(1);
-    expect(requests[0].url).toBe(expectedUrl);
+    // Compare without the query string: pi 1.5 routes Anthropic-protocol
+    // providers through the SDK's beta namespace, which appends `?beta=true`.
+    // What this test guards is the host and path we send MiniMax traffic to.
+    const sent = new URL(requests[0].url);
+    expect(`${sent.origin}${sent.pathname}`).toBe(expectedUrl);
     expect(requests[0].body.model).toBe(model || 'MiniMax-M3.1-Flash');
     if (!model || model.includes('flash')) {
       expect(requests[0].body.thinking).toBeUndefined();

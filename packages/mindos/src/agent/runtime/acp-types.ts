@@ -24,6 +24,7 @@ export type {
   AcpPromptCapabilities,
   AcpRegistryEntry,
   AcpSessionCapabilities,
+  AcpToolCallContentBlock,
   AcpToolCallFull,
   AcpTransportType,
 } from '../../protocols/acp/types.js';

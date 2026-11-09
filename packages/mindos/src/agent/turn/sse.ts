@@ -45,12 +45,25 @@ export type MindOSSSEvent =
       historyBeforeCompactTokens?: number;
       prunedMessages?: number;
       message?: string;
+      /** Cumulative session spend, when the runtime reports it (ACP usage_update). */
+      cost?: { amount: number; currency: string };
     }
   | { type: 'text_delta'; delta: string }
   | { type: 'thinking_delta'; delta: string }
   | { type: 'tool_start'; toolCallId: string; toolName: string; args: unknown; runtime?: 'mindos' | 'acp' | 'codex' | 'claude' }
   | { type: 'tool_delta'; toolCallId: string; delta: string; toolName?: string; runtime?: 'mindos' | 'acp' | 'codex' | 'claude' }
   | { type: 'tool_end'; toolCallId: string; output: string; isError: boolean; toolName?: string; runtime?: 'mindos' | 'acp' | 'codex' | 'claude' }
+  | {
+      /**
+       * Structured file changes an Agent reported for a tool call. Native MindOS
+       * tools embed their diff in the tool output text; external agents report it
+       * here instead, so the UI can render both the same way.
+       */
+      type: 'tool_diff';
+      toolCallId: string;
+      diffs: Array<{ path: string; oldText: string; newText: string; truncated?: boolean }>;
+      runtime?: 'mindos' | 'acp' | 'codex' | 'claude';
+    }
   | {
       type: 'runtime_permission_request';
       runId: string;
@@ -77,6 +90,15 @@ export type MindOSSSEvent =
       decisionIntent?: 'allow' | 'deny' | 'cancel';
       decisionScope?: 'once' | 'session' | 'always' | 'turn';
     }
+  | {
+      /**
+       * The agent's todo list for this turn. ACP resends the whole plan on every
+       * change, so consumers replace rather than append.
+       */
+      type: 'agent_plan';
+      entries: Array<{ content: string; status: 'pending' | 'in_progress' | 'completed' }>;
+      runtime?: 'mindos' | 'acp' | 'codex' | 'claude';
+    }
   | { type: 'user_question_start'; runId: string; toolCallId: string; questions: unknown }
   | { type: 'user_question_answered'; runId: string; toolCallId: string; answers?: unknown }
   | { type: 'user_question_cancelled'; runId: string; toolCallId: string; reason: string }
@@ -100,6 +122,8 @@ export const MINDOS_AGENT_TURN_STREAM_EVENT_TYPES = [
   'tool_start',
   'tool_delta',
   'tool_end',
+  'tool_diff',
+  'agent_plan',
   'runtime_permission_request',
   'runtime_permission_resolved',
   'user_question_start',

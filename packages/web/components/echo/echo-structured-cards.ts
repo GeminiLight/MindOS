@@ -7,7 +7,7 @@ import type { Locale, Messages } from '@/lib/i18n';
 
 export type EchoCopy = Messages['echoPages'];
 
-export type PromotionTarget = 'playbook' | 'practice';
+export type PromotionTarget = 'agreement' | 'playbook' | 'practice';
 export type EchoScheduleMode = 'manual' | 'daily' | 'interval';
 type EchoCardApiSegment = 'insight' | 'promotion';
 
@@ -81,10 +81,12 @@ export const ECHO_INTERVAL_HOUR_OPTIONS = [1, 2, 3, 4, 6, 8, 12, 24];
 const ECHO_TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 export function promotionTargetLabel(target: PromotionTarget, p: EchoCopy): string {
+  if (target === 'agreement') return p.promotionAgreementLabel;
   return target === 'playbook' ? p.promotionPlaybookLabel : p.promotionPracticeLabel;
 }
 
 export function normalizePromotionTarget(target: string): PromotionTarget {
+  if (target === 'agreement') return 'agreement';
   return target === 'practice' ? 'practice' : 'playbook';
 }
 
@@ -217,7 +219,15 @@ function normalizeRemoteEchoMessageRefs(value: unknown): EchoCardMessageRef[] {
     .filter((ref): ref is EchoCardMessageRef => ref !== null);
 }
 
-export function formatStructuredSourceForPrompt(source: EchoStructuredSource): string {
+/**
+ * `includeLabel: false` is for surfaces that already show the label elsewhere —
+ * agreement cards print their provenance under the title, so repeating it inside
+ * the source panel would say the same sentence twice.
+ */
+export function formatStructuredSourceForPrompt(
+  source: EchoStructuredSource,
+  { includeLabel = true }: { includeLabel?: boolean } = {},
+): string {
   const sessionLines = source.sessions.flatMap((session) => {
     const heading = [
       session.runtime,
@@ -228,7 +238,7 @@ export function formatStructuredSourceForPrompt(source: EchoStructuredSource): s
     ));
     return [heading ? `- ${heading}` : `- ${session.id}`, ...refs];
   });
-  return [source.label, ...sessionLines].filter(Boolean).join('\n');
+  return [...(includeLabel ? [source.label] : []), ...sessionLines].filter(Boolean).join('\n');
 }
 
 export function useEchoStructuredCards<TKind extends string>({

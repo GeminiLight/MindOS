@@ -6,12 +6,22 @@ import { TASK_DRAFT_EVENT, takeTaskDraft } from '@/lib/chat-task-draft';
 
 import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, CornerDownRight, FileText, GripVertical, ImageIcon, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { Check, CornerDownRight, FileText, GripVertical, ImageIcon, Pencil, Plus, Target, Trash2, X } from 'lucide-react';
 import { useLocale } from '@/lib/stores/locale-store';
 import type { AcpRuntimeOptions, AgentMode, AgentPermissionMode, AgentRuntimeDescriptor, AgentRuntimeIdentity, ChatSession, Message, NativeRuntimeOptions } from '@/lib/types';
-import AgentModeCapsule from '@/components/ask/AgentModeCapsule';
+import {
+  resolveComposerAgentRequest,
+  type ComposerPermissionChoice,
+} from '@/lib/agent/composer-permission';
+import {
+  createPromptHistoryNavigator,
+  loadPromptHistory,
+  recordPromptHistoryEntry,
+  shouldRecallPromptHistory,
+  type PromptHistoryNavigator,
+} from '@/lib/agent/prompt-history';
 import ModeCapsule, {
-  getPersistedPermissionMode,
+  getPersistedPermissionChoice,
 } from '@/components/ask/ModeCapsule';
 import { useRuntimeSessionAction } from '@/hooks/useRuntimeSessionAction';
 import { useExternalSessionHistory } from '@/hooks/useExternalSessionHistory';
@@ -120,6 +130,9 @@ type PendingPrompt = { text: string; runtime?: AgentRuntimeIdentity; clearSkill?
 
 const COMPOSER_AGENT_MODE_DIRECTIVE_RE = /^\/(plan|goal)(?:\s+|$)/i;
 
+/** Matches the `/goal` directive the composer already understands. */
+const GOAL_DIRECTIVE_RE = /^\s*\/goal\b/i;
+
 function agentModeDirectiveFromComposerValue(value: string): ComposerDirectiveAgentMode | null {
   const match = COMPOSER_AGENT_MODE_DIRECTIVE_RE.exec(value.trimStart());
   if (!match) return null;
@@ -200,6 +213,8 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
   // (read path); setComposerValue is the write path.
   const inputValueRef = useRef('');
   const composerSetterRef = useRef<((value: string) => void) | null>(null);
+  /** Non-null only while the user is walking prompt history with the arrows. */
+  const promptHistoryRef = useRef<PromptHistoryNavigator | null>(null);
   const setComposerValue = useCallback((value: string) => {
     inputValueRef.current = value;
     composerSetterRef.current?.(value);
@@ -232,6 +247,13 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
   const pendingOpenAgentRef = useRef<SelectedAgentRuntime | null>(null);
   const [agentMode, setAgentMode] = useState<AgentMode>('default');
   const agentModeRef = useRef<AgentMode>('default');
+  // One ladder in the UI (read/plan/ask/auto/full) resolves into the unchanged
+  // wire pair (permissionMode, agentMode). Plan is a permission level there,
+  // which is what the server already enforced.
+  const [permissionChoice, setPermissionChoice] = useState<ComposerPermissionChoice>('ask');
+  const permissionChoiceRef = useRef<ComposerPermissionChoice>('ask');
+  /** The ladder position to restore when a typed `/plan` or `/goal` is removed. */
+  const permissionChoiceBeforeDirectiveRef = useRef<ComposerPermissionChoice>('ask');
   const [permissionMode, setPermissionMode] = useState<AgentPermissionMode>('ask');
   const permissionModeRef = useRef<AgentPermissionMode>('ask');
   const [providerOverride, setProviderOverride] = useState<ProviderSelection>(null);
@@ -248,16 +270,30 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     setAgentMode(next);
   }, []);
 
+  /** Moves the ladder and the permission it resolves to, without touching agentMode. */
+  const applyPermissionChoice = useCallback((next: ComposerPermissionChoice) => {
+    if (permissionChoiceRef.current === next) return;
+    permissionChoiceRef.current = next;
+    setPermissionChoice(next);
+    const resolved = resolveComposerAgentRequest({ choice: next });
+    permissionModeRef.current = resolved.permissionMode;
+    setPermissionMode(resolved.permissionMode);
+  }, []);
+
   const syncAgentModeFromComposerValue = useCallback((value: string) => {
     const directiveMode = agentModeDirectiveFromComposerValue(value);
     if (directiveMode) {
       if (!inputDirectiveAgentModeRef.current) {
         agentModeBeforeInputDirectiveRef.current = agentModeRef.current;
+        permissionChoiceBeforeDirectiveRef.current = permissionChoiceRef.current;
       }
       inputDirectiveAgentModeRef.current = directiveMode;
       if (agentModeRef.current !== directiveMode) {
         setAgentModeSelection(directiveMode);
       }
+      // A typed `/plan` must move the ladder too, or the capsule would show a
+      // permission the run does not use — the split this redesign removed.
+      applyPermissionChoice(directiveMode === 'plan' ? 'plan' : permissionChoiceBeforeDirectiveRef.current);
       return;
     }
 
@@ -267,7 +303,8 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     if (agentModeRef.current !== restoredMode) {
       setAgentModeSelection(restoredMode);
     }
-  }, [setAgentModeSelection]);
+    applyPermissionChoice(permissionChoiceBeforeDirectiveRef.current);
+  }, [applyPermissionChoice, setAgentModeSelection]);
 
   const setComposerValueWithAgentModeSync = useCallback((value: string) => {
     setComposerValue(value);
@@ -293,9 +330,14 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
   const session = useAskSession(currentFile, projectId);
 
   useEffect(() => {
-    const persistedPermissionMode = getPersistedPermissionMode();
-    permissionModeRef.current = persistedPermissionMode;
-    setPermissionMode(persistedPermissionMode);
+    const persistedChoice = getPersistedPermissionChoice();
+    const restored = resolveComposerAgentRequest({ choice: persistedChoice });
+    permissionChoiceRef.current = persistedChoice;
+    permissionChoiceBeforeDirectiveRef.current = persistedChoice;
+    setPermissionChoice(persistedChoice);
+    permissionModeRef.current = restored.permissionMode;
+    setPermissionMode(restored.permissionMode);
+    if (restored.agentMode !== 'default') setAgentModeSelection(restored.agentMode);
   }, []);
 
   useEffect(() => {
@@ -351,7 +393,6 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     ? selectedAgentRuntime.kind
     : null;
   const isNativeRuntime = selectedNativeRuntimeKind !== null;
-  const supportsAgentMode = isMindosRuntime || isNativeRuntime;
   const runtimeSessionProjection = useRuntimeSessionProjection({ visible, runtime: selectedAgentRuntime, sessionId: getMatchingRuntimeSessionBinding(session.activeSession, selectedAgentRuntime)?.externalSessionId });
   const acpRuntimeCommands = useMemo(() => (
     isAcpRuntime
@@ -625,6 +666,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
   const clearTransientComposerState = useCallback(() => {
     setComposerValueWithAgentModeSync('');
     setPendingPrompt(null);
+    promptHistoryRef.current = null;
     setAttachedFiles(currentFile ? [currentFile] : []);
     uploadRef.current.clearAttachments();
     imageUploadRef.current.clearImages();
@@ -774,6 +816,10 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
       event.preventDefault();
       return;
     }
+    // Record before the composer is cleared, and whether or not the turn is
+    // queued, so ArrowUp recalls everything the user actually sent.
+    recordPromptHistoryEntry(inputValueRef.current);
+    promptHistoryRef.current = null;
     if (chat.isLoadingRef.current) {
       event.preventDefault();
       enqueueFollowUp();
@@ -1125,6 +1171,9 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
   const handleInputChange = useCallback((val: string, cursorPos?: number) => {
     // Local input state already updated inside AskComposerInput.
     setPendingPrompt(null);
+    // Editing ends the history walk, so the next ArrowUp starts from the top
+    // with what is now in the composer as the draft.
+    promptHistoryRef.current = null;
     syncAgentModeFromComposerValue(val);
     const pos = cursorPos ?? val.length;
     if (mentionTimerRef.current) clearTimeout(mentionTimerRef.current);
@@ -1248,12 +1297,34 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
         }
         return;
       }
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        const textarea = e.currentTarget as HTMLTextAreaElement;
+        const canRecall = shouldRecallPromptHistory({
+          key: e.key,
+          selectionStart: textarea.selectionStart ?? 0,
+          selectionEnd: textarea.selectionEnd ?? 0,
+          navigating: promptHistoryRef.current !== null,
+        });
+        if (canRecall) {
+          const navigator = promptHistoryRef.current
+            ?? createPromptHistoryNavigator(loadPromptHistory(), inputValueRef.current);
+          const recalled = e.key === 'ArrowUp' ? navigator.previous() : navigator.next();
+          if (recalled !== null) {
+            e.preventDefault();
+            promptHistoryRef.current = navigator;
+            setComposerValue(recalled);
+            // Terminal convention: land at the end so the user can keep typing.
+            requestAnimationFrame(() => textarea.setSelectionRange(recalled.length, recalled.length));
+            return;
+          }
+        }
+      }
       if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && (inputValueRef.current.trim() || imageUploadRef.current.images.length > 0)) {
         e.preventDefault();
         (e.currentTarget as HTMLTextAreaElement).form?.requestSubmit();
       }
     },
-    [],
+    [setComposerValue],
   );
 
   const handleResetSession = useCallback(() => {
@@ -1618,15 +1689,32 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
     setPiThinkingLevel(level);
   }, []);
 
-  const handlePermissionModeChange = useCallback((next: AgentPermissionMode) => {
-    permissionModeRef.current = next;
-    setPermissionMode(next);
-  }, []);
-  const handleAgentModeChange = useCallback((next: AgentMode) => {
+  const handlePermissionChoiceChange = useCallback((next: ComposerPermissionChoice) => {
+    // A goal outlives a permission change, so it keeps driving the run.
+    const hasGoal = agentModeRef.current === 'goal';
+    const resolved = resolveComposerAgentRequest({ choice: next, hasGoal });
+    permissionChoiceRef.current = next;
+    permissionChoiceBeforeDirectiveRef.current = next;
+    setPermissionChoice(next);
+    permissionModeRef.current = resolved.permissionMode;
+    setPermissionMode(resolved.permissionMode);
     inputDirectiveAgentModeRef.current = null;
-    agentModeBeforeInputDirectiveRef.current = next;
-    setAgentModeSelection(next);
+    agentModeBeforeInputDirectiveRef.current = resolved.agentMode;
+    setAgentModeSelection(resolved.agentMode);
   }, [setAgentModeSelection]);
+
+  /**
+   * Primes the composer with the `/goal` directive the runtime already
+   * understands, so the objective is discoverable without knowing the command.
+   */
+  const handleSetGoalFromMenu = useCallback(() => {
+    setShowAttachMenu(false);
+    const current = inputValueRef.current;
+    if (!GOAL_DIRECTIVE_RE.test(current)) {
+      setComposerValueWithAgentModeSync(current.trim() ? `/goal ${current.trimStart()}` : '/goal ');
+    }
+    focusIfAvailable(inputRef.current);
+  }, [setComposerValueWithAgentModeSync]);
 
   const handleNativeRuntimeOptionsChange = useCallback((next: NativeRuntimeOptions) => {
     setNativeRuntimeOptions(next);
@@ -2042,6 +2130,16 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
                   <ImageIcon size={12} className="shrink-0 text-muted-foreground" />
                   {t.ask.attachImageLabel}
                 </button>
+                <div className="my-1 border-t border-border/50" />
+                <button
+                  type="button"
+                  data-set-goal
+                  className="hit-target-box flex w-full items-center gap-2.5 px-3 py-2 text-xs transition-colors text-left [--hit-target-hover-bg:var(--muted)] [--hit-target-radius:var(--radius-lg)]"
+                  onClick={handleSetGoalFromMenu}
+                >
+                  <Target size={12} className="shrink-0 text-muted-foreground" />
+                  {agentMode === 'goal' ? t.ask.goalMenuActiveLabel : t.ask.goalMenuLabel}
+                </button>
               </div>,
               document.body
             )}
@@ -2105,10 +2203,7 @@ export default function ChatContent({ visible, currentFile, initialMessage, init
                   disabled={isLoading}
                 />
               )}
-              {mounted && supportsAgentMode && (
-                <AgentModeCapsule mode={agentMode} onChange={handleAgentModeChange} disabled={isLoading} />
-              )}
-              <ModeCapsule mode={permissionMode} onChange={handlePermissionModeChange} disabled={isLoading} />
+              <ModeCapsule choice={permissionChoice} onChange={handlePermissionChoiceChange} disabled={isLoading} />
               {mounted && isAcpRuntime && (
                 <AcpRuntimeOptionsCapsule
                   projection={runtimeSessionProjection.selectedProjection}

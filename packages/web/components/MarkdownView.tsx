@@ -1,8 +1,7 @@
 'use client';
 
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
+import { VaultMarkdown, stripNonDom } from '@/components/markdown/VaultMarkdown';
 import rehypeSlug from 'rehype-slug';
 import {
   useState,
@@ -10,15 +9,12 @@ import {
   useEffect,
   useId,
   useMemo,
-  type MouseEvent as ReactMouseEvent,
   type ReactElement,
   type ReactNode,
 } from 'react';
 import { Copy, Check, X, ChevronDown } from 'lucide-react';
 import { copyToClipboard } from '@/lib/clipboard';
 import { toast } from '@/lib/toast';
-import { resolveImagePath } from '@/lib/image';
-import { isExternalMarkdownHref, resolveMarkdownInternalHref } from '@/lib/markdown-links';
 import { splitMarkdownFrontmatter, type FrontmatterValue } from '@/lib/parsing/frontmatter';
 import {
   fetchPluginMarkdownCodeBlockSnapshots,
@@ -30,7 +26,6 @@ import {
 } from '@/lib/plugins/client';
 import type { PluginSurface } from '@/lib/plugins/surfaces';
 import type { Components, Options as ReactMarkdownOptions } from 'react-markdown';
-import { shouldHandleSmoothNavigation, useSmoothRouterPush } from '@/hooks/useSmoothRouterPush';
 
 type RehypePlugin = NonNullable<ReactMarkdownOptions['rehypePlugins']>[number];
 
@@ -78,14 +73,6 @@ function CopyButton({ code }: { code: string }) {
       {copied ? <Check size={13} /> : <Copy size={13} />}
     </button>
   );
-}
-
-// react-markdown passes an AST `node` prop to custom components;
-// strip it (and any other non-DOM keys) before forwarding to the real element.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function stripNonDom(props: Record<string, any>): Record<string, any> {
-  const { node, inline, ordered, depth, isHeader, ...domProps } = props;
-  return domProps;
 }
 
 function makeHeading(Tag: 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6') {
@@ -254,7 +241,6 @@ function createMarkdownComponents(
   markdownHooks: MarkdownHookMap,
   markdownRenders: MarkdownRenderMap,
   sourcePath: string,
-  navigateInternalHref: (href: string) => void,
 ): Components {
   return {
     ...HEADING_COMPONENTS,
@@ -366,35 +352,6 @@ function createMarkdownComponents(
       void node;
       return <span {...stripNonDom(rest)} suppressHydrationWarning>{children}</span>;
     },
-    a({ href, children, node, ...rest }) {
-      void node;
-      const resolvedHref = resolveMarkdownInternalHref(href, sourcePath);
-      const isExternal = isExternalMarkdownHref(resolvedHref);
-      const isInternalDocumentLink = typeof resolvedHref === 'string' && resolvedHref.startsWith('/view/');
-      const handleClick = (event: ReactMouseEvent<HTMLAnchorElement>) => {
-        if (!isInternalDocumentLink || !shouldHandleSmoothNavigation(event)) return;
-        event.preventDefault();
-        navigateInternalHref(resolvedHref);
-      };
-      return (
-        <a
-          {...stripNonDom(rest)}
-          href={resolvedHref}
-          target={isExternal ? '_blank' : undefined}
-          rel={isExternal ? 'noopener noreferrer' : undefined}
-          onClick={handleClick}
-        >
-          {children}
-        </a>
-      );
-    },
-    img({ src, alt, node, ...rest }) {
-      void node;
-      if (!src) return null;
-      const resolvedSrc = typeof src === 'string' ? resolveImagePath(src) : src;
-      // eslint-disable-next-line @next/next/no-img-element
-      return <img src={resolvedSrc} alt={alt ?? ''} {...stripNonDom(rest)} />;
-    },
   };
 }
 
@@ -481,7 +438,6 @@ function FrontmatterPanel({ frontmatter }: { frontmatter: NonNullable<ReturnType
 }
 
 export default function MarkdownView({ content, highlightLines, onDismissHighlight, emptyPlaceholder, sourcePath = '' }: MarkdownViewProps) {
-  const navigateInternalHref = useSmoothRouterPush();
   const hasHighlights = highlightLines && highlightLines.length > 0;
   const parsedMarkdown = useMemo(() => splitMarkdownFrontmatter(content), [content]);
   const hasFencedCodeBlocks = useMemo(() => /(^|\n)(```|~~~)/.test(parsedMarkdown.body), [parsedMarkdown.body]);
@@ -597,8 +553,8 @@ export default function MarkdownView({ content, highlightLines, onDismissHighlig
     return next;
   }, [markdownCodeBlockRenders]);
   const markdownComponents = useMemo(
-    () => createMarkdownComponents(markdownHooks, markdownRenders, sourcePath, navigateInternalHref),
-    [markdownHooks, markdownRenders, navigateInternalHref, sourcePath],
+    () => createMarkdownComponents(markdownHooks, markdownRenders, sourcePath),
+    [markdownHooks, markdownRenders, sourcePath],
   );
 
   // rehype-highlight pulls in highlight.js (~100KB gz) — load it lazily so it
@@ -662,13 +618,13 @@ export default function MarkdownView({ content, highlightLines, onDismissHighlig
       <MarkdownPostProcessorSnapshots renders={markdownPostProcessorRenders} />
       <div className="prose max-w-none">
         {mounted ? (
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
+          <VaultMarkdown
+            content={parsedMarkdown.body}
+            sourcePath={sourcePath}
+            embeds
             rehypePlugins={highlightPlugin ? [rehypeSlug, highlightPlugin, rehypeRaw] : [rehypeSlug, rehypeRaw]}
             components={markdownComponents}
-          >
-            {parsedMarkdown.body}
-          </ReactMarkdown>
+          />
         ) : null}
       </div>
     </div>

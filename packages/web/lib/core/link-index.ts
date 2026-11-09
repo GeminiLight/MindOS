@@ -1,4 +1,5 @@
 import path from 'path';
+import { parseWikiLinks, resolveWikiLinkTarget } from '@geminilight/mindos/foundation';
 import { collectAllFiles } from './tree';
 import { readFile } from './fs-ops';
 
@@ -197,22 +198,17 @@ export function extractLinks(
   const targets: string[] = [];
   const sourceDir = path.dirname(sourcePath);
 
-  // WikiLinks: [[target]] or [[target|alias]] or [[target#section]]
-  const wikiRe = /\[\[([^\]|#]+)(?:[|#][^\]]*)?/g;
-  let m: RegExpExecArray | null;
-  while ((m = wikiRe.exec(content)) !== null) {
-    const raw = m[1].trim();
-    if (!raw) continue;
-    if (fileSet.has(raw)) { targets.push(raw); continue; }
-    const withMd = raw.endsWith('.md') ? raw : raw + '.md';
-    if (fileSet.has(withMd)) { targets.push(withMd); continue; }
-    const lower = path.basename(withMd).toLowerCase();
-    const candidates = basenameMap.get(lower);
-    if (candidates && candidates.length === 1) targets.push(candidates[0]);
+  // WikiLinks: [[target]], [[target|alias]], [[target#heading]], [[target#^block]]
+  // Both parsing and resolution are shared with the product server and the
+  // reading view, so the link graph and what the reader sees cannot drift.
+  for (const link of parseWikiLinks(content)) {
+    const resolved = resolveWikiLinkTarget(link.target, fileSet, basenameMap);
+    if (resolved) targets.push(resolved);
   }
 
   // Markdown links: [text](relative/path.md)
   const mdLinkRe = /\[[^\]]+\]\(([^)]+\.md)(?:#[^)]*)?\)/g;
+  let m: RegExpExecArray | null;
   while ((m = mdLinkRe.exec(content)) !== null) {
     const raw = m[1].trim();
     if (!raw || raw.startsWith('http')) continue;

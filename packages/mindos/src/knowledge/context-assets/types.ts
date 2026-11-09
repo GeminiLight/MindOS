@@ -1,5 +1,6 @@
 export const CONTEXT_ASSET_KINDS = [
   'knowledge',
+  'echo-agreement',
   'echo-playbook',
   'echo-practice',
   'skill',

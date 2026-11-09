@@ -28,6 +28,8 @@ export const aiChatZh = {
     attachFile: '上下文',
     attachFileLabel: '文档',
     attachImageLabel: '图片',
+    goalMenuLabel: '设定目标',
+    goalMenuActiveLabel: '目标进行中',
     uploadedFiles: '已上传',
     uploadsProcessing: '请等待上传文件处理完成后再发送。',
     queueFollowUpTitle: '排队发送',

@@ -2,7 +2,7 @@
 
 import type { Dispatch, ReactNode, SetStateAction } from 'react';
 import { useMemo, useState } from 'react';
-import { BookOpen, Check, ClipboardCheck, Clock3, ListFilter, MessageSquareText, Pencil, RefreshCw } from 'lucide-react';
+import { BookOpen, Check, ClipboardCheck, Clock3, Handshake, ListFilter, MessageSquareText, Pencil, RefreshCw } from 'lucide-react';
 import { openAskModal } from '@/hooks/useAskModal';
 import type { Locale } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -321,6 +321,7 @@ export function PromotionPanel({
   locale: Locale;
 }) {
   const [activeFilters, setActiveFilters] = useState<Record<PromotionTarget, boolean>>({
+    agreement: true,
     playbook: true,
     practice: true,
   });
@@ -355,6 +356,11 @@ export function PromotionPanel({
   });
   const filters: Array<{ id: PromotionTarget; label: string; icon: ReactNode }> = [
     {
+      id: 'agreement',
+      label: p.promotionAgreementsLabel,
+      icon: <Handshake size={15} aria-hidden />,
+    },
+    {
       id: 'playbook',
       label: p.promotionPlaybooksLabel,
       icon: <BookOpen size={15} aria-hidden />,
@@ -367,12 +373,13 @@ export function PromotionPanel({
   ];
   const visiblePromotions = cards.filter((candidate) => activeFilters[candidate.kind]);
   const scheduleStatusLabel = echoScheduleStatusLabel(schedule, p);
-  const allFiltersActive = activeFilters.playbook && activeFilters.practice;
+  const allFiltersActive = activeFilters.agreement && activeFilters.playbook && activeFilters.practice;
 
   function toggleAllFilters() {
     setActiveFilters((current) => {
-      const allActive = current.playbook && current.practice;
+      const allActive = current.agreement && current.playbook && current.practice;
       return {
+        agreement: !allActive,
         playbook: !allActive,
         practice: !allActive,
       };
@@ -496,7 +503,7 @@ export function PromotionPanel({
         <div className="space-y-3">
           {visiblePromotions.length > 0 ? visiblePromotions.map((candidate) => {
             const content = draftContent[candidate.id] ?? candidate.content;
-            const source = formatStructuredSourceForPrompt(candidate.source) || candidate.source.label;
+            const source = formatStructuredSourceForPrompt(candidate.source, { includeLabel: candidate.kind !== 'agreement' }) || candidate.source.label;
             const isEditing = editingId === candidate.id;
             return (
               <EchoCardFrame
@@ -511,6 +518,14 @@ export function PromotionPanel({
                     timestamp={candidate.createdAt}
                   />
                   <EchoCardTitle>{candidate.title}</EchoCardTitle>
+                  {candidate.kind === 'agreement' && candidate.source.label ? (
+                    <p
+                      className="mt-2 font-sans text-xs leading-5 text-muted-foreground"
+                      data-testid="echo-promotion-agreement-provenance"
+                    >
+                      {candidate.source.label}
+                    </p>
+                  ) : null}
                   {isEditing ? (
                     <textarea
                       className="mt-3 min-h-28 w-full resize-y rounded-lg border border-border bg-background px-3 py-2 font-sans text-sm leading-6 text-foreground outline-none transition focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
@@ -531,7 +546,7 @@ export function PromotionPanel({
                   canReview={candidate.source.sessions.some((session) => (session.messageRefs?.length ?? 0) > 0)}
                   reviewing={reviewingId === candidate.id}
                   error={reviewErrorById[candidate.id] ? p.promotionReviewFailedLabel : undefined}
-                  approveLabel={p.promotionApproveLabel}
+                  approveLabel={candidate.kind === 'agreement' ? p.promotionApproveAgreementLabel : p.promotionApproveLabel}
                   rejectLabel={p.promotionRejectLabel}
                   approvedLabel={p.promotionApprovedLabel}
                   rejectedLabel={p.promotionRejectedLabel}

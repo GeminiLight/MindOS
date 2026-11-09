@@ -10,10 +10,15 @@ describe('DiscoverPanel plugin market boundary', () => {
     expect(source).toContain('href="/explore/capabilities"');
     expect(source).toContain('href="/explore/skills"');
     expect(source).toContain('href="/explore/mcp"');
-    expect(source).toContain('href="/explore/plugins"');
     expect(source).toContain('href="/explore"');
     expect(source).not.toContain('/settings?tab=mcp');
-    expect(source).not.toContain('/settings?tab=plugins&panel=community');
+  });
+
+  it('no longer advertises an Obsidian plugin market', () => {
+    // MindOS compatibility is scoped to the Obsidian *data* layer; browsing and
+    // installing community plugins was removed, so Discover must not link to it.
+    expect(source).not.toContain('/explore/plugins');
+    expect(source).not.toContain('d.pluginMarket');
   });
 
   it('does not embed plugin manager renderer toggles in Discover', () => {
@@ -35,7 +40,6 @@ describe('DiscoverPanel plugin market boundary', () => {
 
   it('puts use cases after market entries in the primary navigation', () => {
     const capabilitiesIndex = source.indexOf('title={d.capabilityMarketplace}');
-    const pluginIndex = source.indexOf('title={d.pluginMarket}');
     const skillIndex = source.indexOf('title={d.skillMarket}');
     const mcpIndex = source.indexOf('title={d.mcpServers}');
     const useCasesIndex = source.indexOf('title={d.useCases}');
@@ -43,7 +47,6 @@ describe('DiscoverPanel plugin market boundary', () => {
     expect(capabilitiesIndex).toBeGreaterThan(-1);
     expect(skillIndex).toBeGreaterThan(capabilitiesIndex);
     expect(mcpIndex).toBeGreaterThan(skillIndex);
-    expect(pluginIndex).toBeGreaterThan(mcpIndex);
-    expect(useCasesIndex).toBeGreaterThan(pluginIndex);
+    expect(useCasesIndex).toBeGreaterThan(mcpIndex);
   });
 });
