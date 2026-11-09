@@ -1,0 +1,14 @@
+diff --git a/src/types.ts b/src/types.ts
+index 7e553b2febd24391b4d44560a01a490b209d9ca1..cd3b754de6e63d62240790036e5a5ba7257805f9 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -1,4 +1,8 @@
+-import { type Static, StringEnum, Type } from "@earendil-works/pi-ai";
++// Patched for pi-ai 1.x: `Type` is no longer re-exported from pi-ai.
++// It is typebox's, and pi-ai depends on the same typebox build, so the
++// generated schemas are unchanged. Upstream is inactive (last publish 2026-06-23).
++import { type Static, StringEnum } from "@earendil-works/pi-ai";
++import { Type } from "typebox";
+ 
+ /**
+  * Type of cron job
