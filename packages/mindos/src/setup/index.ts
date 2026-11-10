@@ -117,6 +117,7 @@ const DEFAULT_PROVIDER_PRESETS: Record<string, MindosSetupProviderPreset> = {
   xai: { name: 'xAI (Grok)', defaultModel: 'grok-3' },
   openrouter: { name: 'OpenRouter', defaultModel: 'anthropic/claude-sonnet-4' },
   requesty: { name: 'Requesty', defaultModel: 'openai/gpt-4o-mini' },
+  uberllm: { name: 'UberLLM', defaultModel: 'deepseek/deepseek-v4.1-flash' },
   mistral: { name: 'Mistral', defaultModel: 'mistral-large-latest' },
   deepseek: { name: 'DeepSeek', defaultModel: 'deepseek-chat' },
   zai: { name: 'ZhipuAI (GLM)', defaultModel: 'glm-4-plus' },

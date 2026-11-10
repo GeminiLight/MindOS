@@ -155,7 +155,7 @@ function applyEndpointOverrides(model: Model<any>, providerId: ProviderId, baseU
     model = { ...model, baseUrl: normalizedBaseUrl };
   }
 
-  if ((hasCustomBase || providerId === 'requesty') && model.api === 'openai-responses') {
+  if ((hasCustomBase || providerId === 'requesty' || providerId === 'uberllm') && model.api === 'openai-responses') {
     model = { ...model, api: 'openai-completions' };
   }
 

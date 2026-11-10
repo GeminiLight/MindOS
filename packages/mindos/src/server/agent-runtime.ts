@@ -8,14 +8,14 @@ import { buildMindosSystemPrompt } from '../agent/prompt/index.js';
 import { nativeImport } from '../foundation/native-import.js';
 import { installMindosPiAgentDir } from '../foundation/pi-agent-dir/index.js';
 import { applyMiniMaxModelCompatibility } from '../agent/mindos-pi/minimax-model.js';
-import { MINDOS_PROVIDER_PRESETS, REQUESTY_DEFAULT_BASE_URL } from './provider-settings.js';
+import { MINDOS_PROVIDER_PRESETS, REQUESTY_DEFAULT_BASE_URL, UBERLLM_DEFAULT_BASE_URL } from './provider-settings.js';
 import { getSkillRootsFromRuntime, readRuntimeSettings, type MindosRuntimeSettings } from './runtime.js';
 import { createStandaloneAutomationKbToolkit } from './automations/standalone-kb-host.js';
 type PiProvidersModule = typeof import('@earendil-works/pi-ai/providers/all');
 type CreateRuntime = (options: MindosPiCodingAgentRuntimeOptions) => Promise<MindosPiAgentRuntime>;
 
 const PACKAGE_ROOT = fileURLToPath(new URL('../..', import.meta.url).href);
-const PROVIDER_ALIASES: Record<string, string> = { deepseek: 'openai', requesty: 'openai', 'zai-cn': 'zai' };
+const PROVIDER_ALIASES: Record<string, string> = { deepseek: 'openai', requesty: 'openai', uberllm: 'openai', 'zai-cn': 'zai' };
 const PROVIDER_ENV_KEYS: Record<string, string[]> = {
   anthropic: ['ANTHROPIC_API_KEY'],
   openai: ['OPENAI_API_KEY'],
@@ -24,6 +24,7 @@ const PROVIDER_ENV_KEYS: Record<string, string[]> = {
   xai: ['XAI_API_KEY'],
   openrouter: ['OPENROUTER_API_KEY'],
   requesty: ['REQUESTY_API_KEY'],
+  uberllm: ['UBERLLM_API_KEY'],
   mistral: ['MISTRAL_API_KEY'],
   deepseek: ['DEEPSEEK_API_KEY'],
   zai: ['ZAI_API_KEY', 'ZHIPUAI_API_KEY'],
@@ -67,7 +68,9 @@ async function resolveStandaloneModel(settings: MindosRuntimeSettings, modelOver
   const builtin = providers.builtinModels().getModel(runtimeProvider, modelName);
   const baseUrl = protocol === 'requesty'
     ? provider.baseUrl.trim() || REQUESTY_DEFAULT_BASE_URL
-    : provider.baseUrl;
+    : protocol === 'uberllm'
+      ? provider.baseUrl.trim() || UBERLLM_DEFAULT_BASE_URL
+      : provider.baseUrl;
   const resolved = builtin
     ? applyBaseUrl(builtin as unknown as Record<string, unknown>, baseUrl)
     : {

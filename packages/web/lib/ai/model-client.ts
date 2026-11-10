@@ -14,6 +14,7 @@ const OPENAI_COMPATIBLE_PROVIDERS = new Set<ProviderId>([
   'xai',
   'openrouter',
   'requesty',
+  'uberllm',
   'mistral',
   'deepseek',
   'zai',
