@@ -12,6 +12,7 @@ const PROVIDER_ENV_KEYS = {
   xai: ['XAI_API_KEY'],
   openrouter: ['OPENROUTER_API_KEY'],
   requesty: ['REQUESTY_API_KEY'],
+  uberllm: ['UBERLLM_API_KEY'],
   mistral: ['MISTRAL_API_KEY'],
   deepseek: ['DEEPSEEK_API_KEY'],
   zai: ['ZAI_API_KEY', 'ZHIPUAI_API_KEY'],

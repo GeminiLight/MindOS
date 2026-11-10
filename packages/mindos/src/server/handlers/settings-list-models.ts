@@ -37,6 +37,7 @@ const DEFAULT_PROVIDER_IDS = new Set([
   'lmstudio',
   'openrouter',
   'requesty',
+  'uberllm',
   'siliconflow',
 ]);
 

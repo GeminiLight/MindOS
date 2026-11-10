@@ -71,11 +71,22 @@ describe('getProviderApiType', () => {
   it('reports Requesty as openai-completions', () => {
     expect(getProviderApiType('requesty')).toBe('openai-completions');
   });
+
+  it('reports UberLLM as openai-completions', () => {
+    expect(getProviderApiType('uberllm')).toBe('openai-completions');
+  });
 });
 
 describe('Requesty preset', () => {
   it('uses the Requesty router endpoint and its own API key env var', () => {
     expect(getDefaultBaseUrl('requesty')).toBe('https://router.requesty.ai/v1');
     expect(getApiKeyEnvVar('requesty')).toBe('REQUESTY_API_KEY');
+  });
+});
+
+describe('UberLLM preset', () => {
+  it('uses the UberLLM endpoint and its own API key env var', () => {
+    expect(getDefaultBaseUrl('uberllm')).toBe('https://api.uberllm.dev/v1');
+    expect(getApiKeyEnvVar('uberllm')).toBe('UBERLLM_API_KEY');
   });
 });

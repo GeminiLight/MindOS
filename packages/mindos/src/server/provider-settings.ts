@@ -43,6 +43,7 @@ export type MindosProviderModelCapability = {
 const PROVIDER_ID_PREFIX = 'p_';
 
 export const REQUESTY_DEFAULT_BASE_URL = 'https://router.requesty.ai/v1';
+export const UBERLLM_DEFAULT_BASE_URL = 'https://api.uberllm.dev/v1';
 
 export const MINDOS_PROVIDER_PRESETS: Record<string, MindosProviderPreset> = {
   anthropic: {
@@ -101,6 +102,14 @@ export const MINDOS_PROVIDER_PRESETS: Record<string, MindosProviderPreset> = {
     supportsListModels: true,
     apiType: 'openai-completions',
     envKeys: ['REQUESTY_API_KEY'],
+  },
+  uberllm: {
+    name: 'UberLLM',
+    defaultModel: 'deepseek/deepseek-v4.1-flash',
+    defaultBaseUrl: UBERLLM_DEFAULT_BASE_URL,
+    supportsListModels: true,
+    apiType: 'openai-completions',
+    envKeys: ['UBERLLM_API_KEY'],
   },
   mistral: {
     name: 'Mistral',
